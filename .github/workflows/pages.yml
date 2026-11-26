@@ -102,7 +102,9 @@ jobs:
           TAG: ${{ needs.plan.outputs.tag }}
         run: |
           for attempt in {1..12}; do
-            if curl -fsS --max-time 10 "${SITE%/}/react-preview/version.json?commit=$GITHUB_SHA&attempt=$attempt" -o /tmp/studio-version.json && python -c 'import json,os; m=json.load(open("/tmp/studio-version.json")); assert "v"+m["version"]==os.environ["TAG"] and m["commit"]==os.environ["GITHUB_SHA"]'; then exit 0; fi
+            if curl -fsS --max-time 10 "${SITE%/}/react-preview/version.json?commit=$GITHUB_SHA&attempt=$attempt" -o /tmp/studio-version.json && python -c 'import json,os; m=json.load(open("/tmp/studio-version.json")); assert "v"+m["version"]==os.environ["TAG"] and m["commit"]==os.environ["GITHUB_SHA"]'; then
+              if curl -fsS --max-time 10 "${SITE%/}/react-preview/?commit=$GITHUB_SHA&attempt=$attempt" -o /tmp/studio-index.html && curl -fsS --max-time 10 "${SITE%/}/react-preview/sw.js?commit=$GITHUB_SHA&attempt=$attempt" -o /tmp/studio-sw.js && python -c 'import glob,zipfile,pathlib; z=zipfile.ZipFile(glob.glob("release-package/*.zip")[0]); assert z.read("index.html")==pathlib.Path("/tmp/studio-index.html").read_bytes() and z.read("sw.js")==pathlib.Path("/tmp/studio-sw.js").read_bytes()'; then exit 0; fi
+            fi
             sleep 5
           done
           exit 1
