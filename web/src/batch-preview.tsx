@@ -6,7 +6,7 @@ export function BatchPreviewModal({onClose}:{onClose:()=>void}){
  const update=(s:string)=>{setCSV(s);setPreview(null);setError('')};
  const [reviewed,setReviewed]=useState<number[]>([]);
  const reset=(s:string)=>{update(s);setReviewed([])};
- return <Modal open onClose={onClose} title="批量建库"><div className="space-y-4"><p className="text-sm text-muted">CSV 批量建档 · 库存默认 0。</p>
+ return <Modal open onClose={onClose} title="批量建库"><div className="space-y-4"><p className="text-sm text-muted">库存默认 0。</p>
  <label className="block">选择 CSV 文件<input type="file" accept=".csv,text/csv" onChange={async e=>{const f=e.target.files?.[0];if(!f)return;if(f.size>1000000){setError('文件超过 1 MB');return}try{reset(await f.text())}catch{setError('文件读取失败')}}}/></label>
  <label className="block">CSV 内容<textarea className="w-full min-h-32 rounded-xl border border-line bg-paper p-3 font-mono text-xs" value={csv} onChange={e=>reset(e.target.value)}/></label><p className="text-xs text-muted">必需列：name、category。参数列：param:字段 Key。支持 500 行，未知参数保留空值。</p>
  <details><summary className="studio-summary flex items-center min-h-11 text-sm cursor-pointer">当前分类及可用参数</summary>{catalog.categories.map(c=><p key={c.key} className="text-xs py-1 break-all"><strong>{c.key}</strong> · {c.parameters.join(', ')}</p>)}</details>

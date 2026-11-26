@@ -26,7 +26,7 @@ try:
    page.get_by_role('button',name='手动录入').click();page.get_by_role('heading',name='查找已有元件').wait_for();fit()
    assert page.get_by_role('dialog').count()==0
    page.get_by_label('搜索已有元件').fill('RES-001');page.get_by_role('button',name='选择 RES-001').click()
-   page.get_by_label('本次入库数量').focus();fit()
+   page.get_by_label('本次入库数量').fill('12');page.get_by_label('本次入库数量').focus();fit()
    page.set_viewport_size({'width':width,'height':480});page.wait_for_function("document.documentElement.style.getPropertyValue('--studio-vv-height')==='480px'");fit()
    page.get_by_role('button',name='取消录入').click();page.get_by_role('dialog').get_by_role('button',name='放弃录入',exact=True).click();page.set_viewport_size({'width':width,'height':844})
    page.get_by_role('button',name='仓储',exact=True).click();fit()

@@ -1,15 +1,12 @@
-# Studio Workspace — UI contract
-
-Status: project-owned baseline; the requested external article https://zacharyzhang.com/blog/ai-frontend-design-rules could not be retrieved on this audit run. Do not attribute these rules to its author. Reconcile article-specific requirements when the text is available.
-
-## Product hierarchy
-A mobile-first working inventory, not a marketing dashboard. Preserve Studio warm paper/green palette and one header with version top right. Home: global search, two 112px receipt actions, cabinet list. No KPI or explanatory cards. Four navigation destinations; receiving is a dedicated workflow. One dominant commit action per decision stage, secondary choices visibly subordinate. Never obscure unknown identity, mixed bins, uncommitted writes, or failures.
-
-## Reusable controls
-Use source-owned Button, Panel, Modal, SearchField, PartCard and ParameterFilter. Radix Dialog/Slot, Tailwind and Lucide are existing dependencies, not a claim of full shadcn installation. Primary receipt actions are deliberate large exceptions; ordinary controls min 44px, 16px input text, compact secondary actions. Default button type=button; forms opt into submit. Focus visible; keyboard supported. Avoid nested decorative cards, duplicate status text and unbounded dropdowns. Use semantic labels and accessible names. Search on all eligible records, paginate rendering, preserve known/unknown separation. Part rows expose distinguishing specs, identity and stock, not just names. Expand detailed fields on demand. Do not introduce new dependencies for cosmetic effects.
-
-## Tokens
-Canvas #F4F2EB; paper #FFFEF9; ink #293B31; primary #3E5E4C; muted #526659; line #DEDFD3; sage #E4E9DD; warning #80591F. Spacing 4/8px; control radius 8px, surface radius 12px, dialog 16px. Body text 14–16px; metadata 12px; form input 16px minimum. Color is supplementary to explicit state text. Respect safe area, user zoom and reduced motion. Local matrix scroll only.
-
-## Acceptance
-Verify rendered layouts at 320/375/390/430/768/1280 widths; no horizontal page overflow, overlap, inaccessible focus, or broken back/clear actions. Empty/searching/error states must differ. Test search combinations, fold/unfold, confirmation and quantity conservation. Preserve existing domain/operation journals and release gates. Capture actual representative mobile and desktop screenshots and inspect before calling a visual audit complete; source review or geometry alone is not visual acceptance. Native iOS keyboard/picker and real backend remain separate acceptance.
+# Studio Workspace — 前端界面设计规范（用户确认）
+来源：用户提供的 https://zacharyzhang.com/blog/ai-frontend-design-rules 正文；本文件为项目落实及验收口径。
+## 1 布局与信息
+禁止装饰性嵌套卡片、框线和分割线，优先使用排版、间距、对齐组织内容。移除标语、副标题、冗余标签和解释。保留必要的字段标签、规格、数量、身份/容量核对、错误、未知信息和真实/模拟模式辨识，不将业务信息误当装饰。首页仅图标+Studio Workspace+右上角版本、搜索、两项112px主操作及仓储入口。
+## 2 视觉
+苹果官网式极简；约90%黑白灰、约10%单一强调色。保留 Studio 绿色 #3E5E4C 仅核心行动、选中状态及关键数据；背景 #F7F7F7、表面 #FFFFFF、主文字 #181818、次文字 #6A6A6A。无渐变、高饱和、霓虹及复杂阴影。警告以文字、图标、语义角色区分，不使用第二主题色。扩大常规内容间距约1.5倍，例如8→12、16→24、24→36，并取4px整数倍；小屏不得牺牲操作或溢出。
+## 3 字体、图标和栅格
+Geist 自托管（中文缺字使用系统 CJK fallback）。标题18px/600或700，正文14/16px、400/500；必要辅助数据14px，触控表单至少16px。4px栅格用于所有排版间距；圆角8–40px，控制8px、表面12–16px、弹窗24px。Reicon React，统一18px线性图标、1.5px线宽、24×24透明外框；图标须可核实来源。44px最小可触控目标是独立于图标尺寸的无障碍要求。
+## 4 按意图显示及桌面菜单
+次要操作可在支持精细鼠标的设备上 hover/focus-within 时显现，触屏常显或显式操作入口；键盘可达，必要操作、错误及确认不能隐藏。当前没有 hover 多级子菜单，安全三角区为适用时必做，不为合规引入无业务需求的级联菜单。将来若新增，需开启/关闭延时、指针当前位置到子菜单近边上下端点的安全三角、离开/切换及键盘关闭测试。
+## 5 真实渲染验收
+以实际浏览器截图为准，检查首页、搜索、入库各步、仓储、设置和弹窗的对齐、遮挡、换行、留白。截图包含移动与桌面。几何测试只是辅助；必须实际打开截图，不能用计算值替代。没有截图访问就标记视觉验收未完成，不合并声称完成的视觉改动。保持既有 CI、库存安全和 60s 升级测试。iOS 原生键盘/相册另行实机验收。

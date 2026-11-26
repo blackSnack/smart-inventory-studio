@@ -4,3 +4,7 @@ Source review: Radix Dialog/Slot, Tailwind and Lucide are installed; source-owne
 
 ## v0.3.6 source audit
 The requested external article could not be retrieved (URL variants/search failed); the current browser context cannot be controlled for visual capture. This is a source review and targeted implementation, not a full screenshot-based audit. See DESIGN.md. Findings: duplicate search/cards, unbounded global list, controlled details forcing open, missing discard confirmation, redundant styling/labels and weak focus contrast. Existing primary receipt actions and journal semantics preserved. Tests retain prior mobile/receipt/update assertions; add shared query, clear, filter collapse, outstanding quantity and cancel checks. Actual visual and article-specific audit pending.
+
+
+## User-supplied five-section rules
+The user supplied the full rules after the previous source-only audit. DESIGN.md now supersedes the earlier warm palette/spacing specification. Apply neutral monochrome surfaces and one accent, flat layout, Geist/Reicon, intentional secondary actions, and actual screenshot inspection. Cascading menu rule is currently not applicable: no hover submenus. Real screenshot review remains required; no acceptance claim yet.
