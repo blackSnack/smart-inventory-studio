@@ -1,0 +1,26 @@
+name: React preview
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate-react:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm --prefix web install --ignore-scripts --no-audit --no-fund
+      - name: Export initial dependency lock
+        run: node -e "console.log('STUDIO_LOCK_BEGIN');console.log(require('fs').readFileSync('web/package-lock.json','utf8'));console.log('STUDIO_LOCK_END')"
+      - run: npm --prefix web run build
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install playwright==1.51.0
+      - run: python -m playwright install --with-deps chromium
+      - run: python tests/react-smoke.py
