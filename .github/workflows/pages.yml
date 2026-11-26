@@ -1,4 +1,4 @@
-name: Publish demo
+name: Publish release
 on:
   push:
     branches: [main]
@@ -11,7 +11,31 @@ concurrency:
   group: github-pages
   cancel-in-progress: false
 jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.plan.outputs.tag }}
+      publish: ${{ steps.plan.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Plan immutable version
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" > /tmp/studio-releases.json
+          node web/scripts/release-plan.mjs /tmp/studio-releases.json
+          tag=$(node -p "'v'+require('./web/package.json').version")
+          existing=$(git ls-remote --tags origin "refs/tags/$tag")
+          if [ -n "$existing" ] && ! grep -q "^$GITHUB_SHA[[:space:]]" <<< "$existing"; then
+            if ! grep -Fxq 'publish=false' "$GITHUB_OUTPUT"; then echo 'Tag points to another commit'; exit 1; fi
+          fi
   build:
+    needs: plan
+    if: github.ref == 'refs/heads/main' && needs.plan.outputs.publish == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -31,6 +55,19 @@ jobs:
       - run: npm --prefix web run build
       - run: python tests/react-smoke.py
       - run: python tests/live-read-smoke.py
+      - run: python tests/update-smoke.py
+      - name: Package exact static release
+        run: |
+          mkdir -p release-package
+          tag=$(node -p "'v'+require('./web/package.json').version")
+          python -c 'import shutil,sys; shutil.make_archive(sys.argv[1],"zip","web/dist")' "release-package/smart-inventory-studio-$tag"
+          (cd release-package && sha256sum *.zip > SHA256SUMS)
+          node -e "const h=require('./web/release-history.json')[0];require('fs').writeFileSync('release-package/RELEASE-NOTES.md','# '+h.title+'\\n\\n'+h.changes.map(s=>'- '+s).join('\\n')+'\\n')"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-package
+          path: release-package
+          if-no-files-found: error
       - uses: actions/configure-pages@v5
       - run: mkdir -p _site && cp index.html _site/index.html && touch _site/.nojekyll && mkdir -p _site/react-preview && cp -R web/dist/. _site/react-preview/
       - uses: actions/upload-pages-artifact@v3
@@ -39,11 +76,39 @@ jobs:
   deploy:
     if: github.ref == 'refs/heads/main'
     needs: build
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-24.04
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Deploy preview
+      - name: Deploy release preview
         id: deployment
         uses: actions/deploy-pages@v4
+  release:
+    needs: [plan, deploy]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-package
+          path: release-package
+      - name: Verify published manifest
+        env:
+          SITE: ${{ needs.deploy.outputs.page_url }}
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: |
+          for attempt in {1..12}; do
+            if curl -fsS --max-time 10 "${SITE%/}/react-preview/version.json?commit=$GITHUB_SHA&attempt=$attempt" -o /tmp/studio-version.json && python -c 'import json,os; m=json.load(open("/tmp/studio-version.json")); assert "v"+m["version"]==os.environ["TAG"] and m["commit"]==os.environ["GITHUB_SHA"]'; then exit 0; fi
+            sleep 5
+          done
+          exit 1
+      - name: Publish GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: |
+          gh release create "$TAG" release-package/*.zip release-package/SHA256SUMS --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Smart Inventory Studio $TAG" --notes-file release-package/RELEASE-NOTES.md --prerelease
