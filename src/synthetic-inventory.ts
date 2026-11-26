@@ -22,15 +22,15 @@ export class SyntheticInventoryStore implements OperationTransport{
  }
  async snapshot(){return this.transaction(state=>{if(!state)throw Error('missing synthetic inventory');validate(state,this.ids);return {value:state}})}
  async send(operation:Operation):Promise<void>{
-  return this.transaction(state=>{if(!state)throw Error('missing synthetic inventory');validate(state,this.ids);if(!['receive-existing-part','create-demo-part-and-receive'].includes(operation.kind)||!operation.id)throw Error('unsupported synthetic operation');
+  return this.transaction(state=>{if(!state)throw Error('missing synthetic inventory');validate(state,this.ids);if(!['receive-existing-part','create-demo-part-and-receive','create-demo-catalog-part'].includes(operation.kind)||!operation.id)throw Error('unsupported synthetic operation');
    const previous=state.receipts.find(r=>r.operation.id===operation.id);if(previous){if(!equal(previous.operation,operation))throw Error('operation identity conflict');return {value:undefined}}
    if(state.receipts.length>=20000)throw Error('synthetic receipt log limit');
-   if(operation.kind==='create-demo-part-and-receive'){
+   if(operation.kind==='create-demo-part-and-receive'||operation.kind==='create-demo-catalog-part'){
     const {part,quantity,allocations,expectedRevision}=operation.payload;
-    if(!part||typeof part!=='object'||!Array.isArray(allocations)||typeof quantity!=='number'||expectedRevision!==state.revision)throw Error('stale or invalid new part plan');
+    if(!part||typeof part!=='object'||expectedRevision!==state.revision||operation.kind==='create-demo-part-and-receive'&&(!Array.isArray(allocations)||typeof quantity!=='number'))throw Error('stale or invalid new part plan');
     const p=structuredClone(part) as DemoPart;const identity=p.details?.identity;
     if(!p.id||!p.name?.trim()||!identity||identity.id!==p.id||!['exact','partial'].includes(identity.mode)||Object.keys(p.stock??{}).length||state.parts.some(x=>x.id===p.id||!!demoIdentity(x)&&strongIdentity(identity,demoIdentity(x)!)))throw Error('duplicate or invalid new part identity');
-    validateAllocation(p.id,quantity,allocations,demoLocations(state.parts,this.ids));p.stock={};for(const a of allocations)p.stock[a.locationId]=a.quantity;
+    p.stock={};if(operation.kind==='create-demo-part-and-receive'){if(typeof quantity!=='number'||!Array.isArray(allocations))throw Error('invalid receipt');validateAllocation(p.id,quantity,allocations,demoLocations(state.parts,this.ids));for(const a of allocations)p.stock[a.locationId]=a.quantity;}
     state.parts.push(p);state.revision++;state.receipts.push({operation:structuredClone(operation),receiptId:'demo-receipt:'+operation.id});return {next:state,value:undefined};
    }
    const {partId,locationId,quantity,expectedOccupants}=operation.payload;if(typeof partId!=='string'||typeof locationId!=='string'||typeof quantity!=='number'||!Array.isArray(expectedOccupants)||expectedOccupants.some(x=>typeof x!=='string'))throw Error('invalid receipt operation');
