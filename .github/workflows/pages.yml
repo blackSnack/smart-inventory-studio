@@ -29,6 +29,7 @@ jobs:
       - run: npm --prefix web ci --ignore-scripts --no-audit --no-fund
       - run: npm --prefix web run build
       - run: python tests/react-smoke.py
+      - run: python tests/live-read-smoke.py
       - uses: actions/configure-pages@v5
       - run: mkdir -p _site && cp index.html _site/index.html && touch _site/.nojekyll && mkdir -p _site/react-preview && cp -R web/dist/. _site/react-preview/
       - uses: actions/upload-pages-artifact@v3
