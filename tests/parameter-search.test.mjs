@@ -1,0 +1,5 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {filterParameters,partitionSearch} from '../dist/parameter-search.js';
+const c=[{key:'voltage',operator:'gte',kind:'decimal',value:'25'},{key:'package',operator:'eq',kind:'text',value:'0805'}];
+test('strict matches, lower rating rejected, unknown separated',()=>{assert.equal(filterParameters({voltage:'50',package:'0805'},c),'match');assert.equal(filterParameters({voltage:'16',package:'0805'},c),'excluded');assert.equal(filterParameters({voltage:null,package:'0805'},c),'unknown');assert.equal(filterParameters({voltage:null,package:'0603'},c),'excluded')});
+test('exact decimal avoids precision loss',()=>{assert.equal(filterParameters({x:'0.10000000000000000001'},[{key:'x',operator:'gte',kind:'decimal',value:'0.10000000000000000002'}]),'excluded')});
+test('partition never includes unknown as strict match',()=>{const r=partitionSearch([{fields:{voltage:'50',package:'0805'}},{fields:{voltage:'unknown',package:'0805'}}],c);assert.equal(r.matches.length,1);assert.equal(r.unknown.length,1)});
