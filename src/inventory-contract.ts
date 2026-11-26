@@ -7,16 +7,17 @@ export interface SourceRef {kind:'manufacturer'|'supplier'|'datasheet'|'image'|'
 export interface PartRecord extends PartSummary {parameters:ParameterValueRef[];sources:SourceRef[];manufacturerParts:{manufacturer:string;mpn:string}[];supplierParts:{supplier:string;sku:string}[]}
 export interface CatalogReadPort {getPart(id:string):Promise<PartRecord>;getCategories():Promise<CategoryRef[]>;getParameterTemplates(categoryId:string):Promise<ParameterTemplateRef[]>}
 export interface MetadataReadPort {getLocationMetadata(locationId:string):Promise<Record<string,unknown>>}
-export type InventoryFeature='partDetails'|'categories'|'parameterTemplates'|'metadata'|'write'|'stockTransfer';
+export type InventoryFeature='read'|'partDetails'|'categories'|'parameterTemplates'|'metadata'|'write'|'stockTransfer';
 export interface InventoryFeatureSet extends InventoryCapabilities {partDetails?:boolean;categories?:boolean}
 export interface InventoryPorts {instanceId:string;read:InventoryReadPort;catalog?:CatalogReadPort;metadata?:MetadataReadPort;operations?:OperationTransport;capabilities():Promise<InventoryFeatureSet>}
 export class UnsupportedInventoryCapability extends Error{constructor(public feature:InventoryFeature){super('Unsupported inventory capability: '+feature);this.name='UnsupportedInventoryCapability'}}
 export class InventorySession{
  constructor(private ports:InventoryPorts){if(!ports.instanceId.trim())throw Error('inventory instance required')}
  get instanceId(){return this.ports.instanceId}
- searchParts(q:string):Promise<PartSummary[]>{return this.ports.read.searchParts(q)}
- getStockByPart(id:string):Promise<StockDistribution[]>{return this.ports.read.getStockByPart(id)}
- getLocations():Promise<LocationSummary[]>{return this.ports.read.getLocations()}
+ getCapabilities(){return this.ports.capabilities()}
+ async searchParts(q:string):Promise<PartSummary[]>{await this.require('read');return this.ports.read.searchParts(q)}
+ async getStockByPart(id:string):Promise<StockDistribution[]>{await this.require('read');return this.ports.read.getStockByPart(id)}
+ async getLocations():Promise<LocationSummary[]>{await this.require('read');return this.ports.read.getLocations()}
  async getPart(id:string){await this.require('partDetails');if(!this.ports.catalog)throw new UnsupportedInventoryCapability('partDetails');return this.ports.catalog.getPart(id)}
  async getCategories(){await this.require('categories');if(!this.ports.catalog)throw new UnsupportedInventoryCapability('categories');return this.ports.catalog.getCategories()}
  async getParameterTemplates(id:string){await this.require('parameterTemplates');if(!this.ports.catalog)throw new UnsupportedInventoryCapability('parameterTemplates');return this.ports.catalog.getParameterTemplates(id)}
