@@ -2,7 +2,7 @@
 
 An open-source, mobile-first electronic component inventory client with pluggable inventory and AI providers, visual storage management, and human-reviewed receiving.
 
-**Status: v0.1 development seed / simulated UI prototype.** The preview does not access real inventory or AI APIs. It is not yet an installable PWA; React/shadcn integration, live write adapters and mobile acceptance are future implementation work. No inventory, personal configuration, tokens or private environment snapshots belong in this public repository.
+**Status: development preview.** React PWA supports synthetic workflows and opt-in read-only provider/AI draft checks; production writes and physical-device acceptance are pending. No inventory, personal configuration, tokens or private environment snapshots belong in this public repository.
 
 ## Preview
 
@@ -17,6 +17,7 @@ Use Node.js 22 and the pinned TypeScript dependency. Run `npm ci --ignore-script
 - [Architecture and implementation specification](docs/ARCHITECTURE.md)
 - [Local inventory migration and acceptance guide](docs/LOCAL-AGENT-EXECUTION.md)
 - [Shared catalog seed](catalog/electronic-parts.json): draft, not approved for production migrations.
+- [Release and update workflow](docs/RELEASE.md)
 - [Delivery roadmap](docs/ROADMAP.md)
 - [Contributing and release gates](CONTRIBUTING.md)
 
