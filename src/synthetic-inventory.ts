@@ -1,6 +1,7 @@
+import {demoIdentity,strongIdentity,type DemoPartDetails} from './demo-part-draft.js';
 import {validateAllocation,type Location} from './domain.js';
 import type {Operation,OperationTransport,Observation} from './operation-journal.js';
-export interface DemoPart {id:string;name:string;spec:string;partial:boolean;stock:Record<string,number>}
+export interface DemoPart {id:string;name:string;spec:string;partial:boolean;stock:Record<string,number>;details?:DemoPartDetails}
 interface Receipt {operation:Operation;receiptId:string}
 export interface DemoSnapshot {revision:number;parts:DemoPart[];receipts:Receipt[]}
 const STORE='inventory',KEY='synthetic';
@@ -21,9 +22,17 @@ export class SyntheticInventoryStore implements OperationTransport{
  }
  async snapshot(){return this.transaction(state=>{if(!state)throw Error('missing synthetic inventory');validate(state,this.ids);return {value:state}})}
  async send(operation:Operation):Promise<void>{
-  return this.transaction(state=>{if(!state)throw Error('missing synthetic inventory');validate(state,this.ids);if(operation.kind!=='receive-existing-part'||!operation.id)throw Error('unsupported synthetic operation');
+  return this.transaction(state=>{if(!state)throw Error('missing synthetic inventory');validate(state,this.ids);if(!['receive-existing-part','create-demo-part-and-receive'].includes(operation.kind)||!operation.id)throw Error('unsupported synthetic operation');
    const previous=state.receipts.find(r=>r.operation.id===operation.id);if(previous){if(!equal(previous.operation,operation))throw Error('operation identity conflict');return {value:undefined}}
    if(state.receipts.length>=20000)throw Error('synthetic receipt log limit');
+   if(operation.kind==='create-demo-part-and-receive'){
+    const {part,quantity,allocations,expectedRevision}=operation.payload;
+    if(!part||typeof part!=='object'||!Array.isArray(allocations)||typeof quantity!=='number'||expectedRevision!==state.revision)throw Error('stale or invalid new part plan');
+    const p=structuredClone(part) as DemoPart;const identity=p.details?.identity;
+    if(!p.id||!p.name?.trim()||!identity||identity.id!==p.id||!['exact','partial'].includes(identity.mode)||Object.keys(p.stock??{}).length||state.parts.some(x=>x.id===p.id||!!demoIdentity(x)&&strongIdentity(identity,demoIdentity(x)!)))throw Error('duplicate or invalid new part identity');
+    validateAllocation(p.id,quantity,allocations,demoLocations(state.parts,this.ids));p.stock={};for(const a of allocations)p.stock[a.locationId]=a.quantity;
+    state.parts.push(p);state.revision++;state.receipts.push({operation:structuredClone(operation),receiptId:'demo-receipt:'+operation.id});return {next:state,value:undefined};
+   }
    const {partId,locationId,quantity,expectedOccupants}=operation.payload;if(typeof partId!=='string'||typeof locationId!=='string'||typeof quantity!=='number'||!Array.isArray(expectedOccupants)||expectedOccupants.some(x=>typeof x!=='string'))throw Error('invalid receipt operation');
    const part=state.parts.find(p=>p.id===partId),locations=demoLocations(state.parts,this.ids),location=locations.find(l=>l.id===locationId);if(!part||!location||!equal(location.occupants,[...expectedOccupants].sort()))throw Error('stale occupancy');
    validateAllocation(partId,quantity,[{locationId,quantity}],locations);

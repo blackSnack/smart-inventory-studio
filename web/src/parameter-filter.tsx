@@ -1,15 +1,8 @@
-import {useState} from 'react';import {Button,Panel} from './ui';import {validateCatalog} from '../../src/catalog';import {canonicalFields} from '../../src/identity-resolution';import {partitionSearch,type Constraint} from '../../src/parameter-search';import type {DemoPart} from '../../src/synthetic-inventory';import seed from '../../catalog/electronic-parts.json';
+import {useState} from 'react';import {Button,Panel} from './ui';import {validateCatalog} from '../../src/catalog';import {canonicalFields} from '../../src/identity-resolution';import {partitionSearch,type Constraint} from '../../src/parameter-search';import {demoIdentity} from '../../src/demo-part-draft';import type {DemoPart} from '../../src/synthetic-inventory';import seed from '../../catalog/electronic-parts.json';
 const catalog=validateCatalog(seed);
 export interface FilterSelection {category:string;constraints:Constraint[];includeUnknown:boolean}
-// Synthetic fixture specifications only. No inference from arbitrary live inventory names.
-const fixture:Record<string,{category:string;fields:Record<string,string|null>}>={
- 'RES-001':{category:'resistor.smd',fields:{resistance:'10000',tolerance:'±1%',package:'0603',rated_power:'0.1'}},
- 'RES-002':{category:'resistor.smd',fields:{resistance:'10000',tolerance:'±5%',package:'0603',rated_power:'0.1'}},
- 'CAP-001':{category:'capacitor.ceramic',fields:{capacitance:'0.00001',rated_voltage:'25',package:'0805',tolerance:'±10%',dielectric_class:'X7R'}},
- 'CAP-002':{category:'capacitor.ceramic',fields:{capacitance:'0.00001',rated_voltage:'25',package:'0805',tolerance:null,dielectric_class:null}},
-};
 export function filterDemoParts(parts:DemoPart[],selection:FilterSelection){
- const items=parts.flatMap(part=>{const f=fixture[part.id];return f?.category===selection.category?[{part,fields:f.fields}]:[]});
+ const items=parts.flatMap(part=>{const f=demoIdentity(part);return f?.category===selection.category?[{part,fields:f.fields}]:[]});
  const r=partitionSearch(items,selection.constraints);return {matches:r.matches.map(x=>x.part),unknown:r.unknown.map(x=>x.part)}
 }
 const siUnits=['Ω','F','H','V','W','A'];
