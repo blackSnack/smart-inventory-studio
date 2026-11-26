@@ -23,3 +23,4 @@ jobs:
       - run: python -m pip install playwright==1.51.0
       - run: python -m playwright install --with-deps chromium
       - run: python tests/ui-smoke.py
+      - run: python tests/journal-browser.py
