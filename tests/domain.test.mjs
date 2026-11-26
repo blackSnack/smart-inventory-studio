@@ -1,0 +1,15 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {match,normalizeSI,validateAllocation,planExpansion,InvenTreeReadProvider} from '../dist/domain.js';
+const policy={fields:['resistance','tolerance','package'],genericPooling:true,version:1};const a={id:'a',category:'resistor',mode:'generic',fields:{resistance:'10000',tolerance:'1',package:'0603'}};
+test('generic identity equal',()=>assert.equal(match(a,{...a,id:'b'},policy),'same'));
+test('different tolerance',()=>assert.equal(match(a,{...a,fields:{...a.fields,tolerance:'5'}},policy),'different'));
+test('unknown never matches',()=>assert.equal(match(a,{...a,fields:{...a.fields,tolerance:null}},policy),'candidate'));
+test('partial never pools',()=>assert.equal(match({...a,mode:'partial'},{...a,mode:'partial'},policy),'candidate'));
+test('generic disabled',()=>assert.equal(match(a,a,{...policy,genericPooling:false}),'candidate'));
+test('exact conflicting evidence blocks',()=>{const b={...a,mode:'exact',manufacturer:'M',mpn:'X'};assert.equal(match(b,{...b,fields:{...b.fields,tolerance:'5'}},policy),'conflict')});
+test('exact suffix distinguished',()=>{const b={...a,mode:'exact',manufacturer:'M',mpn:'X'};assert.equal(match(b,{...b,mpn:'X-2'},policy),'different')});
+test('SI normalization',()=>{assert.equal(normalizeSI('10 kΩ','Ω'),'10000');assert.equal(normalizeSI('0.01MΩ','Ω'),'10000');assert.equal(normalizeSI('10000mΩ','Ω'),'10');assert.equal(normalizeSI('10µF','F'),'0.00001');assert.throws(()=>normalizeSI('10K','Ω'))});
+const locs=[{id:'1',name:'A',structural:false,occupants:['a']},{id:'2',name:'B',structural:false,occupants:[]},{id:'3',name:'C',structural:false,occupants:['b']}];
+test('split putaway',()=>validateAllocation('a',100,[{locationId:'1',quantity:40},{locationId:'2',quantity:60}],locs));
+test('no mixed or incomplete',()=>{assert.throws(()=>validateAllocation('a',100,[{locationId:'3',quantity:100}],locs));assert.throws(()=>validateAllocation('a',100,[{locationId:'1',quantity:99}],locs))});
+test('expansion retains original coordinates IDs names',()=>{const old=[{id:'1',layer:0,row:0,col:0,name:'A001'}];const p=planExpansion(old,{layers:1,rows:10,cols:10});assert.deepEqual(p.keep,old);assert.equal(p.create.length,99);assert.throws(()=>planExpansion(old,{layers:0,rows:1,cols:1}))});
+test('provider pagination blocks different origin',async()=>{let n=0;const p=new InvenTreeReadProvider('https://example.test','dummy',async()=>{n++;return new Response(JSON.stringify({results:[1],next:'https://elsewhere.test/api/part/'}))});await assert.rejects(p.searchParts('a'),/unsafe pagination/);assert.equal(n,1)});

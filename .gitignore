@@ -1,0 +1,14 @@
+node_modules/
+dist/
+_site/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+__pycache__/
+*.pyc
+playwright-report/
+test-results/
+tests/home-*.png
+*.local.json

@@ -1,0 +1,1 @@
+{"name":"smart-inventory-studio","version":"0.1.0","private":true,"type":"module","scripts":{"build:core":"tsc -p tsconfig.json","test":"node --test tests/*.test.mjs","check":"npm run build:core && npm test"},"devDependencies":{"typescript":"5.8.3"}}
