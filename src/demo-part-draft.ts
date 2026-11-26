@@ -1,10 +1,11 @@
+import type {Evidence} from './enrichment-review.js';
 import type {PhotoDraft} from './ai-provider.js';
 import {parseDraft} from './ai-provider.js';
 import {categoryPolicy,type Catalog} from './catalog.js';
 import {canonicalFields,resolveCandidates} from './identity-resolution.js';
 import {validateAllocation,type Identity,type Allocation,type Location} from './domain.js';
 import type {ApprovedPlan} from './operation-journal.js';
-export interface DemoPartDetails {identity:Identity;draft:PhotoDraft;catalogVersion:string}
+export interface DemoPartDetails {identity:Identity;draft:PhotoDraft;catalogVersion:string;fieldEvidence?:Record<string,Evidence[]>}
 export interface DraftPart {id:string;name:string;spec:string;partial:boolean;stock:Record<string,number>;details?:DemoPartDetails}
 const fixtures:Record<string,{category:string;fields:Record<string,string|null>}>={
  'RES-001':{category:'resistor.smd',fields:{resistance:'10000',tolerance:'±1%',package:'0603',rated_power:'0.1'}},

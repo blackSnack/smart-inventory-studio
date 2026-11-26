@@ -1,5 +1,5 @@
 import type {Suggestion,Evidence} from './enrichment-review.js';
-export interface EnrichmentRequest {partId:string;name:string;category:string;manufacturer?:string;mpn?:string;supplier?:string;sku?:string;known:Record<string,string|null>;allowedKeys:string[]}
+export interface EnrichmentRequest {partId:string;name:string;category:string;manufacturer?:string;mpn?:string;supplier?:string;sku?:string;known:Record<string,string|null>;allowedKeys:string[];sourceUrls?:string[]}
 export interface EnrichmentResult {suggestions:Suggestion[];requiresReview:true;retrievalVerified:false}
 export interface EnrichmentProvider {enrich(input:EnrichmentRequest,signal?:AbortSignal):Promise<EnrichmentResult>}
 const obj=(x:unknown):x is Record<string,unknown>=>!!x&&typeof x==='object'&&!Array.isArray(x);
