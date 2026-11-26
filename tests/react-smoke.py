@@ -74,7 +74,7 @@ try:
    fc.value.set_files([])
    assert page.get_by_role('heading',name='采集元件照片').is_visible()
   page.get_by_test_id('receipt-album').set_input_files({'name':'album.png','mimeType':'image/png','buffer':png});page.get_by_text('album.png',exact=True).wait_for();assert page.get_by_role('button',name='识别元件',exact=True).is_disabled()
-  page.get_by_test_id('receipt-file').set_input_files({'name':'local.png','mimeType':'image/png','buffer':png});page.get_by_text('local.png',exact=True).wait_for();page.once('dialog',lambda d:d.dismiss());page.get_by_role('button',name='取消录入').click();page.get_by_text('local.png',exact=True).wait_for();page.once('dialog',lambda d:d.accept());page.get_by_role('button',name='取消录入').click()
+  page.get_by_test_id('receipt-file').set_input_files({'name':'local.png','mimeType':'image/png','buffer':png});page.get_by_text('local.png',exact=True).wait_for();page.get_by_role('button',name='取消录入').click();page.get_by_role('dialog').get_by_role('button',name='继续录入',exact=True).click();page.get_by_text('local.png',exact=True).wait_for();page.get_by_role('button',name='取消录入').click();page.get_by_role('dialog').get_by_role('button',name='放弃录入',exact=True).click()
   # Explicit mock gateway test; no user credentials or external network.
   page.get_by_role('button',name='设置',exact=True).click();page.get_by_text('AI Gateway · 未配置',exact=True).click()
   page.get_by_label('Agent API Base URL').fill(f'http://127.0.0.1:{gateway_server.server_port}/v1');page.get_by_label('API Key',exact=True).fill('fixture-key');page.get_by_label('模型或 Agent ID').fill('fixture-model')
