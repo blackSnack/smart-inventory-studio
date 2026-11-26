@@ -1,1 +1,1 @@
-import {StrictMode} from 'react';import {createRoot} from 'react-dom/client';import {App} from './app';import './studio.css';createRoot(document.getElementById('root')!).render(<StrictMode><App/></StrictMode>);
+import {StrictMode} from 'react';import {createRoot} from 'react-dom/client';import {App} from './app';import '@fontsource-variable/geist';import './studio.css';createRoot(document.getElementById('root')!).render(<StrictMode><App/></StrictMode>);
