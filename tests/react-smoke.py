@@ -44,6 +44,9 @@ try:
   dialog.get_by_role('button',name='A-L1-R1-C1 有库存',exact=True).click();dialog.get_by_role('button',name='子格 1').click();dialog.get_by_role('button',name='拆分所选格').click();dialog.get_by_role('alert').get_by_text('该抽屉有库存',exact=False).wait_for()
   dialog.get_by_role('button',name='A-L1-R1-C4 已绑定空闲',exact=True).click();dialog.get_by_role('button',name='子格 1').click();dialog.get_by_role('button',name='拆分所选格').click();dialog.get_by_role('button',name='子格 2').wait_for();dialog.get_by_role('button',name='子格 1').click();dialog.get_by_role('button',name='子格 2').click();dialog.get_by_role('button',name='合并相邻格').click();assert dialog.get_by_role('button',name='子格 3').count()==0
   dialog.get_by_role('button',name='预览命名迁移').click();dialog.get_by_text('20 项重命名',exact=False).wait_for();dialog.get_by_role('button',name='关闭').click()
+  # Save a fresh expansion without retiring the existing A-04 fixture used by receiving.
+  page.get_by_role('button',name='编辑布局').click();dialog=page.get_by_role('dialog');dialog.get_by_label('行数').fill('10');dialog.get_by_label('列数').fill('10');dialog.get_by_role('button',name='扩库 / 补齐').click();dialog.get_by_label('已确认实际柜体',exact=False).check();dialog.get_by_role('button',name='保存布局',exact=True).click();dialog.wait_for(state='hidden');page.get_by_role('button',name='A-L1-R10-C10 空闲',exact=True).wait_for()
+  page.reload();page.get_by_role('button',name='仓储',exact=True).click();page.get_by_role('button',name='A-L1-R10-C10 空闲',exact=True).wait_for();page.get_by_role('button',name='A-01 有库存',exact=True).wait_for()
   page.get_by_role('button',name='首页',exact=True).click();page.get_by_role('button',name='手动录入').click()
   page.get_by_role('heading',name='查找已有元件').wait_for();assert page.get_by_role('dialog').count()==0;assert page.locator('input[type=file]').count()==0
   page.get_by_label('搜索已有元件').fill('10k 0603');page.get_by_role('button',name='选择 RES-001').wait_for();page.get_by_role('button',name='选择 RES-002').wait_for()
