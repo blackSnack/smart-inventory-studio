@@ -21,6 +21,13 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install playwright==1.51.0
       - run: python -m playwright install --with-deps chromium
+      - run: python tests/design-evidence.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: studio-design-evidence
+          path: design-evidence/*.jpg
+          if-no-files-found: warn
       - run: python tests/react-smoke.py
       - run: python tests/mobile-layout.py
       - run: python tests/live-read-smoke.py
