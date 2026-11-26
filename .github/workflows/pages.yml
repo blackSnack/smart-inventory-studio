@@ -54,6 +54,7 @@ jobs:
       - run: npm --prefix web ci --ignore-scripts --no-audit --no-fund
       - run: npm --prefix web run build
       - run: python tests/react-smoke.py
+      - run: python tests/mobile-layout.py
       - run: python tests/live-read-smoke.py
       - run: python tests/update-smoke.py
       - name: Package exact static release

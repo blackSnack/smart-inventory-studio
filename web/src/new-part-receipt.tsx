@@ -9,7 +9,7 @@ export function NewPartReceipt({parts,locations,busy,error,onClose,onReuse,onCom
  function invalidate(){setPrepared(null);setApproved(false);setAlloc({});setLocalError('')}
  function check(d:PhotoDraft){try{setPrepared(prepareDemoDraft(d,catalog,mode,'PART-'+crypto.randomUUID(),parts));setApproved(false);setLocalError('')}catch(e){setLocalError(e instanceof Error?e.message:'身份校验失败')}}
  return <Modal open onClose={()=>{if(!busy)onClose()}} title="新元件建档与入库" description="独立模拟库存，审核身份、分配空闲库位并读回。"><fieldset disabled={busy} className="space-y-4">
- <p className="text-sm text-muted">仅写入本机模拟库存。资料不完整的元件独立建档，不和已知规格自动混装。</p>
+ <p className="text-sm text-muted">参数不完整时独立建档。</p>
  <label className="block">身份类型<select aria-label="身份类型" value={mode} onChange={e=>{invalidate();setMode(e.target.value as 'exact'|'partial')}}><option value="partial">Partial · 独立来源 / 参数不完整</option><option value="exact">Exact · 已核验供应商或原厂料号</option></select></label>
  <DraftReview key={mode} draft={draft} catalog={catalog} onChange={d=>{invalidate();setDraft(d)}} onApproved={check} actionLabel="审核并检索已有库存"/>
  {localError&&<p role="alert" className="text-warn">{localError}</p>}
