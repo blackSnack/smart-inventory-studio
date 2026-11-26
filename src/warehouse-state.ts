@@ -8,7 +8,7 @@ export function validateWarehouse(w:WarehouseState){
  if(!w||w.schemaVersion!==1||!Array.isArray(w.cabinets)||!w.cabinets.length||!Array.isArray(w.retired))throw Error('invalid warehouse');
  const cabinets=new Set<string>(),refs=new Set<string>(),compartments=new Set<string>();
  for(const c of w.cabinets){validateCabinet(c.layout);if(cabinets.has(c.layout.id)||!c.leaves||typeof c.leaves!=='object')throw Error('duplicate or invalid cabinet');cabinets.add(c.layout.id);
-  const own=new Set<string>();for(const cell of c.layout.cells){for(const r of cell.drawer.compartments){const id=c.leaves[r.id];if(compartments.has(r.id)||!id||refs.has(id))throw Error('invalid leaf binding');compartments.add(r.id);own.add(r.id);refs.add(id)}
+  const own=new Set<string>();for(const cell of c.layout.cells){for(const r of cell.drawer.compartments){const id=Object.hasOwn(c.leaves,r.id)?c.leaves[r.id]:null;if(compartments.has(r.id)||typeof id!=='string'||!id||refs.has(id))throw Error('invalid leaf binding');compartments.add(r.id);own.add(r.id);refs.add(id)}
    if(cell.drawer.compartments.length===1?cell.locationId!==c.leaves[cell.drawer.compartments[0].id]:cell.locationId!==null)throw Error('invalid drawer reference');
   }
   if(Object.keys(c.leaves).some(k=>!own.has(k)))throw Error('extra leaf binding');
@@ -33,7 +33,7 @@ export function applyCabinetLayout(w:WarehouseState,draft:CabinetLayout,parts:St
  for(const cell of next.cells){
   const before=old?.layout.cells.find(c=>c.id===cell.id);
   for(const r of cell.drawer.compartments){
-   const existing=old?.leaves[r.id];
+   const existing=old&&Object.hasOwn(old.leaves,r.id)?old.leaves[r.id]:undefined;
    if(existing){const previous=before?.drawer.compartments.find(x=>x.id===r.id);if(!previous||['x','y','width','height'].some(k=>previous[k as keyof typeof previous]!==r[k as keyof typeof r]))throw Error('stable leaf geometry changed');leaves[r.id]=existing;kept.add(existing);continue}
    const base=cell.name+(cell.drawer.compartments.length>1?'-S'+(cell.drawer.compartments.indexOf(r)+1):'');let id=base,n=1;while(used.has(id))id=base+'-'+(++n);used.add(id);leaves[r.id]=id;
   }
