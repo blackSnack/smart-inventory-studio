@@ -1,0 +1,549 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": "0.2.0-draft",
+  "status": "seed_not_approved_for_production",
+  "referenceProvider": "LCSC",
+  "fieldDefinitions": {
+    "package": {
+      "key": "package",
+      "labelZh": "封装",
+      "labelEn": "Package",
+      "type": "string",
+      "unit": null,
+      "nullable": true
+    },
+    "resistance": {
+      "key": "resistance",
+      "labelZh": "阻值",
+      "labelEn": "Resistance",
+      "type": "number",
+      "unit": "Ω",
+      "nullable": true
+    },
+    "tolerance": {
+      "key": "tolerance",
+      "labelZh": "容差",
+      "labelEn": "Tolerance",
+      "type": "string",
+      "unit": null,
+      "nullable": true
+    },
+    "rated_voltage": {
+      "key": "rated_voltage",
+      "labelZh": "额定电压",
+      "labelEn": "Voltage Rating",
+      "type": "number",
+      "unit": "V",
+      "nullable": true
+    },
+    "rated_power": {
+      "key": "rated_power",
+      "labelZh": "额定功率",
+      "labelEn": "Power(Watts)",
+      "type": "number",
+      "unit": "W",
+      "nullable": true
+    },
+    "resistor_type": {
+      "key": "resistor_type",
+      "labelZh": "电阻类型",
+      "labelEn": "Type",
+      "type": "string",
+      "unit": null,
+      "nullable": true
+    },
+    "tcr": {
+      "key": "tcr",
+      "labelZh": "电阻温度系数",
+      "labelEn": "Temperature Coefficient",
+      "type": "string",
+      "unit": "ppm/°C",
+      "nullable": true
+    },
+    "operating_temperature": {
+      "key": "operating_temperature",
+      "labelZh": "工作温度",
+      "labelEn": "Operating Temperature",
+      "type": "string",
+      "unit": "°C",
+      "nullable": true
+    },
+    "capacitance": {
+      "key": "capacitance",
+      "labelZh": "容值",
+      "labelEn": "Capacitance",
+      "type": "number",
+      "unit": "F",
+      "nullable": true
+    },
+    "dielectric_class": {
+      "key": "dielectric_class",
+      "labelZh": "陶瓷介质温度特性",
+      "labelEn": "Temperature Coefficient",
+      "type": "string",
+      "unit": null,
+      "nullable": true
+    },
+    "ripple_current": {
+      "key": "ripple_current",
+      "labelZh": "纹波电流",
+      "labelEn": "Ripple Current",
+      "type": "string",
+      "unit": "A",
+      "nullable": true
+    },
+    "lifetime": {
+      "key": "lifetime",
+      "labelZh": "寿命",
+      "labelEn": "Lifetime",
+      "type": "string",
+      "unit": "h",
+      "nullable": true
+    },
+    "pin_spacing": {
+      "key": "pin_spacing",
+      "labelZh": "引脚间距",
+      "labelEn": "Pin Spacing",
+      "type": "number",
+      "unit": "mm",
+      "nullable": true
+    },
+    "diameter": {
+      "key": "diameter",
+      "labelZh": "直径",
+      "labelEn": "Diameter",
+      "type": "number",
+      "unit": "mm",
+      "nullable": true
+    },
+    "seated_height": {
+      "key": "seated_height",
+      "labelZh": "安装高度上限",
+      "labelEn": "Height - Seated (Max)",
+      "type": "number",
+      "unit": "mm",
+      "nullable": true
+    },
+    "esr": {
+      "key": "esr",
+      "labelZh": "等效串联电阻",
+      "labelEn": "Equivalent Series Resistance(ESR)",
+      "type": "string",
+      "unit": "Ω",
+      "nullable": true
+    },
+    "polarity": {
+      "key": "polarity",
+      "labelZh": "极性",
+      "labelEn": "Polarity type",
+      "type": "string",
+      "unit": null,
+      "nullable": true
+    },
+    "inductance": {
+      "key": "inductance",
+      "labelZh": "电感量",
+      "labelEn": "Inductance",
+      "type": "number",
+      "unit": "H",
+      "nullable": true
+    },
+    "saturation_current": {
+      "key": "saturation_current",
+      "labelZh": "饱和电流",
+      "labelEn": "Current - Saturation(Isat)",
+      "type": "string",
+      "unit": "A",
+      "nullable": true
+    },
+    "rated_current": {
+      "key": "rated_current",
+      "labelZh": "额定电流",
+      "labelEn": "Current Rating",
+      "type": "string",
+      "unit": "A",
+      "nullable": true
+    },
+    "dcr": {
+      "key": "dcr",
+      "labelZh": "直流电阻",
+      "labelEn": "DC Resistance(DCR)",
+      "type": "string",
+      "unit": "Ω",
+      "nullable": true
+    },
+    "inductor_type": {
+      "key": "inductor_type",
+      "labelZh": "电感类型",
+      "labelEn": "Type",
+      "type": "string",
+      "unit": null,
+      "nullable": true
+    },
+    "application_grade": {
+      "key": "application_grade",
+      "labelZh": "应用等级",
+      "labelEn": "Application Grade",
+      "type": "string",
+      "unit": null,
+      "nullable": true
+    },
+    "q_at_frequency": {
+      "key": "q_at_frequency",
+      "labelZh": "品质因数及频率",
+      "labelEn": "Q @ Frequency",
+      "type": "string",
+      "unit": null,
+      "nullable": true
+    },
+    "self_resonant_frequency": {
+      "key": "self_resonant_frequency",
+      "labelZh": "自谐振频率",
+      "labelEn": "Frequency - Self Resonant",
+      "type": "string",
+      "unit": "Hz",
+      "nullable": true
+    },
+    "magnetic_core": {
+      "key": "magnetic_core",
+      "labelZh": "磁芯",
+      "labelEn": "Magnetic Core",
+      "type": "string",
+      "unit": null,
+      "nullable": true
+    },
+    "fet_number": {
+      "key": "fet_number",
+      "labelZh": "器件数量",
+      "labelEn": "Number",
+      "type": "string",
+      "unit": null,
+      "nullable": true
+    },
+    "fet_type": {
+      "key": "fet_type",
+      "labelZh": "场效应管类型",
+      "labelEn": "Type",
+      "type": "string",
+      "unit": null,
+      "nullable": true
+    },
+    "vds": {
+      "key": "vds",
+      "labelZh": "漏源电压",
+      "labelEn": "Drain to Source Voltage",
+      "type": "number",
+      "unit": "V",
+      "nullable": true
+    },
+    "id_continuous": {
+      "key": "id_continuous",
+      "labelZh": "连续漏极电流",
+      "labelEn": "Current - Continuous Drain(Id)",
+      "type": "string",
+      "unit": "A",
+      "nullable": true
+    },
+    "fet_configuration": {
+      "key": "fet_configuration",
+      "labelZh": "配置",
+      "labelEn": "Configuration",
+      "type": "string",
+      "unit": null,
+      "nullable": true
+    },
+    "power_dissipation": {
+      "key": "power_dissipation",
+      "labelZh": "功耗",
+      "labelEn": "Pd - Power Dissipation",
+      "type": "string",
+      "unit": "W",
+      "nullable": true
+    },
+    "rds_on": {
+      "key": "rds_on",
+      "labelZh": "导通电阻及测试条件",
+      "labelEn": "RDS(on)",
+      "type": "string",
+      "unit": "Ω",
+      "nullable": true
+    },
+    "vgs_threshold": {
+      "key": "vgs_threshold",
+      "labelZh": "栅源阈值电压及条件",
+      "labelEn": "Gate Threshold Voltage (Vgs(th))",
+      "type": "string",
+      "unit": "V",
+      "nullable": true
+    },
+    "ciss": {
+      "key": "ciss",
+      "labelZh": "输入电容及条件",
+      "labelEn": "Ciss-Input Capacitance",
+      "type": "string",
+      "unit": "F",
+      "nullable": true
+    },
+    "qg": {
+      "key": "qg",
+      "labelZh": "栅极电荷及条件",
+      "labelEn": "Gate Charge(Qg)",
+      "type": "string",
+      "unit": "C",
+      "nullable": true
+    },
+    "crss": {
+      "key": "crss",
+      "labelZh": "反向传输电容及条件",
+      "labelEn": "Reverse Transfer Capacitance (Crss)",
+      "type": "string",
+      "unit": "F",
+      "nullable": true
+    },
+    "coss": {
+      "key": "coss",
+      "labelZh": "输出电容及条件",
+      "labelEn": "Output Capacitance(Coss)",
+      "type": "string",
+      "unit": "F",
+      "nullable": true
+    },
+    "vgs": {
+      "key": "vgs",
+      "labelZh": "栅源电压",
+      "labelEn": "Vgs",
+      "type": "string",
+      "unit": "V",
+      "nullable": true
+    }
+  },
+  "categories": [
+    {
+      "key": "resistor.smd",
+      "labelZh": "贴片电阻",
+      "source": {
+        "provider": "LCSC",
+        "categoryId": "1199",
+        "categoryLabel": "Chip Resistor - Surface Mount",
+        "url": "https://www.lcsc.com/category/1199.html",
+        "observedDate": "2026-11-26"
+      },
+      "parameters": [
+        "package",
+        "resistor_type",
+        "resistance",
+        "tolerance",
+        "rated_voltage",
+        "rated_power",
+        "tcr",
+        "operating_temperature"
+      ],
+      "identityPolicy": {
+        "version": 1,
+        "fields": [
+          "resistance",
+          "tolerance",
+          "package",
+          "rated_power",
+          "rated_voltage",
+          "tcr",
+          "resistor_type"
+        ],
+        "genericPooling": false,
+        "supportedModes": [
+          "exact",
+          "partial",
+          "generic"
+        ],
+        "unknownNeverMatches": true,
+        "status": "draft_requires_category_review"
+      }
+    },
+    {
+      "key": "capacitor.ceramic",
+      "labelZh": "陶瓷电容",
+      "source": {
+        "provider": "LCSC",
+        "categoryId": "1142",
+        "categoryLabel": "Ceramic Capacitors",
+        "url": "https://www.lcsc.com/category/1142.html",
+        "observedDate": "2026-11-26"
+      },
+      "parameters": [
+        "package",
+        "capacitance",
+        "tolerance",
+        "rated_voltage",
+        "dielectric_class"
+      ],
+      "identityPolicy": {
+        "version": 1,
+        "fields": [
+          "capacitance",
+          "tolerance",
+          "package",
+          "rated_voltage",
+          "dielectric_class"
+        ],
+        "genericPooling": false,
+        "supportedModes": [
+          "exact",
+          "partial",
+          "generic"
+        ],
+        "unknownNeverMatches": true,
+        "status": "draft_requires_category_review"
+      }
+    },
+    {
+      "key": "capacitor.aluminum_electrolytic",
+      "labelZh": "铝电解电容",
+      "source": {
+        "provider": "LCSC",
+        "categoryId": "1140",
+        "categoryLabel": "Aluminum Electrolytic Capacitors",
+        "url": "https://www.lcsc.com/category/1140.html",
+        "observedDate": "2026-11-26"
+      },
+      "parameters": [
+        "package",
+        "capacitance",
+        "tolerance",
+        "rated_voltage",
+        "ripple_current",
+        "lifetime",
+        "operating_temperature",
+        "pin_spacing",
+        "diameter",
+        "seated_height",
+        "esr",
+        "polarity"
+      ],
+      "identityPolicy": {
+        "version": 1,
+        "fields": [
+          "capacitance",
+          "tolerance",
+          "rated_voltage",
+          "package",
+          "polarity",
+          "diameter",
+          "seated_height",
+          "operating_temperature",
+          "esr",
+          "ripple_current",
+          "lifetime"
+        ],
+        "genericPooling": false,
+        "supportedModes": [
+          "exact",
+          "partial",
+          "generic"
+        ],
+        "unknownNeverMatches": true,
+        "status": "draft_requires_category_review"
+      }
+    },
+    {
+      "key": "inductor.fixed",
+      "labelZh": "固定电感",
+      "source": {
+        "provider": "LCSC",
+        "categoryId": "1181",
+        "categoryLabel": "Fixed Inductors",
+        "url": "https://www.lcsc.com/category/1181.html",
+        "observedDate": "2026-11-26"
+      },
+      "parameters": [
+        "package",
+        "inductance",
+        "saturation_current",
+        "tolerance",
+        "rated_current",
+        "dcr",
+        "inductor_type",
+        "application_grade",
+        "q_at_frequency",
+        "self_resonant_frequency",
+        "operating_temperature",
+        "magnetic_core"
+      ],
+      "identityPolicy": {
+        "version": 1,
+        "fields": [
+          "inductance",
+          "tolerance",
+          "package",
+          "rated_current",
+          "saturation_current",
+          "dcr",
+          "inductor_type",
+          "magnetic_core"
+        ],
+        "genericPooling": false,
+        "supportedModes": [
+          "exact",
+          "partial",
+          "generic"
+        ],
+        "unknownNeverMatches": true,
+        "status": "draft_requires_category_review"
+      }
+    },
+    {
+      "key": "transistor.fet.single",
+      "labelZh": "单管场效应管",
+      "source": {
+        "provider": "LCSC",
+        "categoryId": "1436",
+        "categoryLabel": "Single FETs, MOSFETs",
+        "url": "https://www.lcsc.com/category/1436.html",
+        "observedDate": "2026-11-26"
+      },
+      "parameters": [
+        "package",
+        "fet_number",
+        "fet_type",
+        "vds",
+        "id_continuous",
+        "fet_configuration",
+        "operating_temperature",
+        "power_dissipation",
+        "rds_on",
+        "vgs_threshold",
+        "ciss",
+        "qg",
+        "crss",
+        "coss",
+        "vgs"
+      ],
+      "identityPolicy": {
+        "version": 1,
+        "fields": [],
+        "genericPooling": false,
+        "supportedModes": [
+          "exact",
+          "partial"
+        ],
+        "unknownNeverMatches": true,
+        "status": "draft_requires_category_review"
+      }
+    }
+  ],
+  "policies": {
+    "unknownValue": null,
+    "missingCategory": "report_unmapped",
+    "unknownField": "report_unmapped",
+    "preserveRawValue": true,
+    "preserveEvidence": true,
+    "doNotInferMissingRatings": true,
+    "quantityAndLocationNotPartParameters": true,
+    "conditionDependentFields": "retain original value, conditions and source; no scalar coercion without validation"
+  },
+  "storagePolicy": {
+    "onePartPerLeaf": true,
+    "partialSourceGroupsSeparate": true,
+    "quantityMustBalance": true,
+    "capacityRequiresHumanConfirmation": true
+  }
+}
