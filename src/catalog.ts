@@ -11,8 +11,8 @@ export function validateCatalog(input:unknown):Catalog {
  }
  for(const c of input.categories){
   if(!record(c)||typeof c.key!=='string'||!c.key.trim()||keys.has(c.key)||!strings(c.parameters)||new Set(c.parameters).size!==c.parameters.length||!record(c.identityPolicy)||!record(c.source))throw Error('invalid category');
-  keys.add(c.key);if(c.parameters.some(k=>!Object.hasOwn(defs,k)))throw Error('unknown parameter');
-  const p=c.identityPolicy;if(!Number.isSafeInteger(p.version)||Number(p.version)<1||!strings(p.fields)||new Set(p.fields).size!==p.fields.length||p.fields.some(k=>!c.parameters.includes(k))||typeof p.genericPooling!=='boolean'||p.unknownNeverMatches!==true||!strings(p.supportedModes)||p.supportedModes.some(m=>!['exact','generic','partial'].includes(m))||p.genericPooling&&(!p.fields.length||!p.supportedModes.includes('generic')))throw Error('invalid identity policy');
+  const parameters=c.parameters;keys.add(c.key);if(parameters.some(k=>!Object.hasOwn(defs,k)))throw Error('unknown parameter');
+  const p=c.identityPolicy;if(!Number.isSafeInteger(p.version)||Number(p.version)<1||!strings(p.fields)||new Set(p.fields).size!==p.fields.length||p.fields.some(k=>!parameters.includes(k))||typeof p.genericPooling!=='boolean'||p.unknownNeverMatches!==true||!strings(p.supportedModes)||p.supportedModes.some(m=>!['exact','generic','partial'].includes(m))||p.genericPooling&&(!p.fields.length||!p.supportedModes.includes('generic')))throw Error('invalid identity policy');
   if(typeof c.source.provider!=='string'||typeof c.source.url!=='string'||new URL(c.source.url).protocol!=='https:')throw Error('invalid provenance');
  }
  return input as unknown as Catalog;
