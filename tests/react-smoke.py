@@ -32,8 +32,8 @@ try:
  with sync_playwright() as p:
   b=p.chromium.launch();context=b.new_context(viewport={'width':390,'height':844});page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
   page.goto(f'http://127.0.0.1:{server.server_port}/');page.get_by_role('heading',name='Studio Workspace').wait_for()
-  page.get_by_role('textbox',name='全局搜索').fill('10k');page.get_by_role('button',name='搜索',exact=True).click();page.get_by_text('全仓库 · 2 种元件').wait_for()
-  page.get_by_text('技术参数筛选',exact=True).click();page.get_by_label('筛选分类').select_option('resistor.smd');page.get_by_label('技术参数',exact=True).select_option('tolerance');page.get_by_label('参数值').fill('1%');page.get_by_role('button',name='添加筛选条件').click();page.get_by_text('全仓库 · 1 种严格匹配元件').wait_for();assert page.get_by_text('RES-002',exact=False).count()==0
+  page.get_by_role('textbox',name='全局搜索').fill('10k 0603');page.get_by_role('button',name='搜索',exact=True).click();page.get_by_text('全仓库 · 2 种元件').wait_for();page.get_by_role('button',name='清除全局搜索').click();page.get_by_text('全仓库 · 4 种元件').wait_for();page.get_by_label('全局搜索').fill('10k 0603');page.get_by_text('全仓库 · 2 种元件').wait_for()
+  page.get_by_text('技术参数筛选',exact=True).click();page.get_by_label('筛选分类').select_option('resistor.smd');page.get_by_label('技术参数',exact=True).select_option('tolerance');page.get_by_label('参数值').fill('1%');page.get_by_role('button',name='添加筛选条件').click();page.get_by_text('全仓库 · 1 种严格匹配元件').wait_for();assert page.get_by_text('RES-002',exact=False).count()==0;page.locator('summary').filter(has_text='技术参数筛选').click();assert not page.get_by_label('筛选分类').is_visible();page.locator('summary').filter(has_text='技术参数筛选').click();assert page.get_by_label('筛选分类').is_visible()
   page.get_by_role('button',name='清除参数筛选').click();page.get_by_role('textbox',name='全局搜索').fill('10µF');page.get_by_role('button',name='搜索',exact=True).click()
   if not page.get_by_label('筛选分类').is_visible():page.get_by_text('技术参数筛选',exact=True).click()
   page.get_by_label('筛选分类').select_option('capacitor.ceramic');page.get_by_label('技术参数',exact=True).select_option('tolerance');page.get_by_label('参数值').fill('10%');page.get_by_role('button',name='添加筛选条件').click();page.get_by_text('待确认候选 · 1 种',exact=False).wait_for();page.get_by_text('CAP-002',exact=False).wait_for();page.get_by_label('显示参数未知的待确认候选').uncheck();assert page.get_by_text('CAP-002',exact=False).count()==0
@@ -50,7 +50,7 @@ try:
   page.get_by_text('技术参数筛选',exact=True).click();page.get_by_label('筛选分类').select_option('resistor.smd');page.get_by_label('技术参数',exact=True).select_option('tolerance');page.get_by_label('参数值').fill('1%');page.get_by_role('button',name='添加筛选条件').click();assert page.get_by_role('button',name='选择 RES-002').count()==0
   page.get_by_role('button',name='选择 RES-001').click();page.get_by_role('heading',name='数量与存放位置').wait_for()
   page.get_by_label('本次入库数量').fill('100');page.get_by_role('button',name='添加存放位置').click();assert page.get_by_role('button',name='选择库位 A-02').count()==0
-  page.get_by_role('button',name='选择库位 A-01').click();assert page.get_by_label('A-01 数量').input_value()=='100';page.get_by_label('A-01 数量').fill('40')
+  page.get_by_role('button',name='选择库位 A-01').click();assert page.get_by_label('A-01 数量').input_value()=='100';page.get_by_label('A-01 数量').fill('40');page.get_by_text('还需分配 60 件',exact=True).wait_for()
   page.get_by_role('button',name='添加存放位置').click();page.get_by_role('button',name='选择库位 A-04').click();assert page.get_by_label('A-04 数量').input_value()=='60';page.get_by_role('button',name='上一步').click();page.get_by_role('button',name='选择 RES-001').click();assert page.get_by_label('A-04 数量').input_value()=='60'
   assert page.get_by_role('button',name='确认入库',exact=True).is_disabled();page.get_by_label('已核对元件身份',exact=False).check();page.get_by_role('button',name='确认入库',exact=True).click()
   page.get_by_role('button',name='元件',exact=True).click();page.get_by_role('textbox',name='全局搜索').fill('RES-001');page.get_by_text('300 件',exact=True).wait_for();page.get_by_role('button',name='首页',exact=True).click()
@@ -74,7 +74,7 @@ try:
    fc.value.set_files([])
    assert page.get_by_role('heading',name='采集元件照片').is_visible()
   page.get_by_test_id('receipt-album').set_input_files({'name':'album.png','mimeType':'image/png','buffer':png});page.get_by_text('album.png',exact=True).wait_for();assert page.get_by_role('button',name='识别元件',exact=True).is_disabled()
-  page.get_by_test_id('receipt-file').set_input_files({'name':'local.png','mimeType':'image/png','buffer':png});page.get_by_text('local.png',exact=True).wait_for();page.get_by_role('button',name='取消录入').click()
+  page.get_by_test_id('receipt-file').set_input_files({'name':'local.png','mimeType':'image/png','buffer':png});page.get_by_text('local.png',exact=True).wait_for();page.get_by_role('button',name='取消录入').click();page.get_by_role('dialog').get_by_role('button',name='继续录入',exact=True).click();page.get_by_text('local.png',exact=True).wait_for();page.get_by_role('button',name='取消录入').click();page.get_by_role('dialog').get_by_role('button',name='放弃录入',exact=True).click()
   # Explicit mock gateway test; no user credentials or external network.
   page.get_by_role('button',name='设置',exact=True).click();page.get_by_text('AI Gateway · 未配置',exact=True).click()
   page.get_by_label('Agent API Base URL').fill(f'http://127.0.0.1:{gateway_server.server_port}/v1');page.get_by_label('API Key',exact=True).fill('fixture-key');page.get_by_label('模型或 Agent ID').fill('fixture-model')
