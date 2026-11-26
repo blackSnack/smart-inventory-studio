@@ -26,6 +26,7 @@ jobs:
       - run: python -m pip install playwright==1.51.0
       - run: python -m playwright install --with-deps chromium
       - run: python tests/ui-smoke.py
+      - run: python tests/journal-browser.py
       - run: npm --prefix web ci --ignore-scripts --no-audit --no-fund
       - run: npm --prefix web run build
       - run: python tests/react-smoke.py
