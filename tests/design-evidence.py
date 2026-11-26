@@ -14,6 +14,11 @@ def capture(page,name):
  page.evaluate('window.scrollTo(0,0)')
  page.wait_for_timeout(120)
  assert page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth+1'),name
+ for group in page.locator('.studio-search-group').all():
+  if group.is_visible():
+   assert group.evaluate("e=>{const i=e.querySelector('input').getBoundingClientRect(),s=e.querySelector('.studio-icon').getBoundingClientRect(),b=e.querySelector('button')?.getBoundingClientRect();return i.left>=s.right+4&&(!b||i.right<=b.left+1)}"), 'search icon overlaps text'
+ for row in page.locator('.studio-allocation-row').all():
+  assert row.evaluate("e=>{const a=e.querySelector('[data-testid=allocation-label]').getBoundingClientRect(),i=e.querySelector('input').getBoundingClientRect(),b=e.querySelector('button').getBoundingClientRect();return a.width>=80&&i.width>=70&&i.width<=96&&a.right<=i.left&&i.right<=b.left}"), 'allocation row squeezed'
  data=page.screenshot(type='jpeg',quality=52,animations='disabled')
  (out/(name+'.jpg')).write_bytes(data)
  print('DESIGN_IMAGE:'+name+':'+b64encode(data).decode('ascii'),flush=True)

@@ -8,3 +8,6 @@ The requested external article could not be retrieved (URL variants/search faile
 
 ## User-supplied five-section rules
 The user supplied the full rules after the previous source-only audit. DESIGN.md now supersedes the earlier warm palette/spacing specification. Apply neutral monochrome surfaces and one accent, flat layout, Geist/Reicon, intentional secondary actions, and actual screenshot inspection. Cascading menu rule is currently not applicable: no hover submenus. Real screenshot review remains required; no acceptance claim yet.
+
+## Actual rendered review of v0.3.6
+Reviewed eight JPEGs emitted by Chromium run 45878079264 (job 140110152739), not just CSS. Home/search had icon overlap; putaway location A-01 was compressed to a narrow vertical string by global input width. Fix search with non-overlay flex layout and allocations with explicit grid columns. Preserve all business checks. Reinspect screenshots at exact new head before closing UI acceptance. Native iOS remains deferred.
