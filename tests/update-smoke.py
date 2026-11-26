@@ -24,6 +24,7 @@ with TemporaryDirectory() as tmp:
     page.evaluate('navigator.serviceWorker.ready');page.wait_for_function('!!navigator.serviceWorker.controller')
     assert page.evaluate("async()=>!(await caches.match(new URL('version.json',location.href)))")
     page.get_by_role('button',name='检查更新',exact=True).click();page.get_by_text('没有发现更高版本。').wait_for();page.get_by_role('button',name='关闭').click()
+    page.get_by_role('button',name='手动录入').click();page.get_by_label('选择已确认相同元件').select_option('RES-001');page.get_by_label('本次入库数量').fill('1');page.get_by_label('A-01 数量').fill('1');page.get_by_label('已确认实际容量及元件身份').check();page.get_by_role('button',name='确认模拟入库').click();page.get_by_text('501',exact=True).wait_for()
     shutil.copytree(web/'dist',path,dirs_exist_ok=True)
     page.clock.fast_forward(61000);page.get_by_test_id('latest-version').wait_for(timeout=15000)
     assert 'v'+current in page.get_by_test_id('current-version').inner_text()
@@ -31,8 +32,8 @@ with TemporaryDirectory() as tmp:
     assert page.get_by_role('button',name='更新并重新加载').is_disabled()
     page.get_by_label('已保存需要保留的内容，确认重新加载').check();page.get_by_role('button',name='更新并重新加载').click()
     expect(page.get_by_test_id('current-version')).to_have_text('v'+new,timeout=50000)
-    assert page.get_by_test_id('latest-version').count()==0
-    context.set_offline(True);page.reload();expect(page.get_by_test_id('current-version')).to_have_text('v'+new);assert not errors,errors
+    assert page.get_by_test_id('latest-version').count()==0;page.get_by_text('501',exact=True).wait_for()
+    context.set_offline(True);page.reload();expect(page.get_by_test_id('current-version')).to_have_text('v'+new);page.get_by_text('501',exact=True).wait_for();assert not errors,errors
     b.close()
   finally:server.shutdown()
  finally:

@@ -18,7 +18,7 @@ try:
   dialog.get_by_role('button',name='A-L1-R1-C4 已绑定空闲',exact=True).click();dialog.get_by_role('button',name='子格 1').click();dialog.get_by_role('button',name='拆分所选格').click();dialog.get_by_role('button',name='子格 2').wait_for();dialog.get_by_role('button',name='子格 1').click();dialog.get_by_role('button',name='子格 2').click();dialog.get_by_role('button',name='合并相邻格').click();assert dialog.get_by_role('button',name='子格 3').count()==0
   dialog.get_by_role('button',name='预览命名迁移').click();dialog.get_by_text('20 项重命名',exact=False).wait_for();dialog.get_by_role('button',name='关闭').click()
   page.get_by_role('button',name='首页',exact=True).click();page.get_by_role('button',name='手动录入').click();page.get_by_label('选择已确认相同元件').select_option('RES-001');page.get_by_label('A-01 数量').fill('40');page.get_by_label('A-04 数量').fill('60');page.get_by_label('已确认实际容量及元件身份').check();page.get_by_role('button',name='确认模拟入库').click();page.get_by_text('600',exact=True).wait_for()
-  page.evaluate('navigator.serviceWorker.ready');page.wait_for_function('!!navigator.serviceWorker.controller');context.set_offline(True);page.reload();page.get_by_role('heading',name='我的工作室').wait_for();assert not errors,errors
+  page.evaluate('navigator.serviceWorker.ready');page.wait_for_function('!!navigator.serviceWorker.controller');context.set_offline(True);page.reload();page.get_by_role('heading',name='我的工作室').wait_for();page.get_by_text('600',exact=True).wait_for();assert not errors,errors
   b.close()
 finally: server.shutdown()
-print('PASS: React navigation, search, matrix, split receipt, service worker offline shell (synthetic data).')
+print('PASS: React navigation, search, matrix, split receipt, persistent synthetic receipt and offline shell (synthetic data).')

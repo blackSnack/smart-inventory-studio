@@ -20,6 +20,16 @@ try:
   }""")
   page.reload()
   page.evaluate("""async()=>{const {IndexedDbJournalStore:S}=await import('/indexeddb-journal.js');const {executeNext,reconcile}=await import('/operation-journal.js');const s=await S.open('a');let sends=0;const t={send:async()=>{sends++},observe:async()=>({status:'verified',evidence:'synthetic readback'})};let blocked=false;try{await executeNext(s,t,'p','a')}catch{blocked=true}if(!blocked||sends!==0)throw Error('replay after reload');await reconcile(s,t,'p','a');if((await s.pending()).length!==0||sends!==0)throw Error('bad recovery');s.close()}""")
+  page.evaluate("""async()=>{const {SyntheticInventoryStore:S,DEMO_INSTANCE,demoLocations}=await import('/synthetic-inventory.js');const {IndexedDbJournalStore:J}=await import('/indexeddb-journal.js');const {createJournal,executeNext}=await import('/operation-journal.js');const {planExistingPartReceipt}=await import('/receiving-plan.js');
+   const seed=[{id:'p',name:'test',spec:'10k',partial:false,stock:{A:10}},{id:'q',name:'other',spec:'20k',partial:false,stock:{C:1}}],ids=['A','B','C'];const s=await S.open(seed,ids,'test-synthetic'),j=await J.open(DEMO_INSTANCE,'test-synthetic-journal');const before=await s.snapshot();
+   const plan=planExistingPartReceipt({planId:'r',instanceId:DEMO_INSTANCE,catalogHash:'test',snapshotHash:'0',approvalId:'approval',partId:'p',identityConfirmed:true,physicalSpaceConfirmed:true,quantity:10,allocations:[{locationId:'A',quantity:4},{locationId:'B',quantity:6}]},demoLocations(before.parts,ids));await j.create(createJournal(plan));
+   const fault={send:async op=>{await s.send(op);throw Error('response lost after atomic write')},observe:op=>s.observe(op)};const result=await executeNext(j,fault,'r',DEMO_INSTANCE);if(result.steps[0].state!=='unknown'||(await s.snapshot()).parts[0].stock.A!==14)throw Error('postcommit fault not captured');s.close();j.close()
+  }""")
+  page.reload()
+  page.evaluate("""async()=>{const {SyntheticInventoryStore:S,DEMO_INSTANCE}=await import('/synthetic-inventory.js');const {IndexedDbJournalStore:J}=await import('/indexeddb-journal.js');const {reconcile,executeNext}=await import('/operation-journal.js');
+   const seed=[{id:'p',name:'test',spec:'10k',partial:false,stock:{A:10}},{id:'q',name:'other',spec:'20k',partial:false,stock:{C:1}}],ids=['A','B','C'];const s=await S.open(seed,ids,'test-synthetic'),j=await J.open(DEMO_INSTANCE,'test-synthetic-journal');await reconcile(j,s,'r',DEMO_INSTANCE);const done=await executeNext(j,s,'r',DEMO_INSTANCE);const a=await s.snapshot();if(!done.steps.every(x=>x.state==='verified')||a.parts[0].stock.A!==14||a.parts[0].stock.B!==6||a.receipts.length!==2)throw Error('receipt conservation failed');
+   await s.send(done.steps[0].operation);if((await s.snapshot()).parts[0].stock.A!==14)throw Error('duplicate applied');let blocked=false;try{await s.send({id:'bad',kind:'receive-existing-part',payload:{partId:'p',locationId:'C',quantity:1,expectedOccupants:['q']}})}catch{blocked=true}if(!blocked)throw Error('mixed stock accepted');s.close();j.close()
+  }""")
   b.close()
 finally:server.shutdown()
-print('PASS: real Chromium IndexedDB atomic CAS, instance isolation, duplicate rejection and reload recovery; synthetic transport only.')
+print('PASS: real Chromium IndexedDB atomic CAS, instance isolation, duplicate rejection and reload recovery; synthetic transport plus atomic postcommit-timeout recovery; no real backend.')

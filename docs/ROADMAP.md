@@ -13,3 +13,6 @@ Scope: static PWA, no added service. Issue list is the backlog of record. A chec
 | 5 | #23 #24 | isolated integration, device camera and local API, approved production rollout |
 
 Additional backlog: bulk catalog creation and batch enrichment, execution journal recovery, explicit public demo smoke. Parallelize independent waves; no production mutation until schema/permissions verified and catalog frozen. Local Agent owns real environment evidence and physical mapping; repository Agent owns software and synthetic fixtures. Do not mark the parent issue complete for partial implementation.
+
+## Current software-first scope
+Live NAS/InvenTree and external AI Gateway, physical mapping and mobile integration acceptance (#22 #23 #24) are deliberately deferred to a separate user-led phase. Complete software contracts, simulated workflows and isolated failure/recovery tests without waiting for those environments. No live inventory writes or credentials. Publish each verified delivery through #44 and docs/RELEASE.md.
