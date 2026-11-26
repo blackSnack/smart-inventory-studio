@@ -29,5 +29,5 @@ export async function executeNext(store:JournalStore,transport:OperationTranspor
 }
 export async function reconcile(store:JournalStore,transport:OperationTransport,planId:string,instanceId:string):Promise<Journal>{
  const j=await store.read(planId);assertInstance(j,instanceId);const i=j.steps.findIndex(s=>s.state!=='verified');if(i<0)return j;const s=j.steps[i];if(s.state!=='sent'&&s.state!=='unknown')throw Error('step not eligible for reconciliation');
- const r=await observe(transport,s.operation);return save(store,j,transition(j,i,r.status,r.evidence));
+ const r=await observe(transport,s.operation);if(s.state===r.status&&s.evidence===r.evidence)return j;return save(store,j,transition(j,i,r.status,r.evidence));
 }

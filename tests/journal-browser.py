@@ -15,7 +15,7 @@ try:
    await a.create(j);let duplicate=false;try{await a.create(j)}catch{duplicate=true}if(!duplicate)throw Error('duplicate create');
    let sends=0;const t={send:async()=>{sends++;throw Error('timeout')},observe:async()=>({status:'unknown',evidence:'not confirmed'})};
    const results=await Promise.allSettled([executeNext(a,t,'p','a'),executeNext(b,t,'p','a')]);if(sends!==1||results.filter(x=>x.status==='fulfilled').length!==1)throw Error('CAS race');
-   if((await a.read('p')).steps[0].state!=='unknown'||(await a.pending()).length!==1||(await other.pending()).length!==0)throw Error('bad scope/state');
+   const {reconcile}=await import('/operation-journal.js');await reconcile(a,t,'p','a');const revision=(await a.read('p')).revision;await reconcile(a,t,'p','a');if((await a.read('p')).revision!==revision)throw Error('repeated unchanged observation');if((await a.read('p')).steps[0].state!=='unknown'||(await a.pending()).length!==1||(await other.pending()).length!==0)throw Error('bad scope/state');
    a.close();b.close();other.close();
   }""")
   page.reload()

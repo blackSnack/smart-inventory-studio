@@ -8,7 +8,7 @@ export class IndexedDbJournalStore implements JournalStore{
  private constructor(private db:IDBDatabase,private instanceId:string){}
  static open(instanceId:string,databaseName='smart-inventory-journal-v1',factory:IDBFactory=indexedDB):Promise<IndexedDbJournalStore>{
   if(!instanceId.trim()||!databaseName.trim())return Promise.reject(Error('invalid database scope'));
-  return new Promise((resolve,reject)=>{const req=factory.open(databaseName,1);req.onupgradeneeded=()=>{req.result.createObjectStore(STORE,{keyPath:['instanceId','planId']})};req.onerror=()=>reject(req.error);req.onblocked=()=>reject(Error('journal database blocked'));req.onsuccess=()=>{const db=req.result;db.onversionchange=()=>db.close();resolve(new IndexedDbJournalStore(db,instanceId))}});
+  return new Promise((resolve,reject)=>{const req=factory.open(databaseName,1);req.onupgradeneeded=()=>{req.result.createObjectStore(STORE,{keyPath:['instanceId','planId']}).createIndex('instanceId','instanceId')};req.onerror=()=>reject(req.error);req.onblocked=()=>reject(Error('journal database blocked'));req.onsuccess=()=>{const db=req.result;db.onversionchange=()=>db.close();resolve(new IndexedDbJournalStore(db,instanceId))}});
  }
  close(){this.db.close()}
  async create(journal:Journal):Promise<void>{
@@ -25,6 +25,6 @@ export class IndexedDbJournalStore implements JournalStore{
   }});
  }
  async pending():Promise<Journal[]>{
-  return new Promise((resolve,reject)=>{const tx=this.db.transaction(STORE,'readonly'),req=tx.objectStore(STORE).getAll();req.onerror=()=>reject(req.error);req.onsuccess=()=>{try{const rows=(req.result as Row[]).filter(r=>r.instanceId===this.instanceId);for(const r of rows)validate(r.journal,this.instanceId,r.planId);resolve(rows.map(r=>r.journal).filter(j=>j.steps.some(s=>s.state!=='verified')))}catch(e){reject(e)}}});
+  return new Promise((resolve,reject)=>{const tx=this.db.transaction(STORE,'readonly'),req=tx.objectStore(STORE).index('instanceId').getAll(this.instanceId);req.onerror=()=>reject(req.error);req.onsuccess=()=>{try{const rows=(req.result as Row[]).filter(r=>r.instanceId===this.instanceId);for(const r of rows)validate(r.journal,this.instanceId,r.planId);resolve(rows.map(r=>r.journal).filter(j=>j.steps.some(s=>s.state!=='verified')))}catch(e){reject(e)}}});
  }
 }
