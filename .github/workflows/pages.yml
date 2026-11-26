@@ -31,7 +31,11 @@ jobs:
           tag=$(node -p "'v'+require('./web/package.json').version")
           existing=$(git ls-remote --tags origin "refs/tags/$tag")
           if [ -n "$existing" ] && ! grep -q "^$GITHUB_SHA[[:space:]]" <<< "$existing"; then
-            if ! grep -q '^publish=false
+            if ! grep -Fxq 'publish=false' "$GITHUB_OUTPUT"; then echo 'Tag points to another commit'; exit 1; fi
+          fi
+  build:
+    needs: plan
+    if: github.ref == 'refs/heads/main' && needs.plan.outputs.publish == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -82,46 +86,6 @@ jobs:
       - name: Deploy release preview
         id: deployment
         uses: actions/deploy-pages@v4
- "$GITHUB_OUTPUT"; then echo 'Tag points to another commit'; exit 1; fi
-          fi
-  build:
-    needs: plan
-    if: github.ref == 'refs/heads/main' && needs.plan.outputs.publish == 'true'
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - run: npm ci --ignore-scripts --no-audit --no-fund
-      - run: npm run check
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - run: python -m pip install playwright==1.51.0
-      - run: python -m playwright install --with-deps chromium
-      - run: python tests/ui-smoke.py
-      - run: python tests/journal-browser.py
-      - run: npm --prefix web ci --ignore-scripts --no-audit --no-fund
-      - run: npm --prefix web run build
-      - run: python tests/react-smoke.py
-      - run: python tests/live-read-smoke.py
-      - uses: actions/configure-pages@v5
-      - run: mkdir -p _site && cp index.html _site/index.html && touch _site/.nojekyll && mkdir -p _site/react-preview && cp -R web/dist/. _site/react-preview/
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-  deploy:
-    if: github.ref == 'refs/heads/main'
-    needs: build
-    runs-on: ubuntu-24.04
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy preview
-        id: deployment
-        uses: actions/deploy-pages@v4
   release:
     needs: [plan, deploy]
     runs-on: ubuntu-24.04
@@ -138,7 +102,7 @@ jobs:
           TAG: ${{ needs.plan.outputs.tag }}
         run: |
           for attempt in {1..12}; do
-            if curl -fsS --max-time 10 "${SITE%/}/react-preview/version.json?commit=$GITHUB_SHA" -o /tmp/studio-version.json && python -c 'import json,os; m=json.load(open("/tmp/studio-version.json")); assert "v"+m["version"]==os.environ["TAG"] and m["commit"]==os.environ["GITHUB_SHA"]'; then exit 0; fi
+            if curl -fsS --max-time 10 "${SITE%/}/react-preview/version.json?commit=$GITHUB_SHA&attempt=$attempt" -o /tmp/studio-version.json && python -c 'import json,os; m=json.load(open("/tmp/studio-version.json")); assert "v"+m["version"]==os.environ["TAG"] and m["commit"]==os.environ["GITHUB_SHA"]'; then exit 0; fi
             sleep 5
           done
           exit 1
