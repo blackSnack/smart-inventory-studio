@@ -29,13 +29,13 @@ try:
   page.get_by_role('button',name='选择 RES-001').click();page.get_by_role('heading',name='数量与存放位置').wait_for()
   page.get_by_label('本次入库数量').fill('100');page.get_by_role('button',name='添加存放位置').click();assert page.get_by_role('button',name='选择库位 A-02').count()==0
   page.get_by_role('button',name='选择库位 A-01').click();assert page.get_by_label('A-01 数量').input_value()=='100';page.get_by_label('A-01 数量').fill('40')
-  page.get_by_role('button',name='添加存放位置').click();page.get_by_role('button',name='选择库位 A-04').click();assert page.get_by_label('A-04 数量').input_value()=='60'
+  page.get_by_role('button',name='添加存放位置').click();page.get_by_role('button',name='选择库位 A-04').click();assert page.get_by_label('A-04 数量').input_value()=='60';page.get_by_role('button',name='上一步').click();page.get_by_role('button',name='选择 RES-001').click();assert page.get_by_label('A-04 数量').input_value()=='60'
   assert page.get_by_role('button',name='确认入库',exact=True).is_disabled();page.get_by_label('已核对元件身份',exact=False).check();page.get_by_role('button',name='确认入库',exact=True).click()
   page.get_by_role('button',name='元件',exact=True).click();page.get_by_role('textbox',name='全局搜索').fill('RES-001');page.get_by_text('300 件',exact=True).wait_for();page.get_by_role('button',name='首页',exact=True).click()
   page.get_by_role('button',name='手动录入').click();page.get_by_role('button',name='新建元件',exact=True).click()
   page.get_by_label('元件分类').select_option('resistor.smd');page.get_by_label('元件名称').fill('Historical 22k resistor');page.get_by_label('阻值 · Ω').fill('22kΩ')
   page.get_by_label('已核对草稿和来源',exact=False).check();page.get_by_role('button',name='核对已有库存').click();page.get_by_role('button',name='确认独立建档').click()
-  page.get_by_label('本次入库数量').fill('20');page.get_by_role('button',name='添加存放位置').click();page.get_by_label('搜索空闲或同元件库位').fill('A-05');page.get_by_role('button',name='选择库位 A-05').click();page.get_by_label('已核对元件身份及相同来源',exact=False).check();page.get_by_role('button',name='确认入库',exact=True).click()
+  page.get_by_label('本次入库数量').fill('20');page.get_by_role('button',name='添加存放位置').click();page.get_by_label('搜索空闲或同元件库位').fill('A-05');page.get_by_role('button',name='选择库位 A-05').click();page.get_by_label('已确认独立档案及实际存放空间',exact=False).check();page.get_by_role('button',name='确认入库',exact=True).click()
   page.get_by_role('button',name='元件',exact=True).click();page.get_by_role('textbox',name='全局搜索').fill('Historical 22k');page.get_by_text('20 件',exact=True).wait_for();page.get_by_role('button',name='首页',exact=True).click()
   # All image sources have independent file inputs; only the camera requests capture.
   page.get_by_role('button',name='拍照录入').click();page.get_by_role('heading',name='采集元件照片').wait_for()
@@ -67,9 +67,9 @@ try:
    route.fulfill(json={'choices':[{'message':{'content':json.dumps(draft)}}]},headers=headers)
   page.route('https://gateway.example.test/**',gateway)
   page.get_by_role('button',name='首页',exact=True).click();page.get_by_role('button',name='拍照录入').click();page.get_by_test_id('receipt-camera').set_input_files({'name':'photo.png','mimeType':'image/png','buffer':png});page.get_by_role('button',name='识别元件',exact=True).click()
-  page.get_by_role('heading',name='核对元件资料').wait_for();assert page.get_by_label('元件名称').input_value()=='AI 33k resistor';assert len(requests)==1
+  page.get_by_role('heading',name='核对元件资料').wait_for();page.get_by_alt_text('原始元件照片',exact=True).wait_for();assert page.get_by_label('元件名称').input_value()=='AI 33k resistor';assert len(requests)==1
   page.get_by_label('已核对草稿和来源',exact=False).check();page.get_by_role('button',name='核对已有库存').click();page.get_by_role('button',name='确认独立建档').click()
-  page.get_by_label('本次入库数量').fill('7');page.get_by_role('button',name='添加存放位置').click();page.get_by_label('搜索空闲或同元件库位').fill('B-02');page.get_by_role('button',name='选择库位 B-02').click();page.get_by_label('已核对元件身份及相同来源',exact=False).check();page.get_by_role('button',name='确认入库',exact=True).click()
+  page.get_by_label('本次入库数量').fill('7');page.get_by_role('button',name='添加存放位置').click();page.get_by_label('搜索空闲或同元件库位').fill('B-02');page.get_by_role('button',name='选择库位 B-02').click();page.get_by_label('已确认独立档案及实际存放空间',exact=False).check();page.get_by_role('button',name='确认入库',exact=True).click()
   page.get_by_role('button',name='元件',exact=True).click();page.get_by_role('textbox',name='全局搜索').fill('AI 33k');page.get_by_text('7 件',exact=True).wait_for();page.get_by_role('button',name='首页',exact=True).click()
   assert page.evaluate("!Object.values(localStorage).some(v=>v.includes('fixture-key'))")
   page.evaluate('navigator.serviceWorker.ready');page.wait_for_function('!!navigator.serviceWorker.controller');context.set_offline(True);page.reload();page.get_by_role('heading',name='Studio Workspace').wait_for();page.get_by_role('button',name='元件',exact=True).click();page.get_by_role('textbox',name='全局搜索').fill('Historical 22k');page.get_by_text('20 件',exact=True).wait_for();page.get_by_role('button',name='首页',exact=True).click();assert not errors,errors
