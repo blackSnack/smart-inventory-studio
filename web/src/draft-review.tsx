@@ -1,12 +1,12 @@
 import {useState} from 'react';import {Button,Panel} from './ui';import type {PhotoDraft} from '../../src/ai-provider';import {parseDraft} from '../../src/ai-provider';import type {Catalog} from '../../src/catalog';
 const fields=[['name','元件名称'],['manufacturer','制造商'],['mpn','MPN'],['supplier','供应商'],['sku','SKU'],['datasheetUrl','Datasheet 链接'],['imageUrl','产品图片链接']] as const;
-export function DraftReview({draft,catalog,onChange}:{draft:PhotoDraft;catalog:Catalog;onChange:(d:PhotoDraft)=>void}){
+export function DraftReview({draft,catalog,onChange,onApproved,actionLabel='导出审核草稿'}:{draft:PhotoDraft;catalog:Catalog;onChange:(d:PhotoDraft)=>void;onApproved?:(d:PhotoDraft)=>void;actionLabel?:string}){
  const [approved,setApproved]=useState(false),[error,setError]=useState('');
  const category=catalog.categories.find(c=>c.key===draft.category);
  const extra=Object.keys(draft.parameters).filter(k=>!category?.parameters.includes(k));
  function edit(d:PhotoDraft){setApproved(false);setError('');onChange(d)}
  const nullable=(s:string)=>s.trim()?s:null;
- function save(){try{const d=parseDraft({...draft,sourceUrls:draft.sourceUrls.map(s=>s.trim()).filter(Boolean)},catalog.categories.map(c=>c.key));if(!approved||!d.name?.trim()||!category||extra.length)throw Error('审核、分类、名称及未映射参数必须处理');const u=URL.createObjectURL(new Blob([JSON.stringify({catalogVersion:catalog.catalogVersion,review:'draft_reviewed_not_identity_verified',draft:d},null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=u;a.download='part-draft.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}catch(e){setError(e instanceof Error?e.message:'草稿无效')}}
+ function save(){try{const d=parseDraft({...draft,sourceUrls:draft.sourceUrls.map(s=>s.trim()).filter(Boolean)},catalog.categories.map(c=>c.key));if(!approved||!d.name?.trim()||!category||extra.length)throw Error('审核、分类、名称及未映射参数必须处理');if(onApproved){onApproved(d);return}const u=URL.createObjectURL(new Blob([JSON.stringify({catalogVersion:catalog.catalogVersion,review:'draft_reviewed_not_identity_verified',draft:d},null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=u;a.download='part-draft.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}catch(e){setError(e instanceof Error?e.message:'草稿无效')}}
  return <Panel className="space-y-3"><h3 className="font-semibold">元件资料审核</h3><p className="text-sm text-warn">参数及来源需要人工核对；未知值留空，不猜测额定参数。</p>
  <label className="block">元件分类<select value={draft.category??''} onChange={e=>edit({...draft,category:nullable(e.target.value)})}><option value="">选择分类</option>{catalog.categories.map(c=><option key={c.key} value={c.key}>{c.key}</option>)}</select></label>
  {fields.map(([k,label])=><label key={k} className="block">{label}<input value={draft[k]??''} placeholder="未知 / 未填写" onChange={e=>edit({...draft,[k]:nullable(e.target.value)})}/></label>)}
@@ -15,5 +15,5 @@ export function DraftReview({draft,catalog,onChange}:{draft:PhotoDraft;catalog:C
  <label className="block">来源链接（每行一个）<textarea className="w-full border border-line rounded-lg bg-paper p-2" value={draft.sourceUrls.join('\n')} onChange={e=>edit({...draft,sourceUrls:e.target.value.split('\n')})}/></label>
  {[...draft.sourceUrls,draft.datasheetUrl,draft.imageUrl].filter((v):v is string=>!!v&&v.startsWith('https://')).map((v,i)=><a key={i} href={v} target="_blank" rel="noopener noreferrer" className="block text-xs break-all underline text-primary">{v}</a>)}
  <label className="flex gap-2 items-center"><input type="checkbox" checked={approved} onChange={e=>setApproved(e.target.checked)}/>已核对草稿和来源，不代表确认库存身份</label>
- {error&&<p role="alert" className="text-warn">{error}</p>}<Button variant="secondary" disabled={!approved||!draft.name?.trim()||!category||extra.length>0} onClick={save}>导出审核草稿</Button><p className="text-xs text-muted">不写入库存。模板尚未冻结为生产版。</p></Panel>
+ {error&&<p role="alert" className="text-warn">{error}</p>}<Button variant="secondary" disabled={!approved||!draft.name?.trim()||!category||extra.length>0} onClick={save}>{actionLabel}</Button><p className="text-xs text-muted">审核草稿不直接写入库存。模板尚未冻结为生产版。</p></Panel>
 }
