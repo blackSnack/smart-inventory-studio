@@ -28,7 +28,7 @@ try:
    page.get_by_label('搜索已有元件').fill('RES-001');page.get_by_role('button',name='选择 RES-001').click()
    page.get_by_label('本次入库数量').focus();fit()
    page.set_viewport_size({'width':width,'height':480});page.wait_for_function("document.documentElement.style.getPropertyValue('--studio-vv-height')==='480px'");fit()
-   page.get_by_role('button',name='取消录入').click();page.set_viewport_size({'width':width,'height':844})
+   page.once('dialog',lambda d:d.accept());page.get_by_role('button',name='取消录入').click();page.set_viewport_size({'width':width,'height':844})
    page.get_by_role('button',name='仓储',exact=True).click();fit()
    page.get_by_role('button',name='编辑布局').click();dialog=page.get_by_role('dialog');dialog.wait_for();fit()
    title=dialog.get_by_role('heading');close=dialog.get_by_role('button',name='关闭');t=title.bounding_box();c=close.bounding_box()
