@@ -18,7 +18,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run check
       - uses: actions/setup-python@v5
         with:
@@ -26,8 +26,11 @@ jobs:
       - run: python -m pip install playwright==1.51.0
       - run: python -m playwright install --with-deps chromium
       - run: python tests/ui-smoke.py
+      - run: npm --prefix web ci --ignore-scripts --no-audit --no-fund
+      - run: npm --prefix web run build
+      - run: python tests/react-smoke.py
       - uses: actions/configure-pages@v5
-      - run: mkdir -p _site && cp index.html _site/index.html && touch _site/.nojekyll
+      - run: mkdir -p _site && cp index.html _site/index.html && touch _site/.nojekyll && mkdir -p _site/react-preview && cp -R web/dist/. _site/react-preview/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

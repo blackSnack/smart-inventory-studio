@@ -6,17 +6,18 @@ An open-source, mobile-first electronic component inventory client with pluggabl
 
 ## Preview
 
-Open `index.html` in a browser. The demo uses synthetic data and browser-local storage. The GitHub Pages workflow publishes only this demo, not the source or operational records.
+[Try the public demo](https://blacksnack.github.io/smart-inventory-studio/), or open `index.html` in a browser. The demo uses synthetic data and browser-local storage. The GitHub Pages workflow publishes the HTML demo and the separate [React Studio preview](https://blacksnack.github.io/smart-inventory-studio/react-preview/), not source or operational records. The React preview uses synthetic fixtures and a scoped offline shell; real API integration and device acceptance remain pending.
 
 ## Core checks
 
-Use Node.js 22 and the pinned TypeScript dependency. Run `npm install --ignore-scripts` (or `npm ci --ignore-scripts` when a lockfile is present), then `npm run check`. The isolated browser smoke test uses Python Playwright; see the CI configuration. Environment provisioning is the maintainer's responsibility.
+Use Node.js 22 and the pinned TypeScript dependency. Run `npm ci --ignore-scripts`, then `npm run check`. The isolated browser smoke test uses Python Playwright; see the CI configuration. Environment provisioning is the maintainer's responsibility.
 
 ## Architecture and operations
 
 - [Architecture and implementation specification](docs/ARCHITECTURE.md)
 - [Local inventory migration and acceptance guide](docs/LOCAL-AGENT-EXECUTION.md)
 - [Shared catalog seed](catalog/electronic-parts.json): draft, not approved for production migrations.
+- [Delivery roadmap](docs/ROADMAP.md)
 - [Contributing and release gates](CONTRIBUTING.md)
 
 Inventory target: InvenTree 1.7.4, subject to actual API and device verification. Other providers may be added through the domain boundary. Production migration, upgrade and write operations require explicit authorization. See LICENSE for licensing; third-party source materials remain subject to their own terms.

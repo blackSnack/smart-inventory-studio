@@ -14,9 +14,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm --prefix web install --ignore-scripts --no-audit --no-fund
-      - name: Export initial dependency lock
-        run: node -e "console.log('STUDIO_LOCK_BEGIN');console.log(require('fs').readFileSync('web/package-lock.json','utf8'));console.log('STUDIO_LOCK_END')"
+      - run: npm --prefix web ci --ignore-scripts --no-audit --no-fund
       - run: npm --prefix web run build
       - uses: actions/setup-python@v5
         with:

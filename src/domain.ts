@@ -6,7 +6,7 @@ export type Match = 'same'|'different'|'candidate'|'conflict';
 const canon=(s?:string)=>s?.trim()||''; // case folding must be supplier-specific, not blanket MPN folding
 export function match(a:Identity,b:Identity,p:Policy):Match {
  if(a.category!==b.category)return 'different';
- const conflict=p.fields.some(k=>a.fields[k]!=null&&b.fields[k]!=null&&a.fields[k]!==b.fields[k]);
+ const conflict=[...new Set([...p.fields,...Object.keys(a.fields),...Object.keys(b.fields)])].some(k=>a.fields[k]!=null&&b.fields[k]!=null&&a.fields[k]!==b.fields[k]);
  const exact=!!canon(a.manufacturer)&&canon(a.manufacturer)===canon(b.manufacturer)&&!!canon(a.mpn)&&canon(a.mpn)===canon(b.mpn);
  const sku=!!canon(a.supplier)&&canon(a.supplier)===canon(b.supplier)&&!!canon(a.sku)&&canon(a.sku)===canon(b.sku);
  const mpnConflict=!!canon(a.manufacturer)&&!!canon(b.manufacturer)&&!!canon(a.mpn)&&!!canon(b.mpn)&&!exact;
