@@ -11,7 +11,7 @@ export function parseDraft(input:unknown,categoryKeys:string[]):PhotoDraft{
  return {name:val(input.name),manufacturer:val(input.manufacturer),mpn:val(input.mpn),supplier:val(input.supplier),sku:val(input.sku),category,parameters,sourceUrls:input.sourceUrls.map(x=>{const u=link(x);if(!u)throw Error('empty source');return u}),datasheetUrl:link(input.datasheetUrl),imageUrl:link(input.imageUrl)};
 }
 export class OpenAICompatibleProvider implements AIProvider {
- constructor(private base:string,private key:string,private model:string,private request:typeof fetch=fetch){}
+ constructor(private base:string,private key:string,private model:string,private request:typeof fetch=(input,init)=>fetch(input,init)){}
  async recognize(imageDataUrl:string,categoryKeys:string[]):Promise<AIResult>{
   if(!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(imageDataUrl)||imageDataUrl.length>12_000_000)throw Error('invalid or oversized photo');
   const url=new URL(this.base.replace(/\/$/,'')+'/chat/completions');if(!['http:','https:'].includes(url.protocol)||url.username||url.password||url.search||url.hash||!this.key||!this.model)throw Error('invalid AI configuration');
