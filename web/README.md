@@ -1,0 +1,3 @@
+# React Studio preview
+Separate from the published HTML prototype. React, Vite, Tailwind, Radix and source-owned shadcn-style primitives, Lucide. Synthetic fixtures only; current scope: navigation, search, details, matrix occupancy, photo capture input/local preview, existing-part simulated split receiving. No real API or production credentials. Build generates a project-relative manifest, PNG icons and versioned offline shell worker; no API response caching. Physical device acceptance and parity with HTML remain pending.
+Use Node 22. Run npm ci in web, then npm run build and npm run preview. Browser smoke uses an isolated localhost static server in CI, not a physical phone.
