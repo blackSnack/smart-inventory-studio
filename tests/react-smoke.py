@@ -11,6 +11,11 @@ try:
   b=p.chromium.launch();context=b.new_context(viewport={'width':390,'height':844});page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
   page.goto(f'http://127.0.0.1:{server.server_port}/');page.get_by_role('heading',name='我的工作室').wait_for()
   page.get_by_role('textbox',name='全局搜索').fill('10k');page.get_by_role('button',name='搜索',exact=True).click();page.get_by_text('全仓库 · 2 种元件').wait_for()
+  page.get_by_text('技术参数筛选',exact=True).click();page.get_by_label('筛选分类').select_option('resistor.smd');page.get_by_label('技术参数',exact=True).select_option('tolerance');page.get_by_label('参数值').fill('1%');page.get_by_role('button',name='添加筛选条件').click();page.get_by_text('全仓库 · 1 种严格匹配元件').wait_for();assert page.get_by_text('RES-002',exact=False).count()==0
+  page.get_by_role('button',name='清除参数筛选').click();page.get_by_role('textbox',name='全局搜索').fill('10µF');page.get_by_role('button',name='搜索',exact=True).click()
+  if not page.get_by_label('筛选分类').is_visible():page.get_by_text('技术参数筛选',exact=True).click()
+  page.get_by_label('筛选分类').select_option('capacitor.ceramic');page.get_by_label('技术参数',exact=True).select_option('tolerance');page.get_by_label('参数值').fill('10%');page.get_by_role('button',name='添加筛选条件').click();page.get_by_text('待确认候选 · 1 种',exact=False).wait_for();page.get_by_text('CAP-002',exact=False).wait_for();page.get_by_label('显示参数未知的待确认候选').uncheck();assert page.get_by_text('CAP-002',exact=False).count()==0
+  page.get_by_role('button',name='清除参数筛选').click()
   page.get_by_role('button',name='仓储',exact=True).click();page.get_by_role('button',name='A-01 有库存').click();page.get_by_role('dialog').get_by_text('RES-001',exact=False).wait_for();page.get_by_role('button',name='关闭').click()
   page.get_by_role('button',name='批量建库').click();batch=page.get_by_role('dialog');batch.get_by_role('button',name='生成批量预览').click();batch.get_by_text('1 条草稿',exact=False).wait_for();batch.get_by_label('已核对草稿资料',exact=False).check();assert batch.get_by_role('button',name='导出已核对草稿（1）').is_enabled();batch.get_by_role('button',name='关闭').click()
   page.get_by_role('button',name='编辑布局').click();dialog=page.get_by_role('dialog');dialog.get_by_label('行数').fill('10');dialog.get_by_label('列数').fill('10');dialog.get_by_role('button',name='扩库 / 补齐').click();dialog.get_by_text('100',exact=True).wait_for();dialog.get_by_text('80',exact=True).wait_for()
@@ -21,4 +26,4 @@ try:
   page.evaluate('navigator.serviceWorker.ready');page.wait_for_function('!!navigator.serviceWorker.controller');context.set_offline(True);page.reload();page.get_by_role('heading',name='我的工作室').wait_for();page.get_by_text('600',exact=True).wait_for();assert not errors,errors
   b.close()
 finally: server.shutdown()
-print('PASS: React navigation, search, matrix, split receipt, persistent synthetic receipt and offline shell (synthetic data).')
+print('PASS: React navigation, search, strict specification filters, unknown candidates, matrix, split receipt, persistent synthetic receipt and offline shell (synthetic data).')
