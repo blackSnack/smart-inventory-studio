@@ -37,7 +37,7 @@ export function prepareDemoDraft(raw:PhotoDraft,catalog:Catalog,mode:'exact'|'pa
  const strong=candidates.filter(c=>strongIdentity(identity,c));
  const blocked=resolution.decision==='blocked'||strong.length>0&&resolution.decision!=='reuse';
  const spec=category.parameters.flatMap(k=>{const v=draft.parameters[k];return v?[v]:[]}).slice(0,4).join(' · ')||'参数未知';
- const part:DraftPart={id,name:draft.name.trim(),spec,partial:mode==='partial',stock:{},details:{identity,draft,catalogVersion:catalog.catalogVersion}};
+ const part:DraftPart={id,name:draft.name.trim(),spec,partial:mode==='partial',stock:{},details:{identity,draft,catalogVersion:catalog.catalogVersion,...(draft.fieldEvidence?{fieldEvidence:structuredClone(draft.fieldEvidence)}:{})}};
  return {part,resolution,blocked};
 }
 export function planNewDemoReceipt(planId:string,instanceId:string,revision:number,part:DraftPart,quantity:number,allocations:Allocation[],locations:Location[],approved:boolean):ApprovedPlan{

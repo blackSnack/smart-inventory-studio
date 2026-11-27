@@ -31,7 +31,7 @@ class Gateway(BaseHTTPRequestHandler):
    requests.append('valid-photo-post')
    if len(requests)==1:
     self.send_response(503);self.cors();self.end_headers();return
-   draft={'name':'AI 33k resistor','manufacturer':None,'mpn':None,'supplier':None,'sku':None,'category':'resistor.smd','parameters':{'resistance':'33kΩ','tolerance':'±1%','package':'0603'},'sourceUrls':[],'datasheetUrl':None,'imageUrl':None}
+   draft={'name':'AI 33k resistor','manufacturer':None,'mpn':None,'supplier':None,'sku':None,'category':'resistor.smd','parameters':{'resistance':'33kΩ','tolerance':'±1%','package':'0603'},'sourceUrls':['https://example.test/photo-source'],'datasheetUrl':None,'imageUrl':None,'fieldEvidence':{'resistance':[{'url':'https://example.test/photo-source','locator':'resistance table'}],'tolerance':[{'url':'https://example.test/photo-source','locator':'tolerance table'}]}}
    response=json.dumps({'choices':[{'message':{'content':json.dumps(draft)}}]}).encode()
    self.send_response(200);self.cors();self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(response)));self.end_headers();self.wfile.write(response)
   except Exception:
@@ -104,6 +104,7 @@ try:
   page.get_by_label('Agent API Base URL').fill(f'http://127.0.0.1:{gateway_server.server_port}/v1');page.get_by_label('API Key',exact=True).fill('fixture-key');page.get_by_label('模型或 Agent ID').fill('fixture-model')
   page.get_by_role('button',name='首页',exact=True).click();page.get_by_role('button',name='拍照录入').click();page.get_by_test_id('receipt-camera').set_input_files({'name':'photo.png','mimeType':'image/png','buffer':png});page.get_by_alt_text('待识别元件照片').wait_for();page.wait_for_function("document.querySelector('img[alt=\"待识别元件照片\"]').naturalWidth===1");assert requests==[];page.get_by_role('button',name='识别元件',exact=True).click();page.get_by_text('识别失败，可重试或手动录入。',exact=True).wait_for();assert requests==['valid-photo-post'], requests;page.get_by_role('button',name='识别元件',exact=True).click()
   page.get_by_role('heading',name='核对元件资料').wait_for();page.get_by_alt_text('原始元件照片',exact=True).wait_for();assert page.get_by_label('元件名称').input_value()=='AI 33k resistor';assert requests==['valid-photo-post','valid-photo-post'], requests
+  page.get_by_role('link',name='resistance table · example.test').wait_for();page.get_by_role('link',name='tolerance table · example.test').wait_for();page.get_by_label('容差',exact=True).fill('±5%');assert page.get_by_role('link',name='tolerance table · example.test').count()==0;page.get_by_role('link',name='resistance table · example.test').wait_for();page.get_by_label('容差',exact=True).fill('±1%')
   page.get_by_label('已核对草稿和来源',exact=False).check();page.get_by_role('button',name='核对已有库存').click();page.get_by_role('button',name='确认独立建档').click()
   page.get_by_label('本次入库数量').fill('7');page.get_by_role('button',name='添加存放位置').click();page.get_by_label('搜索空闲或同元件库位').fill('B-02');page.get_by_role('button',name='选择库位 B-02').click();page.get_by_label('已确认独立档案及实际存放空间',exact=False).check();page.get_by_role('button',name='确认入库',exact=True).click()
   page.get_by_role('button',name='元件',exact=True).click();page.get_by_role('textbox',name='全局搜索').fill('AI 33k');page.get_by_text('7 件',exact=True).wait_for();page.get_by_role('button',name='首页',exact=True).click()
