@@ -21,7 +21,7 @@ function normalized(b:Baseline){
  if(snapshotKey(defaults.map(({defaultValue,...r})=>r))!==snapshotKey(relations))throw Error('relation defaults mismatch');
  return {snapshot:{...s,categories:sort(s.categories),templates:sort(s.templates),relations},defaults};
 }
-function row(raw:unknown):Relation{const r=obj(raw);if(typeof r.default_value!=='string'||r.default_value.length>500)throw Error('invalid association default');return {id:id(r.pk),categoryId:id(r.category),templateId:id(r.template),defaultValue:r.default_value}}
+function row(raw:unknown,legacy=false):Relation{const r=obj(raw);if(typeof r.default_value!=='string'||r.default_value.length>500)throw Error('invalid association default');return {id:id(r.pk),categoryId:id(r.category),templateId:id(legacy?r.parameter_template:r.template),defaultValue:r.default_value}}
 function parse(o:Operation){
  if(o.kind!==kind||!o.id.trim()||o.payload.confirmed!==true)throw Error('explicit isolated association approval required');
  const p=o.payload,categoryId=id(p.categoryId),templateId=id(p.templateId),baseline=normalized(p.baseline as Baseline),s=baseline.snapshot;
@@ -40,28 +40,28 @@ export function planIsolatedAssociation(operationId:string,catalog:Catalog,mappi
 }
 export class IsolatedCategoryAssociationTransport implements OperationTransport{
 
- private constructor(private evidence:FixtureEvidenceStore,private base:URL,private token:string,private request:typeof fetch,private reader:InvenTreeAssociationReader,private read:InvenTreeReadProvider){}
+ private constructor(private evidence:FixtureEvidenceStore,private base:URL,private token:string,private request:typeof fetch,private reader:InvenTreeAssociationReader,private read:InvenTreeReadProvider,private legacy=false){}
  static async open(config:{base:string;token:string;fixtureOnly:true}&FixtureEvidenceConfig,request:typeof fetch){
   const evidence=fixtureEvidenceFor(config);const b=new URL(config.base.endsWith('/')?config.base:config.base+'/');if(config.fixtureOnly!==true||b.protocol!=='https:'||!b.hostname.endsWith('.test')||b.username||b.password||b.search||b.hash||!config.token.trim()||typeof request!=='function')throw Error('isolated fixture configuration required');
   return IsolatedCategoryAssociationTransport.openTransport(b,config,request,evidence);
  }
  static async openLocalAcceptance(ctx:LocalOperationContext,evidence:FixtureEvidenceStore){
   assertLocalOperationContext(ctx,evidence);const config={token:ctx.token},request=ctx.request,b=new URL(ctx.base);
-  return IsolatedCategoryAssociationTransport.openTransport(b,config,request,evidence);
+  return IsolatedCategoryAssociationTransport.openTransport(b,config,request,evidence,ctx.apiVersion===232);
  }
- private static async openTransport(b:URL,config:{token:string},request:typeof fetch,evidence:FixtureEvidenceStore){
+ private static async openTransport(b:URL,config:{token:string},request:typeof fetch,evidence:FixtureEvidenceStore,legacy=false){
   const e=await probeSchema(b.href,config.token,[{key:'associate',path:'/api/part/category/parameters/',method:'post'}],request);if(e.operations.some(o=>!o.declared))throw Error('association write API not declared');
-  return new IsolatedCategoryAssociationTransport(evidence,b,config.token,request,await InvenTreeAssociationReader.open(b.href,config.token,request),new InvenTreeReadProvider(b.href,config.token,request));
+  return new IsolatedCategoryAssociationTransport(evidence,b,config.token,request,await InvenTreeAssociationReader.open(b.href,config.token,request),new InvenTreeReadProvider(b.href,config.token,request),legacy);
  }
  async readCandidate(instanceId:string,reviews:ScalarTypeReview[]):Promise<Baseline>{
-  const snapshot=await this.reader.readCandidate(instanceId,reviews),defaults=(await this.read.list('api/part/category/parameters/')).map(row);
+  const snapshot=await this.reader.readCandidate(instanceId,reviews),defaults=(await this.read.list('api/part/category/parameters/')).map(x=>row(x,this.legacy));
   return normalized({snapshot,defaults});
  }
  private async current(p:ReturnType<typeof parse>){const b=await this.readCandidate(p.baseline.snapshot.instanceId,p.reviews);return {...b,snapshot:{...b.snapshot,complete:true}}}
  async send(o:Operation){const s=structuredClone(o),p=parse(s),key=snapshotKey(s);if(!await this.evidence.claim(s))throw Error('already attempted; readback only');
   if(snapshotKey(await this.current(p))!==snapshotKey(p.baseline))throw Error('association baseline changed');
-  const res=await this.request(new URL('api/part/category/parameters/',this.base),{method:'POST',headers:{Authorization:'Token '+this.token,Accept:'application/json','Content-Type':'application/json'},cache:'no-store',redirect:'error',signal:AbortSignal.timeout(20000),body:JSON.stringify({category:Number(p.categoryId),template:Number(p.templateId),default_value:''})});
-  if(!res.ok)throw Error('association HTTP '+res.status);const r=row(await res.json());if(r.categoryId!==p.categoryId||r.templateId!==p.templateId||r.defaultValue!==''||p.baseline.defaults.some(x=>x.id===r.id))throw Error('association acknowledgement mismatch');await this.evidence.record(s,{key,id:r.id});
+  const res=await this.request(new URL('api/part/category/parameters/',this.base),{method:'POST',headers:{Authorization:'Token '+this.token,Accept:'application/json','Content-Type':'application/json'},cache:'no-store',redirect:'error',signal:AbortSignal.timeout(20000),body:JSON.stringify({category:Number(p.categoryId),[this.legacy?'parameter_template':'template']:Number(p.templateId),default_value:''})});
+  if(!res.ok)throw Error('association HTTP '+res.status);const r=row(await res.json(),this.legacy);if(r.categoryId!==p.categoryId||r.templateId!==p.templateId||r.defaultValue!==''||p.baseline.defaults.some(x=>x.id===r.id))throw Error('association acknowledgement mismatch');await this.evidence.record(s,{key,id:r.id});
  }
  async observe(o:Operation):Promise<Observation>{try{const s=structuredClone(o),p=parse(s),a=await this.evidence.read<{key:string;id:string}>(s),b=await this.current(p);
   if(!a||a.key!==snapshotKey(s))return {status:'unknown',evidence:'Fixture: no correlated association acknowledgement; no replay'};
