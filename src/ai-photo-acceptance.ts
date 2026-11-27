@@ -20,6 +20,7 @@ function scalar(key:string):key is ScalarKey{return scalarKeys.some(k=>k===key)}
 function validate(raw:unknown){
  const r=record(raw);
  if(r.publicPhotoConfirmed!==true)throw Error('public sanitized photo confirmation required');
+ const scenario=r.scenario??'selected-fields';if(!['selected-fields','legible','unreadable'].includes(String(scenario)))throw Error('invalid photo scenario');
  if(!Array.isArray(r.categoryKeys)||!r.categoryKeys.length||r.categoryKeys.length>150)throw Error('invalid category choices');
  const categoryKeys=r.categoryKeys.map(k=>text(k,128));
  if(new Set(categoryKeys).size!==categoryKeys.length)throw Error('duplicate category');
@@ -30,14 +31,19 @@ function validate(raw:unknown){
   const value=e.value===null?null:text(e.value,4000);
   if(key==='category'&&value!==null&&!categoryKeys.includes(value))throw Error('unknown expected category');
   if((key==='datasheetUrl'||key==='imageUrl')&&value!==null)source(value);
-  const sourceUrl=e.sourceUrl===undefined?undefined:source(e.sourceUrl);
+  const sourceUrl=e.sourceUrl===undefined?undefined:source(e.sourceUrl),locator=e.locator===undefined?undefined:text(e.locator,1000);
+  if(locator!==undefined&&sourceUrl===undefined)throw Error('locator requires source');
   const evidenceKey=key.startsWith('parameter:')?key.slice(10):key==='datasheetUrl'||key==='imageUrl'?key:undefined;
   if(sourceUrl!==undefined&&(value===null||!evidenceKey))throw Error('invalid field source expectation');
   if(value!==null&&evidenceKey&&!sourceUrl)throw Error('source expectation required for sourced fields');
-  return {key,value,sourceUrl,evidenceKey};
+  if(scenario==='legible'&&value!==null&&evidenceKey&&!locator)throw Error('legible sourced field requires exact locator');
+  return {key,value,sourceUrl,evidenceKey,locator};
  });
  if(new Set(expected.map(e=>e.key)).size!==expected.length)throw Error('duplicate expected field');
- return {categoryKeys,expected};
+ const exact=(key:string)=>expected.some(e=>e.key===key&&e.value!==null),unknown=(key:string)=>expected.some(e=>e.key===key&&e.value===null);
+ if(scenario==='legible'&&!(exact('manufacturer')&&exact('mpn')||exact('supplier')&&exact('sku')))throw Error('legible sample needs exact identity');
+ if(scenario==='unreadable'&&(!['manufacturer','mpn','supplier','sku','datasheetUrl','imageUrl'].every(unknown)||expected.some(e=>e.value!==null)))throw Error('unreadable sample must expect unknown identity and sources');
+ return {categoryKeys,expected,scenario};
 }
 function field(draft:PhotoDraft,key:string):string|null|undefined{
  if(scalar(key))return draft[key];
@@ -46,7 +52,7 @@ function field(draft:PhotoDraft,key:string):string|null|undefined{
 }
 // Only the explicitly approved photo and category choices leave the local process.
 export async function runAIPhotoChallenge(raw:unknown,imageDataUrl:string,provider:AIProvider,signal?:AbortSignal){
- const {categoryKeys,expected}=validate(raw);
+ const {categoryKeys,expected,scenario}=validate(raw);
  assertAIActive(signal);
  const result=await provider.recognize(imageDataUrl,categoryKeys,signal);
  assertAIActive(signal);
@@ -56,9 +62,10 @@ export async function runAIPhotoChallenge(raw:unknown,imageDataUrl:string,provid
   if(e.value===null)status=actual===null||actual===undefined?'candidate-match':'unexpected-value';
   else if(actual===null||actual===undefined||!actual.trim())status='missing';
   else if(actual!==e.value)status='value-mismatch';
-  else if(e.sourceUrl&&!result.draft.fieldEvidence?.[e.evidenceKey!]?.some(v=>source(v.url)===e.sourceUrl))status='source-mismatch';
+  else if(e.sourceUrl&&!result.draft.fieldEvidence?.[e.evidenceKey!]?.some(v=>source(v.url)===e.sourceUrl&&(e.locator===undefined||e.locator===v.locator)))status='source-mismatch';
   else status='candidate-match';
   return {key:e.key,status};
  });
- return {fields,candidateChecksPassed:fields.every(f=>f.status==='candidate-match'),retrievalVerified:false as const,manualSourceAndGatewayLogReviewRequired:true as const,physicalDeviceVerified:false as const};
+ const unexpectedFields=scenario==='unreadable'?[...Object.values(result.draft.parameters),...result.draft.sourceUrls].filter(v=>v!==null&&v.trim()!=='').length:0;
+ return {fields,unexpectedFields,scenario,candidateChecksPassed:unexpectedFields===0&&fields.every(f=>f.status==='candidate-match'),retrievalVerified:false as const,manualSourceAndGatewayLogReviewRequired:true as const,physicalDeviceVerified:false as const};
 }

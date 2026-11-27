@@ -42,3 +42,18 @@ test('invalid fixture and cancellation stop before dispatch; late response canno
  const late=new AbortController();
  await assert.rejects(runAIPhotoChallenge(raw,image,{recognize:async()=>{late.abort();return result(draft)}},late.signal),/cancelled/);
 });
+
+test('explicit legible scenario requires identity pair and exact field locator',async()=>{
+ const strict={...raw,scenario:'legible',expected:[...raw.expected.map(e=>e.key==='parameter:cpu_core'?{...e,locator:'page 3'}:e),{key:'manufacturer',value:'Maker'}]};
+ assert.equal((await runAIPhotoChallenge(strict,image,{recognize:async()=>result(draft)})).candidateChecksPassed,true);
+ const wrong={...draft,fieldEvidence:{cpu_core:[{url:'https://example.test/datasheet',locator:'wrong'}]}};
+ const failed=await runAIPhotoChallenge(strict,image,{recognize:async()=>result(wrong)});assert.equal(failed.candidateChecksPassed,false);assert.equal(failed.fields.find(f=>f.key==='parameter:cpu_core').status,'source-mismatch');
+ let calls=0;const p={recognize:async()=>{calls++;return result(draft)}};await assert.rejects(runAIPhotoChallenge({...raw,scenario:'legible'},image,p));await assert.rejects(runAIPhotoChallenge({...strict,expected:strict.expected.filter(e=>e.key!=='manufacturer')},image,p));assert.equal(calls,0);
+});
+test('unreadable photo cannot pass with invented parameters, sources or identity',async()=>{
+ const fixture={publicPhotoConfirmed:true,scenario:'unreadable',categoryKeys:['ic.mcu','resistor.smd'],expected:['manufacturer','mpn','supplier','sku','datasheetUrl','imageUrl'].map(key=>({key,value:null}))};
+ const unknown={name:null,manufacturer:null,mpn:null,supplier:null,sku:null,category:null,parameters:{cpu_core:null},sourceUrls:[],datasheetUrl:null,imageUrl:null};
+ assert.equal((await runAIPhotoChallenge(fixture,image,{recognize:async()=>result(unknown)})).candidateChecksPassed,true);
+ for(const d of [{...unknown,mpn:'guessed'},{...unknown,parameters:{cpu_core:'guessed'}},{...unknown,sourceUrls:['https://example.test/guess']}])assert.equal((await runAIPhotoChallenge(fixture,image,{recognize:async()=>result(d)})).candidateChecksPassed,false);
+ let calls=0;await assert.rejects(runAIPhotoChallenge({...fixture,expected:fixture.expected.slice(0,5)},image,{recognize:async()=>{calls++;return result(unknown)}}));assert.equal(calls,0);
+});
