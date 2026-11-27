@@ -1,7 +1,7 @@
 import {readFileSync,writeFileSync,realpathSync,statSync} from 'node:fs';
 import {dirname,basename,resolve,relative,isAbsolute,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {NativeReceiptAcceptance} from '../dist/native-receipt-acceptance.js';
+import {NativeReceiptAcceptance,nativeReceiptPreparationHash} from '../dist/native-receipt-acceptance.js';
 import {LocalNativeReceiptEvidence} from './native-receipt-evidence.mjs';
 try{
  const root=realpathSync(fileURLToPath(new URL('../',import.meta.url)));
@@ -16,6 +16,7 @@ try{
   const prepared=await NativeReceiptAcceptance.open(base,token).prepare(instanceId,{partId,quantity:Number(q),allocations:[{locationId,quantity:Number(q)}]});
   writeFileSync(target,JSON.stringify(prepared,null,2)+'\n',{flag:'wx',mode:0o600});
   console.log('Private receipt preparation saved; no write performed.');
+  console.log('Approval preparation SHA-256: '+await nativeReceiptPreparationHash(prepared));
  }else if(['--execute-isolated-write','--observe-only'].includes(mode)&&args.length===3){
   const prepared=input(args[0]),approval=input(args[1]),directory=outside(realpathSync(args[2]));
   if(!statSync(directory).isDirectory())throw Error('private journal directory required');

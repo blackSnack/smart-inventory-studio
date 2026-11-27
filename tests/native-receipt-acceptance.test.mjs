@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {NativeReceiptAcceptance} from '../dist/native-receipt-acceptance.js';
+import {NativeReceiptAcceptance,nativeReceiptPreparationHash} from '../dist/native-receipt-acceptance.js';
 import {LocalNativeReceiptEvidence} from '../tools/native-receipt-evidence.mjs';
 const approval={disposableInstanceConfirmed:true,writeAuthorized:true,visibilityConfirmed:true,exclusiveAccessConfirmed:true,identityConfirmed:true,physicalSpaceConfirmed:true};
+const approve=async p=>({...approval,approvedPreparationSha256:await nativeReceiptPreparationHash(p)});
 const input={partId:'42',quantity:3,allocations:[{locationId:'2',quantity:3}]};
 const base='http://127.0.0.1:8123/';
 function fixture(){
@@ -28,19 +29,20 @@ function journal(t){const dir=mkdtempSync(join(tmpdir(),'studio-native-fixture-'
 test('local acceptance requires explicit loopback port and approvals; preparation is read-only',async t=>{
  const f=fixture(),e=journal(t),p=await f.runner.prepare('fixture',input);assert.equal(p.executionAllowed,false);assert.equal(f.writes.length,0);
  for(const url of ['https://production.example.com:8123','http://localhost:8123','http://127.0.0.1','http://127.0.0.1:8123/prefix'])assert.throws(()=>NativeReceiptAcceptance.open(url,'fixture'));
- await assert.rejects(f.runner.execute(p,{...approval,writeAuthorized:false},e()));
- f.info.version='1.7.3';await assert.rejects(f.runner.execute(p,approval,e()));assert.equal(f.writes.length,0);
+ await assert.rejects(f.runner.execute(p,{...await approve(p),writeAuthorized:false},e()));
+ await assert.rejects(f.runner.execute(p,{...await approve(p),approvedPreparationSha256:'0'.repeat(64)},e()));
+ f.info.version='1.7.3';await assert.rejects(f.runner.execute(p,await approve(p),e()));assert.equal(f.writes.length,0);
 });
 test('native isolated receipt evidence survives reopening and detects changed stock',async t=>{
  const f=fixture(),e=journal(t),p=await f.runner.prepare('fixture',input);
- const r=await f.runner.execute(p,approval,e());assert.equal(r.status,'verified');assert.equal(r.productionWriteAllowed,false);assert.equal(r.serverAuditRequired,true);
- assert.deepEqual(f.writes,[{part:42,location:2,quantity:3}]);assert.equal((await f.runner.observe(p,approval,e())).status,'verified');
- await assert.rejects(f.runner.execute(p,approval,e()));assert.equal(f.writes.length,1);f.stock[0].quantity='11';assert.equal((await f.runner.observe(p,approval,e())).status,'blocked');
+ const r=await f.runner.execute(p,await approve(p),e());assert.equal(r.status,'verified');assert.equal(r.productionWriteAllowed,false);assert.equal(r.serverAuditRequired,true);
+ assert.deepEqual(f.writes,[{part:42,location:2,quantity:3}]);assert.equal((await f.runner.observe(p,await approve(p),e())).status,'verified');
+ await assert.rejects(f.runner.execute(p,await approve(p),e()));assert.equal(f.writes.length,1);f.stock[0].quantity='11';assert.equal((await f.runner.observe(p,await approve(p),e())).status,'blocked');
 });
 test('lost acknowledgement remains unknown after reopen; no replay, and stale baseline blocks before write',async t=>{
- const f=fixture(),e=journal(t),p=await f.runner.prepare('fixture',input);f.lose();assert.equal((await f.runner.execute(p,approval,e())).status,'unknown');
- assert.equal((await f.runner.observe(p,approval,e())).status,'unknown');await assert.rejects(f.runner.execute(p,approval,e()));assert.equal(f.writes.length,1);
- const g=fixture(),q=await g.runner.prepare('fixture',input);g.stock[0].quantity='12';await assert.rejects(g.runner.execute(q,approval,e()));assert.equal(g.writes.length,0);
+ const f=fixture(),e=journal(t),p=await f.runner.prepare('fixture',input);f.lose();assert.equal((await f.runner.execute(p,await approve(p),e())).status,'unknown');
+ assert.equal((await f.runner.observe(p,await approve(p),e())).status,'unknown');await assert.rejects(f.runner.execute(p,await approve(p),e()));assert.equal(f.writes.length,1);
+ const g=fixture(),q=await g.runner.prepare('fixture',input);g.stock[0].quantity='12';await assert.rejects(g.runner.execute(q,await approve(q),e()));assert.equal(g.writes.length,0);
 });
 test('write-once evidence refuses concurrent same binding and preserves missing acknowledgement',async t=>{
  const open=journal(t),key='a'.repeat(64),a=open(),b=open();assert.equal(await a.claim(key),true);assert.equal(await b.claim(key),false);assert.deepEqual(await b.read(key),{});

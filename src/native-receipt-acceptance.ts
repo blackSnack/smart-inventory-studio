@@ -6,7 +6,7 @@ import {snapshotKey} from './approved-snapshot.js';
 
 type Candidate=Awaited<ReturnType<InvenTreeReceiptCandidateReader['readCandidate']>>;
 type Prepared={base:string;schemaSha256:string;candidate:Candidate;executionAllowed:false};
-type Approval={disposableInstanceConfirmed:true;writeAuthorized:true;visibilityConfirmed:true;exclusiveAccessConfirmed:true;identityConfirmed:true;physicalSpaceConfirmed:true};
+type Approval={approvedPreparationSha256:string;disposableInstanceConfirmed:true;writeAuthorized:true;visibilityConfirmed:true;exclusiveAccessConfirmed:true;identityConfirmed:true;physicalSpaceConfirmed:true};
 export interface NativeReceiptEvidence {
  claim(binding:string):Promise<boolean>;
  acknowledge(binding:string,stockId:string):Promise<void>;
@@ -14,6 +14,7 @@ export interface NativeReceiptEvidence {
 }
 const row=(x:unknown):Record<string,unknown>=>{if(!x||typeof x!=='object'||Array.isArray(x))throw Error('invalid native response');return x as Record<string,unknown>};
 const sha=async(s:string|Uint8Array)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',typeof s==='string'?new TextEncoder().encode(s):new Uint8Array(s))),b=>b.toString(16).padStart(2,'0')).join('');
+export async function nativeReceiptPreparationHash(prepared:Prepared){return sha(snapshotKey(prepared))}
 function localBase(base:string){
  const u=new URL(base);
  if(!['http:','https:'].includes(u.protocol)||!['127.0.0.1','[::1]'].includes(u.hostname)||!u.port||u.username||u.password||u.search||u.hash||u.pathname!=='/')throw Error('explicit loopback disposable instance with port required');
@@ -60,7 +61,9 @@ export class NativeReceiptAcceptance {
  private async validate(prepared:Prepared,approval:unknown){
   approved(approval);
   if(!prepared||prepared.base!==this.base.href||prepared.executionAllowed!==false||!(/^[a-f0-9]{64}$/).test(prepared.schemaSha256)||prepared.candidate?.executionAllowed!==false||prepared.candidate.input?.allocations?.length!==1)throw Error('invalid prepared receipt');
-  return sha(snapshotKey(prepared));
+  const binding=await nativeReceiptPreparationHash(prepared);
+  if(approval.approvedPreparationSha256!==binding)throw Error('approval does not bind exact preparation');
+  return binding;
  }
  async execute(raw:Prepared,approval:unknown,evidence:NativeReceiptEvidence){
   const prepared=structuredClone(raw),binding=await this.validate(prepared,approval);

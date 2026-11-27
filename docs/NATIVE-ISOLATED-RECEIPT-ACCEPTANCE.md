@@ -8,10 +8,10 @@ After the existing core build, set STUDIO_INVENTREE_ISOLATED_TOKEN privately and
 node tools/check-native-receipt.mjs --prepare http://127.0.0.1:8123/ <local-instance-label> <part-id> <leaf-id> <quantity> <private-preparation.json>
 ```
 
-This checks version, authenticated read, schema declarations/hash and two stable visible receipt snapshots. Review the saved file (private Part, location and stock data). Prepare a separate private approval JSON only after explicitly checking the actual conditions:
+This checks version, authenticated read, schema declarations/hash and two stable visible receipt snapshots. Review the saved file (private Part, location and stock data). Prepare a separate private approval JSON only after explicitly checking the actual conditions. Copy the exact preparation SHA-256 displayed by the prepare command; approval of a different preparation is rejected:
 
 ```json
-{"disposableInstanceConfirmed":true,"writeAuthorized":true,"visibilityConfirmed":true,"exclusiveAccessConfirmed":true,"identityConfirmed":true,"physicalSpaceConfirmed":true}
+{"approvedPreparationSha256":"<exact preparation SHA-256>","disposableInstanceConfirmed":true,"writeAuthorized":true,"visibilityConfirmed":true,"exclusiveAccessConfirmed":true,"identityConfirmed":true,"physicalSpaceConfirmed":true}
 ```
 
 Only after isolated write authorization:
