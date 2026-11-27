@@ -22,7 +22,7 @@ export class InvenTreeAssociationReader{
   const seen=new Set<string>();
   const snapshot:AssociationSnapshot={instanceId,complete:false,
    categories:categories.map(x=>{const r=obj(x);return {id:id(r.pk),name:str(r.name),parentId:r.parent===null?null:id(r.parent)}}),
-   templates:templates.map(x=>{const raw=obj(x),r=this.legacy?{...raw,model_type:'part.part',enabled:true,selectionlist:null}:raw,tid=id(r.pk),name=str(r.name),unit=str(r.units).trim()||null;
+   templates:templates.map(x=>{const raw=obj(x),r:Record<string,unknown>=this.legacy?{...raw,model_type:'part.part',enabled:true,selectionlist:null}:raw,tid=id(r.pk),name=str(r.name),unit=str(r.units).trim()||null;
     if((r.model_type!=='part.part'&&r.model_type!==null)||typeof r.checkbox!=='boolean'||typeof r.enabled!=='boolean'||!Object.hasOwn(r,'selectionlist'))throw Error('invalid native template scope');
     const choices=str(r.choices),selection=r.selectionlist===null?null:id(r.selectionlist);
     const reviewed=confirmed.find(c=>c.templateId===tid);let type=r.model_type===null?'unknown':r.checkbox?'boolean':choices.trim()||selection!==null?'enum':'unknown';
