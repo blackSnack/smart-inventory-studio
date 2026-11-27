@@ -76,7 +76,7 @@ export class BrowserNativeWorkflow{
  }
  async probe(){
   const v=obj((await this.get('api/',1024*1024)).data);
-  const api=nativeApiVersion(v,!!this.production);if(this.api!==undefined&&this.api!==api)throw Error('API version changed; reconnect and review');
+  const api=nativeApiVersion(v,this.production);if(this.api!==undefined&&this.api!==api)throw Error('API version changed; reconnect and review');
   const a=obj((await this.get('api/user/me/',1024*1024)).data),actorId=validId(a.pk??a.id),s=await this.get('api/schema/?format=json');
   const contract=inspectInvenTreeContract(s.data,api);
   const schemaSha256=await sha(s.bytes);assertNativeTarget(this.production,actorId,schemaSha256);
