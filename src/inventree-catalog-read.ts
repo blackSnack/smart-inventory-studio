@@ -24,11 +24,13 @@ function source(kind:SourceRef['kind'],raw:unknown,label:string):SourceRef[]{
 // Standalone software adapter: explicit declaration probe, actual response validation, GET only.
 // A schema declaration is not a permission check or production integration acceptance.
 export class InvenTreeCatalogReadAdapter implements CatalogReadPort{
- private constructor(private base:URL,private token:string,private request:typeof fetch,private transport:InvenTreeReadProvider,private templateDeclared:boolean){}
+ private constructor(private base:URL,private token:string,private request:typeof fetch,private transport:InvenTreeReadProvider,private templateDeclared:boolean,private legacy:boolean){}
  static async open(base:string,token:string,request:typeof fetch){
-  const b=new URL(base.endsWith('/')?base:base+'/');const e=await probeSchema(b.href,token,[...endpoints,{key:'native-templates',path:'/api/parameter/template/',method:'get'}],request);
-  if(e.operations.some(o=>o.key!=='native-templates'&&!o.declared))throw Error('catalog API not declared');
-  return new InvenTreeCatalogReadAdapter(b,token,request,new InvenTreeReadProvider(b.href,token,request),e.operations.some(o=>o.key==='native-templates'&&o.declared));
+  const b=new URL(base.endsWith('/')?base:base+'/');const e=await probeSchema(b.href,token,[...endpoints,{key:'native-templates',path:'/api/parameter/template/',method:'get'},{key:'legacy-parameters',path:'/api/part/parameter/',method:'get'},{key:'legacy-templates',path:'/api/part/parameter/template/',method:'get'}],request);
+  const declared=(key:string)=>e.operations.some(o=>o.key===key&&o.declared);
+  const legacy=!declared('parameters')&&declared('legacy-parameters')&&declared('legacy-templates');
+  if((!declared('parameters')&&!legacy)||endpoints.some(o=>o.key!=='parameters'&&!declared(o.key)))throw Error('catalog API not declared');
+  return new InvenTreeCatalogReadAdapter(b,token,request,new InvenTreeReadProvider(b.href,token,request),legacy||declared('native-templates'),legacy);
  }
  private async list(path:string,params:Record<string,string>={}):Promise<Record<string,unknown>[]>{
   return unique((await this.transport.list(path,params)).map(row));
@@ -43,7 +45,7 @@ export class InvenTreeCatalogReadAdapter implements CatalogReadPort{
   id(categoryId);
   // Public schema does not promise a category filter; read relations and select exact category locally.
   const relations=await this.list('api/part/category/parameters/'),seen=new Set<string>(),out:ParameterTemplateRef[]=[];
-  for(const r of relations){if(id(r.category)!==categoryId)continue;const tid=id(r.template),d=row(r.template_detail);if(id(d.pk)!==tid||(d.model_type!=='part.part'&&d.model_type!==null)||seen.has(tid)||typeof d.enabled!=='boolean'||typeof d.checkbox!=='boolean')throw Error('invalid category template relation');seen.add(tid);
+  for(const r of relations){if(id(r.category)!==categoryId)continue;const tid=id(this.legacy?r.parameter_template:r.template),raw=row(this.legacy?r.parameter_template_detail:r.template_detail),d:Record<string,unknown>=this.legacy?{...raw,model_type:'part.part',enabled:true,selectionlist:null}:raw;if(id(d.pk)!==tid||(d.model_type!=='part.part'&&d.model_type!==null)||seen.has(tid)||typeof d.enabled!=='boolean'||typeof d.checkbox!=='boolean')throw Error('invalid category template relation');seen.add(tid);
    if(!d.enabled)continue;const choices=text(d.choices),selection=d.selectionlist==null?null:id(d.selectionlist);
    // Native templates do not establish numeric/rating semantics from units alone.
    out.push({id:tid,name:name(d.name),unit:str(d.units).trim()||null,type:d.checkbox?'boolean':choices.trim()||selection?'enum':'unknown'});
@@ -53,15 +55,15 @@ export class InvenTreeCatalogReadAdapter implements CatalogReadPort{
  private async labelParameters(parameters:ParameterValueRef[]):Promise<ParameterValueRef[]>{
   if(!this.templateDeclared||!parameters.length)return parameters;
   try{
-   const rows=await this.list('api/parameter/template/',{for_model:'part.part'});
-   const templates=new Map(rows.map(r=>{if((r.model_type!=='part.part'&&r.model_type!==null)||typeof r.enabled!=='boolean')throw Error('invalid native template scope');return [id(r.pk),{name:name(r.name),unit:str(r.units).trim()||null}] as const}));
+   const rows=await this.list(this.legacy?'api/part/parameter/template/':'api/parameter/template/',this.legacy?{}:{for_model:'part.part'});
+   const templates=new Map(rows.map(r=>{if(!this.legacy&&((r.model_type!=='part.part'&&r.model_type!==null)||typeof r.enabled!=='boolean'))throw Error('invalid native template scope');return [id(r.pk),{name:name(r.name),unit:str(r.units).trim()||null}] as const}));
    // Disabled templates may still identify historic values; no change to search/write capabilities.
    return parameters.map(p=>{const template=templates.get(p.templateId);return template?{...p,template}:p});
   }catch{return parameters} // Optional label metadata must not hide valid values.
  }
  // Raw record identity and note are required by the reviewed parameter write transport.
  async getParameterRecords(partId:string){
-  id(partId);const seen=new Set<string>();
+  id(partId);if(this.legacy)throw Error('legacy parameter write baseline not yet supported');const seen=new Set<string>();
   return (await this.list('api/parameter/',{model_type:'part.part',model_id:partId})).map(r=>{
    const templateId=id(r.template);if(r.model_type!=='part.part'||id(r.model_id)!==partId||seen.has(templateId))throw Error('invalid parameter baseline scope');
    seen.add(templateId);return {id:id(r.pk),templateId,value:str(r.data),note:str(r.note)};
@@ -80,13 +82,13 @@ export class InvenTreeCatalogReadAdapter implements CatalogReadPort{
   if(id(p.pk)!==partId)throw Error('part detail identity mismatch');
   const summary={id:partId,name:name(p.name),ipn:p.IPN==null?null:str(p.IPN),description:text(p.description),categoryId:p.category==null?null:id(p.category)};
   const [params,makers,suppliers,attachments]=await Promise.all([
-   this.list('api/parameter/',{model_type:'part.part',model_id:partId}),
+   this.list(this.legacy?'api/part/parameter/':'api/parameter/',this.legacy?{part:partId}:{model_type:'part.part',model_id:partId}),
    this.list('api/company/part/manufacturer/',{part:partId,manufacturer_detail:'true'}),
    this.list('api/company/part/',{part:partId,supplier_detail:'true'}),
    this.list('api/attachment/',{model_type:'part',model_id:partId})
   ]);
   const templates=new Set<string>(),sources:SourceRef[]=source('other',p.link,'Part link');
-  const parameters=params.map(r=>{const tid=id(r.template);if(r.model_type!=='part.part'||id(r.model_id)!==partId||templates.has(tid))throw Error('invalid part parameter scope');templates.add(tid);const v=str(r.data);return {templateId:tid,value:v.trim()?v:null}});
+  const parameters=params.map(r=>{const tid=id(r.template);if((!this.legacy&&r.model_type!=='part.part')||id(this.legacy?r.part:r.model_id)!==partId||templates.has(tid))throw Error('invalid part parameter scope');templates.add(tid);const v=str(r.data);return {templateId:tid,value:v.trim()?v:null}});
   const manufacturerParts=makers.flatMap(r=>{if(id(r.part)!==partId)throw Error('manufacturer part scope mismatch');const manufacturer=company(r,'manufacturer'),mpn=text(r.MPN);sources.push(...source('manufacturer',r.link,manufacturer));return mpn.trim()?[{manufacturer,mpn}]:[]});
   const supplierParts=suppliers.flatMap(r=>{if(id(r.part)!==partId)throw Error('supplier part scope mismatch');const supplier=company(r,'supplier'),sku=text(r.SKU);sources.push(...source('supplier',r.link,supplier));return sku.trim()?[{supplier,sku}]:[]});
   for(const r of attachments){if(r.model_type!=='part'||id(r.model_id)!==partId)throw Error('attachment part scope mismatch');sources.push(...source('other',r.link,text(r.comment)||'Attachment link'))}
