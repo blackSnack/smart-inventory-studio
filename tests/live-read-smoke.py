@@ -5,6 +5,7 @@ from threading import Thread
 from playwright.sync_api import sync_playwright
 from live_metadata_fixture import cabinet_response
 from live_enrichment_fixture import exercise_live_enrichment
+from native_browser_fixture import exercise_native_browser
 root=Path(__file__).resolve().parents[1]/'web'/'dist'
 server=ThreadingHTTPServer(('127.0.0.1',0),partial(SimpleHTTPRequestHandler,directory=str(root)))
 Thread(target=server.serve_forever,daemon=True).start()
@@ -74,6 +75,7 @@ try:
   stock_mode='denied';page.get_by_role('button',name='读取库存记录').click();page.get_by_text('部分库位读取失败，库存状态保持未知。').wait_for();matrix.get_by_text('库存未知',exact=True).wait_for()
   page.get_by_label('Metadata 模型标识').fill('changed');assert matrix.count()==0
   assert all(m in ('GET','OPTIONS') for m,u in seen);assert page.evaluate("!Object.values(localStorage).some(v=>v.includes('synthetic-test'))");assert not errors,errors
-  batch=b.new_page(viewport={'width':390,'height':844});batch.on('pageerror',lambda e:errors.append(str(e)));exercise_live_enrichment(batch,f'http://127.0.0.1:{server.server_port}/');assert not errors,errors;b.close()
+  batch=b.new_page(viewport={'width':390,'height':844});batch.on('pageerror',lambda e:errors.append(str(e)));exercise_live_enrichment(batch,f'http://127.0.0.1:{server.server_port}/');assert not errors,errors
+  native=b.new_page(viewport={'width':390,'height':844});native.on('pageerror',lambda e:errors.append(str(e)));exercise_native_browser(native,f'http://127.0.0.1:{server.server_port}/');assert not errors,errors;b.close()
 finally:server.shutdown()
 print('PASS: explicit read-only connection, global result distribution, zero stock distinction, no credential persistence (mocked network).')

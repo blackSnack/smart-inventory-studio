@@ -1,3 +1,4 @@
+import {authorizedNativeBase,assertNativeTarget,assertNativeMode,type ProductionNativeTarget} from './native-production-authorization.js';
 // Local disposable-instance acceptance only; never imported by the PWA or fixture router.
 import {InvenTreeReceiptCandidateReader,type ReceiptCandidateInput} from './inventree-receipt-candidate.js';
 import {receiptId,receiptDecimal} from './receipt-stock-baseline.js';
@@ -6,7 +7,7 @@ import {snapshotKey} from './approved-snapshot.js';
 
 type Candidate=Awaited<ReturnType<InvenTreeReceiptCandidateReader['readCandidate']>>;
 type Prepared={base:string;schemaSha256:string;candidate:Candidate;executionAllowed:false};
-type Approval={approvedPreparationSha256:string;disposableInstanceConfirmed:true;writeAuthorized:true;visibilityConfirmed:true;exclusiveAccessConfirmed:true;identityConfirmed:true;physicalSpaceConfirmed:true};
+type Approval={approvedPreparationSha256:string;writeAuthorized:true;visibilityConfirmed:true;exclusiveAccessConfirmed:true;identityConfirmed:true;physicalSpaceConfirmed:true};
 export interface NativeReceiptEvidence {
  claim(binding:string):Promise<boolean>;
  acknowledge(binding:string,stockId:string):Promise<void>;
@@ -15,23 +16,18 @@ export interface NativeReceiptEvidence {
 const row=(x:unknown):Record<string,unknown>=>{if(!x||typeof x!=='object'||Array.isArray(x))throw Error('invalid native response');return x as Record<string,unknown>};
 const sha=async(s:string|Uint8Array)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',typeof s==='string'?new TextEncoder().encode(s):new Uint8Array(s))),b=>b.toString(16).padStart(2,'0')).join('');
 export async function nativeReceiptPreparationHash(prepared:Prepared){return sha(snapshotKey(prepared))}
-function localBase(base:string){
- const u=new URL(base);
- if(!['http:','https:'].includes(u.protocol)||!['127.0.0.1','[::1]'].includes(u.hostname)||!u.port||u.username||u.password||u.search||u.hash||u.pathname!=='/')throw Error('explicit loopback disposable instance with port required');
- return u;
-}
-function approved(x:unknown):asserts x is Approval{
- const r=row(x),keys=['disposableInstanceConfirmed','writeAuthorized','visibilityConfirmed','exclusiveAccessConfirmed','identityConfirmed','physicalSpaceConfirmed'];
- if(keys.some(k=>r[k]!==true))throw Error('all local acceptance confirmations required');
+function approved(x:unknown,production?:ProductionNativeTarget):asserts x is Approval{
+ const r=row(x),keys=['writeAuthorized','visibilityConfirmed','exclusiveAccessConfirmed','identityConfirmed','physicalSpaceConfirmed'];
+ assertNativeMode(production,r);if(keys.some(k=>r[k]!==true))throw Error('all local acceptance confirmations required');
 }
 function report(status:'verified'|'unknown'|'blocked',reason:string){
  return {status,reason,serverAuditRequired:true as const,productionWriteAllowed:false as const};
 }
 export class NativeReceiptAcceptance {
- private constructor(private base:URL,private token:string,private request:typeof fetch){}
- static open(base:string,token:string,request:typeof fetch=fetch){
+ private constructor(private base:URL,private token:string,private request:typeof fetch,private production?:ProductionNativeTarget){}
+ static open(base:string,token:string,request:typeof fetch=fetch,production?:ProductionNativeTarget){
   if(typeof token!=='string'||!token.trim()||/[\r\n]/.test(token))throw Error('explicit isolated token required');
-  return new NativeReceiptAcceptance(localBase(base),token,request);
+  return new NativeReceiptAcceptance(authorizedNativeBase(base,production),token,request,production);
  }
  private async call(path:string,method:'GET'|'POST'='GET',body?:unknown,limit=2*1024*1024){
   const u=new URL(path,this.base);
@@ -46,11 +42,11 @@ export class NativeReceiptAcceptance {
   const version=row((await this.call('api/')).data);
   if(version.server!=='InvenTree'||version.version!=='1.7.4'||version.apiVersion!==570)throw Error('isolated version mismatch');
   const auth=row((await this.call('api/user/me/')).data);
-  receiptId(auth.pk??auth.id);
+  const actorId=receiptId(auth.pk??auth.id);
   const schema=await this.call('api/schema/?format=json','GET',undefined,16*1024*1024);
   const required=[{key:'part',path:'/api/part/{id}/',method:'get' as const},{key:'locations',path:'/api/stock/location/',method:'get' as const},{key:'stock',path:'/api/stock/',method:'get' as const}];
   if(inspectSchema(schema.data,[...required,...(requirePost?[{key:'create',path:'/api/stock/',method:'post' as const}]:[])]).some(x=>!x.declared))throw Error('native receipt API missing');
-  return sha(schema.bytes);
+  const digest=await sha(schema.bytes);assertNativeTarget(this.production,actorId,digest);return digest;
  }
  private reader(){return InvenTreeReceiptCandidateReader.open(this.base.href,this.token,this.request)}
  async prepare(instanceId:string,input:ReceiptCandidateInput):Promise<Prepared>{
@@ -59,7 +55,7 @@ export class NativeReceiptAcceptance {
   return {base:this.base.href,schemaSha256,candidate,executionAllowed:false};
  }
  private async validate(prepared:Prepared,approval:unknown){
-  approved(approval);
+  approved(approval,this.production);
   if(!prepared||prepared.base!==this.base.href||prepared.executionAllowed!==false||!(/^[a-f0-9]{64}$/).test(prepared.schemaSha256)||prepared.candidate?.executionAllowed!==false||prepared.candidate.input?.allocations?.length!==1)throw Error('invalid prepared receipt');
   const binding=await nativeReceiptPreparationHash(prepared);
   if(approval.approvedPreparationSha256!==binding)throw Error('approval does not bind exact preparation');
