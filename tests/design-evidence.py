@@ -38,7 +38,7 @@ try:
   assert page.locator('.studio-icon svg').first.evaluate('e=>e.getBoundingClientRect().width===18 && e.parentElement.getBoundingClientRect().width===24')
   capture(page,'01-mobile-home')
   page.get_by_role('button',name='元件',exact=True).click();capture(page,'31-mobile-parts')
-  page.get_by_text('技术参数筛选',exact=True).click();capture(page,'32-mobile-filter');page.get_by_role('button',name='首页',exact=True).click()
+  page.get_by_text('技术参数筛选',exact=True).click();capture(page,'32-mobile-filter');page.get_by_role('button',name='关闭',exact=True).click();page.get_by_role('button',name='首页',exact=True).click()
   page.get_by_role('button',name='拍照录入').click();page.get_by_role('heading',name='采集元件照片').wait_for();capture(page,'02-mobile-photo')
   page.get_by_role('button',name='取消录入').click()
   page.get_by_role('button',name='手动录入').click();page.get_by_label('搜索已有元件').fill('10k');page.get_by_role('button',name='选择 RES-001').wait_for();capture(page,'03-mobile-candidates')
@@ -80,7 +80,7 @@ try:
   action.focus();page.wait_for_timeout(160)
   assert float(action.evaluate('e=>getComputedStyle(e).opacity'))==1
   page.get_by_role('button',name='取消录入').click();page.get_by_role('dialog').get_by_role('button',name='放弃录入',exact=True).click()
-  page.get_by_role('button',name='元件',exact=True).click();capture(page,'33-desktop-parts');page.get_by_role('button',name='查看 RES-001').click();capture(page,'34-desktop-detail');page.get_by_role('dialog').get_by_role('button',name='关闭').click()
+  page.get_by_role('button',name='元件',exact=True).click();capture(page,'33-desktop-parts');page.get_by_role('button',name='查看 RES-001').click();capture(page,'34-desktop-detail');page.get_by_role('button',name='查看 RES-002').click();page.get_by_role('dialog').get_by_text('RES-002',exact=False).first.wait_for();page.get_by_role('dialog').get_by_role('button',name='关闭').click()
   page.get_by_role('button',name='仓储',exact=True).click();page.get_by_role('button',name='编辑布局').click();capture(page,'35-desktop-workbench');page.get_by_role('dialog').get_by_role('button',name='关闭').click()
   desktop.close()
   tablet=b.new_context(viewport={'width':820,'height':1180},is_mobile=True,has_touch=True,device_scale_factor=1)

@@ -162,3 +162,12 @@ textarea.studio-csv-editor{min-height:160px;height:160px;font-size:16px;line-hei
 .studio-live-layout-matrix{min-width:0}
 @media(min-width:768px){.studio-parts-tools{grid-template-columns:minmax(0,1fr) auto;align-items:center}.studio-workbench-jump{display:none}}
 @media(min-width:1024px){.studio-live-layout{grid-template-columns:minmax(240px,1fr) minmax(0,2fr)}.studio-live-layout-config{border-right:1px solid var(--color-line);padding-right:16px}}
+
+/* Responsive filter sheet and linked desktop detail. */
+.studio-dialog[data-presentation="filter"]{width:min(calc(100% - 24px),480px)}
+.studio-parts-table tr[data-active="true"]{background:#e5eee7;box-shadow:inset 3px 0 var(--color-primary)}
+.studio-parts-table{container-type:inline-size}
+@media(max-width:767px){.studio-dialog[data-presentation="filter"]{top:auto;bottom:calc(100dvh - var(--studio-vv-top) - var(--studio-vv-height));left:0;transform:none;width:100%;max-height:calc(var(--studio-vv-height) - 12px);border-radius:16px 16px 0 0}}
+@media(min-width:768px){.studio-dialog[data-presentation="filter"]{left:auto;right:0;top:var(--studio-vv-top);transform:none;height:var(--studio-vv-height);max-height:var(--studio-vv-height);border-radius:16px 0 0 16px}}
+@media(min-width:1024px){.studio-shell[data-linked-detail="true"]{padding-right:clamp(380px,34vw,520px);max-width:100%;grid-template-columns:154px minmax(0,1fr)}.studio-dialog[data-nonmodal="true"]{width:clamp(360px,33vw,500px);box-shadow:-2px 0 12px #18181b0b}}
+@container (max-width:520px){.studio-parts-table td,.studio-parts-table th{padding-inline:6px}.studio-col-location{font-size:12px}.studio-col-spec{font-size:12px}}
