@@ -42,7 +42,6 @@ try:
   detail_enabled=True;detail_fail=True;dialog.get_by_role('button',name='重试读取').click();dialog.get_by_role('alert').wait_for()
   detail_fail=False;dialog.get_by_role('button',name='重试读取').click();dialog.get_by_text('FIX-10K',exact=True).wait_for();dialog.get_by_text('SKU-10K',exact=True).wait_for();dialog.get_by_text('10kΩ',exact=True).wait_for();assert dialog.get_by_role('link',name='Fixture manual · example.test').get_attribute('href')=='https://example.test/manual'
   assert dialog.evaluate('e=>e.getBoundingClientRect().right<=innerWidth+1&&e.getBoundingClientRect().left>=-1')
-  evidence=root.parents[1]/'design-evidence';evidence.mkdir(exist_ok=True);page.screenshot(path=str(evidence/'21-live-part-detail.jpg'),type='jpeg',quality=65)
   dialog.get_by_role('button',name='关闭').click();assert page.get_by_role('dialog').count()==0
   page.get_by_text('技术参数筛选',exact=True).click();page.get_by_role('button',name='读取参数模板').click();page.get_by_label('参数模板').select_option('5');page.get_by_label('数值比较').check();page.get_by_label('参数值').fill('10000');page.get_by_role('button',name='应用参数筛选').click();page.get_by_text('找到 1 种元件').wait_for();page.get_by_text('另有 1 种参数未知，未计入严格匹配。').wait_for();assert page.get_by_text('10k unknown',exact=True).count()==0
   page.get_by_role('button',name='首页',exact=True).click();page.get_by_role('button',name='手动录入草稿').click()
