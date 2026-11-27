@@ -35,6 +35,17 @@ try:
    if((await a.read('next')).steps[0].operation.payload.quantity!==2)throw Error('caller mutated queued approval');
    await rejected(()=>a.create(make('after-next')),'new pending plan not enforced');a.close();b.close();other.close();
   }""")
+  page.evaluate("""async()=>{const {IndexedDbJournalStore:S}=await import('/indexeddb-journal.js');const {createJournal,executeNext}=await import('/operation-journal.js');
+   const s=await S.open('integrity','journal-exact-integrity'),make=()=>createJournal({id:'p',instanceId:'integrity',catalogHash:'c',snapshotHash:'s',approvalId:'a',operations:[{id:'p:0',kind:'receipt',payload:{quantity:2,unknown:null,optional:undefined}}]});
+   const rejected=async(fn)=>{let failed=false;try{await fn()}catch{failed=true}if(!failed)throw Error('lossy snapshot accepted')};
+   for(const bad of [NaN,Infinity,new Date(0),new Map(),[,,]]){const j=make();j.plan.operations[0].payload.unknown=bad;j.steps[0].operation.payload.unknown=bad;await rejected(()=>s.create(j))}
+   const mismatch=make();delete mismatch.steps[0].operation.payload.optional;await rejected(()=>s.create(mismatch));
+   const j=make();await s.create(j);
+   const mutate=await s.read('p');mutate.revision++;mutate.steps[0].state='sent';delete mutate.plan.operations[0].payload.optional;delete mutate.steps[0].operation.payload.optional;await rejected(()=>s.compareAndSet('p',0,mutate));
+   const forged=await s.read('p');forged.revision++;forged.steps[0].state='sent';forged.plan.operations[0].payload.unknown=NaN;forged.steps[0].operation.payload.unknown=NaN;await rejected(()=>s.compareAndSet('p',0,forged));
+   if((await s.read('p')).revision!==0)throw Error('failed CAS changed stored data');
+   const done=await executeNext(s,{send:async o=>{if(!Object.hasOwn(o.payload,'optional')||o.payload.unknown!==null)throw Error('approved snapshot lost')},observe:async()=>({status:'verified',evidence:'fixture'})},'p','integrity');if(done.steps[0].state!=='verified')throw Error('valid optional field rejected');s.close()
+  }""")
   page.reload()
   page.evaluate("""async()=>{const {IndexedDbJournalStore:S}=await import('/indexeddb-journal.js');const {executeNext,reconcile}=await import('/operation-journal.js');const s=await S.open('a');let sends=0;const t={send:async()=>{sends++},observe:async()=>({status:'verified',evidence:'synthetic readback'})};let blocked=false;try{await executeNext(s,t,'p','a')}catch{blocked=true}if(!blocked||sends!==0)throw Error('replay after reload');await reconcile(s,t,'p','a');if((await s.pending()).length!==0||sends!==0)throw Error('bad recovery');s.close()}""")
   page.evaluate("""async()=>{const {SyntheticInventoryStore:S,DEMO_INSTANCE,demoLocations}=await import('/synthetic-inventory.js');const {IndexedDbJournalStore:J}=await import('/indexeddb-journal.js');const {createJournal,executeNext}=await import('/operation-journal.js');const {planExistingPartReceipt}=await import('/receiving-plan.js');
