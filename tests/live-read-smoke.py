@@ -10,7 +10,7 @@ Thread(target=server.serve_forever,daemon=True).start()
 try:
  with sync_playwright() as p:
   b=p.chromium.launch();page=b.new_page(viewport={'width':390,'height':844});errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-  seen=[];detail_enabled=False;detail_fail=False;label_fail=False;metadata_enabled=False;metadata_mode='valid'
+  seen=[];detail_enabled=False;detail_fail=False;label_fail=False;metadata_enabled=False;metadata_mode='valid';stock_mode='positive'
   def api(route):
    req=route.request;seen.append((req.method,req.url))
    headers={'access-control-allow-origin':'*','access-control-allow-headers':'authorization,content-type','access-control-allow-methods':'GET, OPTIONS'}
@@ -19,7 +19,7 @@ try:
    if '/api/schema/' in req.url:
     paths=['/api/parameter/','/api/parameter/template/']
     if detail_enabled:paths+=['/api/part/{id}/','/api/part/category/','/api/part/category/parameters/','/api/company/part/manufacturer/','/api/company/part/','/api/attachment/']
-    if metadata_enabled:paths+=['/api/stock/location/','/api/metadata/{model}/{id}/']
+    if metadata_enabled:paths+=['/api/stock/location/','/api/metadata/{model}/{id}/','/api/stock/']
     data={'openapi':'3.0.3','paths':{p:{'get':{}} for p in paths}}
    elif '/api/metadata/stocklocation/1/' in req.url:
     if metadata_mode=='denied':route.fulfill(status=403,headers=headers);return
@@ -36,6 +36,10 @@ try:
    elif '/api/parameter/' in req.url: data=[{'pk':20,'model_id':42,'model_type':'part.part','template':5,'data':'10kΩ'}]
    elif '/api/stock/location/' in req.url: data=[{'pk':1,'name':'Cabinet A','parent':None,'structural':True},{'pk':2,'name':'A-01','parent':1,'structural':False}]
    elif '/api/part/' in req.url:data=[{'pk':42,'name':'10k resistor','IPN':'R-01','description':'±1%','category':1},{'pk':43,'name':'10k unknown','IPN':'R-02','description':'Partial','category':1}]
+   elif '/api/stock/' in req.url and 'location=2' in req.url:
+    assert 'cascade=false' in req.url
+    if stock_mode=='denied':route.fulfill(status=403,headers=headers);return
+    data=[{'pk':9,'part':42,'location':2,'quantity':'100'}] if stock_mode=='positive' else []
    elif 'part=42' in req.url:data=[{'pk':9,'part':42,'location':2,'quantity':'100'}]
    else:data=[]
    route.fulfill(json=data,headers=headers)
@@ -62,6 +66,9 @@ try:
   metadata_mode='empty';page.get_by_role('button',name='读取布局',exact=True).click();page.get_by_text('该库位没有已保存的柜体布局。').wait_for()
   metadata_mode='valid';page.get_by_role('button',name='读取布局',exact=True).click();matrix=page.get_by_role('region',name='仓储矩阵');matrix.wait_for();matrix.get_by_text('库存未知',exact=True).wait_for();matrix.get_by_text('未绑定',exact=True).wait_for();matrix.get_by_text('未定义',exact=True).wait_for();assert matrix.get_by_text('空闲',exact=True).count()==0
   matrix.get_by_role('button',name='A-01 库存未知').click();drawer=page.get_by_role('dialog',name='A-01');drawer.get_by_text('1 · 库位 2',exact=True).wait_for();drawer.get_by_role('button',name='关闭').click()
+  page.get_by_role('button',name='读取库存记录').click();matrix.get_by_text('有正量',exact=True).wait_for();matrix.get_by_role('button',name='A-01 有正量').click();drawer.get_by_text('有正量',exact=True).wait_for();drawer.get_by_role('button',name='关闭').click()
+  stock_mode='empty';page.get_by_role('button',name='读取库存记录').click();matrix.get_by_text('无正量',exact=True).wait_for();assert matrix.get_by_text('空闲',exact=True).count()==0
+  stock_mode='denied';page.get_by_role('button',name='读取库存记录').click();page.get_by_text('部分库位读取失败，库存状态保持未知。').wait_for();matrix.get_by_text('库存未知',exact=True).wait_for()
   page.get_by_label('Metadata 模型标识').fill('changed');assert matrix.count()==0
   assert all(m in ('GET','OPTIONS') for m,u in seen);assert page.evaluate("!Object.values(localStorage).some(v=>v.includes('synthetic-test'))");assert not errors,errors;b.close()
 finally:server.shutdown()

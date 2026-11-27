@@ -1,5 +1,5 @@
 import {InvenTreeReadProvider} from './domain.js';
-import {InvenTreeReadAdapter} from './inventory-provider.js';
+import {InvenTreeReadAdapter,type LocationSummary} from './inventory-provider.js';
 import {probeSchema} from './provider-schema.js';
 export interface LocationStockRow {id:string;partId:string;locationId:string;quantity:string}
 export interface LocationStockReadback {locationId:string;items:LocationStockRow[];hasPositiveQuantity:boolean}
@@ -14,7 +14,19 @@ export class InvenTreeLocationStockReader{
  }
  async getLocationStock(locationId:string):Promise<LocationStockReadback>{
   if(id(locationId)!==locationId)throw Error('invalid location ID');
-  const locations=await this.locations.getLocations(),location=locations.find(l=>l.id===locationId);
+  return this.readLeaf(locationId,await this.locations.getLocations());
+ }
+ // Explicit bulk read, with a single tree snapshot and at most four concurrent leaf reads.
+ // Cancellation prevents new requests; in-flight requests may finish but are ignored by the caller.
+ async getLocationStocks(locationIds:string[],signal?:AbortSignal):Promise<PromiseSettledResult<LocationStockReadback>[]>{
+  const ids=[...locationIds];if(new Set(ids).size!==ids.length||ids.some(x=>id(x)!==x)||ids.length>10000)throw Error('invalid leaf read set');
+  signal?.throwIfAborted();if(!ids.length)return [];
+  const locations=await this.locations.getLocations(),results:PromiseSettledResult<LocationStockReadback>[]=new Array(ids.length);let next=0;
+  await Promise.all(Array.from({length:Math.min(4,ids.length)},async()=>{while(next<ids.length){signal?.throwIfAborted();const i=next++;try{results[i]={status:'fulfilled',value:await this.readLeaf(ids[i],locations)}}catch(reason){results[i]={status:'rejected',reason}}}}));
+  signal?.throwIfAborted();return results;
+ }
+ private async readLeaf(locationId:string,locations:LocationSummary[]):Promise<LocationStockReadback>{
+  const location=locations.find(l=>l.id===locationId);
   if(!location||location.structural||locations.some(l=>l.parentId===locationId))throw Error('not a storage leaf');
   const seen=new Set<string>();
   const items=(await this.transport.list('api/stock/',{location:locationId,cascade:'false'})).map(raw=>{
