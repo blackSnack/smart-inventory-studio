@@ -9,10 +9,12 @@ const id=(x:unknown):string=>{const v=typeof x==='number'&&Number.isSafeInteger(
 const row=(x:unknown)=>{if(!x||typeof x!=='object'||Array.isArray(x))throw Error('invalid identity index row');return x as Record<string,unknown>};
 const norm=(v:string)=>v.normalize('NFKC').trim().toLowerCase();
 const same=(a:string,b:string)=>norm(a)===norm(b);
+const company=(s:string)=>/^(lcsc|立创商城|立创电子商城)$/.test(norm(s))?'lcsc':norm(s);
+const sameCompany=(a:string,b:string)=>company(a)===company(b);
 export function resolvePhotoAssociations(d:PhotoDraft,makers:Association[],suppliers:Association[]):PhotoInventoryMatch{
  if(!hasStrongPhotoIdentity(d))return {decision:'insufficient',ids:[]};
- const m=d.manufacturer&&d.mpn?makers.filter(a=>same(a.company,d.manufacturer!)&&same(a.code,d.mpn!)).map(a=>a.partId):[];
- const s=d.supplier&&d.sku?suppliers.filter(a=>same(a.company,d.supplier!)&&same(a.code,d.sku!)).map(a=>a.partId):[];
+ const m=d.manufacturer&&d.mpn?makers.filter(a=>sameCompany(a.company,d.manufacturer!)&&same(a.code,d.mpn!)).map(a=>a.partId):[];
+ const s=d.supplier&&d.sku?suppliers.filter(a=>sameCompany(a.company,d.supplier!)&&same(a.code,d.sku!)).map(a=>a.partId):[];
  const ids=[...new Set([...m,...s])];
  if(ids.length>1)return {decision:'conflict',ids};
  if(ids.length===1){const partial=!!(d.manufacturer&&d.mpn&&d.supplier&&d.sku)&&(!m.length||!s.length);return {decision:partial?'candidate':'reuse',ids}}
