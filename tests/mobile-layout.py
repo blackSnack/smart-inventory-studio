@@ -9,8 +9,8 @@ Thread(target=server.serve_forever,daemon=True).start()
 try:
  with sync_playwright() as p:
   b=p.chromium.launch()
-  for width in (320,375,390,430,768,1024,1280,1440,1920):
-   context=b.new_context(viewport={'width':width,'height':844},is_mobile=width<768,has_touch=width<768,device_scale_factor=1)
+  for width in (320,375,390,430,768,820,1024,1280,1440,1920):
+   context=b.new_context(viewport={'width':width,'height':844},is_mobile=width<768,has_touch=width<=1024,device_scale_factor=1)
    page=context.new_page();page.goto(f'http://127.0.0.1:{server.server_port}/');page.get_by_role('heading',name='Studio Workspace').wait_for()
    def fit():
     assert page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth+1'), f'horizontal page overflow {width}'
@@ -31,7 +31,7 @@ try:
    page.get_by_role('button',name='取消录入').click();page.get_by_role('dialog').get_by_role('button',name='放弃录入',exact=True).click();page.set_viewport_size({'width':width,'height':844})
    page.get_by_role('button',name='仓储',exact=True).click();fit()
    page.get_by_role('button',name='编辑布局').click();dialog=page.get_by_role('dialog');dialog.wait_for();fit()
-   title=dialog.get_by_role('heading');close=dialog.get_by_role('button',name='关闭');t=title.bounding_box();c=close.bounding_box()
+   title=dialog.get_by_role('heading',name='仓储布局工作台',exact=True);close=dialog.get_by_role('button',name='关闭');t=title.bounding_box();c=close.bounding_box()
    assert t['x']+t['width']<=c['x']+1 and c['width']>=43.9 and c['height']>=43.9
    assert dialog.evaluate('e=>e.getBoundingClientRect().right<=innerWidth+1 && e.getBoundingClientRect().left>=-1')
    page.set_viewport_size({'width':width,'height':480});page.wait_for_function("document.documentElement.style.getPropertyValue('--studio-vv-height')==='480px'");fit()
@@ -44,4 +44,4 @@ try:
    context.close()
   b.close()
 finally:server.shutdown()
-print('PASS: responsive 320/375/390/430/768/1024/1280/1440/1920 widths, 16px form text, version placement, modal title/close geometry, reduced viewport and contained matrix. Chromium only; physical iOS pending.')
+print('PASS: responsive 320/375/390/430/768/820/1024/1280/1440/1920 widths, 16px form text, version placement, modal title/close geometry, reduced viewport and contained matrix. Chromium only; physical iOS pending.')

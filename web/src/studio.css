@@ -151,3 +151,14 @@ textarea.studio-csv-editor{min-height:160px;height:160px;font-size:16px;line-hei
 @media(max-width:767px){.studio-workbench-footer{display:grid}.studio-workbench-footer>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 .studio-list-group .studio-table-open.studio-result{padding:0;border-radius:4px;background:transparent}.studio-list-group .studio-table-open.studio-result:focus-visible{outline-offset:0}
+
+/* Responsive workflow refinements */
+.studio-parts-tools{display:grid;gap:10px}
+.studio-workbench-jump{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.studio-workbench-jump .studio-button{flex:1}
+.studio-workbench-matrix,.studio-workbench-properties,.studio-workbench-inspector,.studio-workbench-wide{scroll-margin-top:8px}
+.studio-matrix button[aria-pressed="true"]{border:2px solid var(--color-primary);background:#e5eee7;color:var(--color-primary)}
+.studio-live-layout{display:grid;gap:16px;min-width:0}
+.studio-live-layout-matrix{min-width:0}
+@media(min-width:768px){.studio-parts-tools{grid-template-columns:minmax(0,1fr) auto;align-items:center}.studio-workbench-jump{display:none}}
+@media(min-width:1024px){.studio-live-layout{grid-template-columns:minmax(240px,1fr) minmax(0,2fr)}.studio-live-layout-config{border-right:1px solid var(--color-line);padding-right:16px}}
