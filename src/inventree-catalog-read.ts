@@ -1,6 +1,6 @@
 import {InvenTreeReadProvider} from './domain.js';
 import {probeSchema,type RequiredOperation} from './provider-schema.js';
-import type {CatalogReadPort,CategoryRef,ParameterTemplateRef,PartRecord,SourceRef} from './inventory-contract.js';
+import type {CatalogReadPort,CategoryRef,ParameterTemplateRef,ParameterValueRef,PartRecord,SourceRef} from './inventory-contract.js';
 const endpoints:RequiredOperation[]=[
  {key:'part-detail',path:'/api/part/{id}/',method:'get'},
  {key:'categories',path:'/api/part/category/',method:'get'},
@@ -24,11 +24,11 @@ function source(kind:SourceRef['kind'],raw:unknown,label:string):SourceRef[]{
 // Standalone software adapter: explicit declaration probe, actual response validation, GET only.
 // A schema declaration is not a permission check or production integration acceptance.
 export class InvenTreeCatalogReadAdapter implements CatalogReadPort{
- private constructor(private base:URL,private token:string,private request:typeof fetch,private transport:InvenTreeReadProvider){}
+ private constructor(private base:URL,private token:string,private request:typeof fetch,private transport:InvenTreeReadProvider,private templateDeclared:boolean){}
  static async open(base:string,token:string,request:typeof fetch){
-  const b=new URL(base.endsWith('/')?base:base+'/');const e=await probeSchema(b.href,token,endpoints,request);
-  if(e.operations.some(o=>!o.declared))throw Error('catalog API not declared');
-  return new InvenTreeCatalogReadAdapter(b,token,request,new InvenTreeReadProvider(b.href,token,request));
+  const b=new URL(base.endsWith('/')?base:base+'/');const e=await probeSchema(b.href,token,[...endpoints,{key:'native-templates',path:'/api/parameter/template/',method:'get'}],request);
+  if(e.operations.some(o=>o.key!=='native-templates'&&!o.declared))throw Error('catalog API not declared');
+  return new InvenTreeCatalogReadAdapter(b,token,request,new InvenTreeReadProvider(b.href,token,request),e.operations.some(o=>o.key==='native-templates'&&o.declared));
  }
  private async list(path:string,params:Record<string,string>={}):Promise<Record<string,unknown>[]>{
   return unique((await this.transport.list(path,params)).map(row));
@@ -50,6 +50,15 @@ export class InvenTreeCatalogReadAdapter implements CatalogReadPort{
   }
   return out;
  }
+ private async labelParameters(parameters:ParameterValueRef[]):Promise<ParameterValueRef[]>{
+  if(!this.templateDeclared||!parameters.length)return parameters;
+  try{
+   const rows=await this.list('api/parameter/template/',{model_type:'part.part'});
+   const templates=new Map(rows.map(r=>{if(r.model_type!=='part.part'||typeof r.enabled!=='boolean')throw Error('invalid native template scope');return [id(r.pk),{name:name(r.name),unit:str(r.units).trim()||null}] as const}));
+   // Disabled templates may still identify historic values; no change to search/write capabilities.
+   return parameters.map(p=>{const template=templates.get(p.templateId);return template?{...p,template}:p});
+  }catch{return parameters} // Optional label metadata must not hide valid values.
+ }
  async getPart(partId:string):Promise<PartRecord>{
   id(partId);const url=new URL('api/part/'+partId+'/',this.base);
   const response=await this.request(url,{method:'GET',headers:{Authorization:'Token '+this.token,Accept:'application/json'},cache:'no-store',redirect:'error',signal:AbortSignal.timeout(20000)});
@@ -68,6 +77,6 @@ export class InvenTreeCatalogReadAdapter implements CatalogReadPort{
   const supplierParts=suppliers.flatMap(r=>{if(id(r.part)!==partId)throw Error('supplier part scope mismatch');const supplier=company(r,'supplier'),sku=text(r.SKU);sources.push(...source('supplier',r.link,supplier));return sku.trim()?[{supplier,sku}]:[]});
   for(const r of attachments){if(r.model_type!=='part'||id(r.model_id)!==partId)throw Error('attachment part scope mismatch');sources.push(...source('other',r.link,text(r.comment)||'Attachment link'))}
   // Do not certify a datasheet by filename, promote private media to external evidence, or invent missing identities.
-  return {...summary,parameters,manufacturerParts,supplierParts,sources:[...new Map(sources.map(s=>[JSON.stringify([s.kind,s.url,s.label]),s])).values()]};
+  return {...summary,parameters:await this.labelParameters(parameters),manufacturerParts,supplierParts,sources:[...new Map(sources.map(s=>[JSON.stringify([s.kind,s.url,s.label]),s])).values()]};
  }
 }
