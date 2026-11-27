@@ -9,7 +9,7 @@ Thread(target=server.serve_forever,daemon=True).start()
 try:
  with sync_playwright() as p:
   b=p.chromium.launch()
-  for width in (320,375,390,430,768,1280):
+  for width in (320,375,390,430,768,1024,1280,1440,1920):
    context=b.new_context(viewport={'width':width,'height':844},is_mobile=width<768,has_touch=width<768,device_scale_factor=1)
    page=context.new_page();page.goto(f'http://127.0.0.1:{server.server_port}/');page.get_by_role('heading',name='Studio Workspace').wait_for()
    def fit():
@@ -44,4 +44,4 @@ try:
    context.close()
   b.close()
 finally:server.shutdown()
-print('PASS: responsive 320/375/390/430/768/1280 widths, 16px form text, version placement, modal title/close geometry, reduced viewport and contained matrix. Chromium only; physical iOS pending.')
+print('PASS: responsive 320/375/390/430/768/1024/1280/1440/1920 widths, 16px form text, version placement, modal title/close geometry, reduced viewport and contained matrix. Chromium only; physical iOS pending.')

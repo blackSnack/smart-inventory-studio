@@ -96,3 +96,38 @@ textarea.studio-csv-editor{min-height:160px;height:160px;font-size:16px;line-hei
 @media(min-width:1024px) and (hover:hover) and (pointer:fine){.studio-button[data-size="sm"]{min-height:36px;padding-block:6px}}
 @media(max-width:767px){.studio-surface,.studio-review-item{padding:12px}.studio-dialog[data-presentation="workspace"],.studio-dialog[data-presentation="detail"]{left:0;right:0;top:var(--studio-vv-top);width:100%;height:var(--studio-vv-height);max-height:var(--studio-vv-height);transform:none;border-radius:0}.studio-dialog-footer{padding:12px 16px max(12px,env(safe-area-inset-bottom))}.studio-workflow{padding-inline:16px}.studio-sticky-actions{bottom:env(safe-area-inset-bottom)}}
 @media(max-width:350px){.studio-matrix-frame{padding:4px}.studio-surface{padding:10px}}
+
+.studio-parts-table{border-collapse:collapse;table-layout:fixed;text-align:left}
+.studio-parts-table th{background:var(--color-sage);font-size:12px;color:var(--color-muted);font-weight:500;padding:12px}
+.studio-parts-table td{padding:10px 12px;border-top:1px solid var(--color-line);vertical-align:middle;overflow-wrap:anywhere}
+.studio-parts-table tr[data-selected="true"]{background:#e5eee7}
+.studio-parts-table th:first-child:not(.studio-col-check){width:38%}.studio-parts-table .studio-col-check{width:48px;padding-inline:4px}
+.studio-table-checkbox{display:flex;align-items:center;justify-content:center;min-height:44px}
+.studio-table-open{display:block;text-align:left;min-height:44px;width:100%;border-radius:4px}
+.studio-table-open:hover{text-decoration:underline;text-underline-offset:3px}
+.studio-col-qty{text-align:right;white-space:normal}.studio-col-qty strong{font-size:16px}
+.studio-location-chip{display:inline-block;background:var(--color-sage);border-radius:4px;margin:2px 4px 2px 0;padding:2px 6px;font-size:12px;max-width:100%;overflow-wrap:anywhere}
+.studio-table-chevron{display:none}
+.studio-kv-list{border:1px solid var(--color-line);border-radius:8px;overflow:hidden}
+.studio-kv-list>div{padding:10px 12px}.studio-kv-list>div+div{border-top:1px solid var(--color-line)}
+.studio-workbench{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+.studio-workbench-wide,.studio-workbench-matrix,.studio-workbench-inspector{min-width:0}
+.studio-review-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+.studio-upload{border:1px dashed var(--color-control);border-radius:12px;background:var(--color-paper);padding:12px}
+.studio-value-comparison{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-block:8px}
+.studio-value-comparison>span{display:block;background:var(--color-sage);border-radius:6px;padding:8px}
+.studio-value-comparison>span+span{background:#e5eee7}
+.studio-value-comparison>span[data-conflict="true"]{background:#fceceb;color:var(--color-danger)}
+.studio-progress{height:6px;background:#d9dddf;border-radius:4px;overflow:hidden}
+.studio-progress>div{height:100%;background:var(--color-primary)}
+@media(min-width:768px){.studio-workbench{grid-template-columns:minmax(200px,1fr) minmax(0,2fr);align-items:start}.studio-workbench-wide{grid-column:1/-1}.studio-workbench-inspector{grid-column:1/-1}.studio-review-grid{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}}
+@media(min-width:1100px){.studio-workbench{grid-template-columns:minmax(200px,1fr) minmax(0,2fr) minmax(230px,1fr)}.studio-workbench-inspector{grid-column:auto}}
+@media(max-width:767px){
+ .studio-parts-table,.studio-parts-table tbody{display:block;width:100%}.studio-parts-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+ .studio-parts-table tr{display:grid;grid-template-columns:minmax(0,1fr) 68px;grid-template-areas:"name qty" "spec qty" "loc qty";gap:2px 8px;padding:10px 12px;border-bottom:1px solid var(--color-line);position:relative}
+ .studio-parts-table tr[data-selection="true"]{grid-template-columns:36px minmax(0,1fr) 68px;grid-template-areas:"check name qty" "check spec qty" "check loc qty"}
+ .studio-parts-table tr:last-child{border-bottom:0}.studio-parts-table td{padding:0;border:0;min-width:0}
+ .studio-parts-table .studio-col-check{grid-area:check;width:auto;z-index:1;align-self:center}
+ .studio-col-name{grid-area:name}.studio-col-spec{grid-area:spec}.studio-col-location{grid-area:loc}.studio-col-qty{grid-area:qty;align-self:center}
+ .studio-table-open{min-height:44px}.studio-table-open:after{content:"";position:absolute;inset:0}.studio-table-open:focus-visible{outline-offset:0}
+}
