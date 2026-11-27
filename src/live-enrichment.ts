@@ -8,7 +8,7 @@ import type {EnrichmentRequest} from './ai-enrichment-provider.js';
 import {reviewEnrichment,type Suggestion} from './enrichment-review.js';
 export type LinkKey='datasheetUrl'|'imageUrl';
 export const liveLinkKeys:LinkKey[]=['datasheetUrl','imageUrl'];
-export interface LiveBaseline {part:PartRecord;parameterRecords:{id:string;templateId:string;value:string;note:string}[];baselineComplete:false}
+export interface LiveBaseline {part:PartRecord;parameterRecords:{id:string;templateId:string;value:string;note:string|null}[];baselineComplete:false}
 export type LiveMapping={categoryKey:string;templates:Record<string,string>;missingSources:LinkKey[]};
 export function publicIdentity(p:PartRecord){
  const makers=[...new Map(p.manufacturerParts.filter(m=>m.manufacturer.trim()&&m.mpn.trim()).map(m=>[JSON.stringify([m.manufacturer,m.mpn]),m])).values()];

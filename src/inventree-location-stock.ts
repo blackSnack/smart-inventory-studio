@@ -1,3 +1,4 @@
+import {legacyStockDecimal} from './native-legacy-stock.js';
 import {InvenTreeReadProvider} from './domain.js';
 import {InvenTreeReadAdapter,type LocationSummary} from './inventory-provider.js';
 import {probeSchema} from './provider-schema.js';
@@ -6,11 +7,12 @@ export interface LocationStockReadback {locationId:string;items:LocationStockRow
 const id=(v:unknown):string=>{const s=typeof v==='number'&&Number.isSafeInteger(v)?String(v):v;if(typeof s!=='string'||!(/^[1-9][0-9]{0,17}$/).test(s))throw Error('invalid stock ID');return s};
 const decimal=(v:unknown):string=>{const s=typeof v==='number'&&Number.isSafeInteger(v)?String(v):v;if(typeof s!=='string'||s.length>128||!/^\d+(?:\.\d+)?$/.test(s))throw Error('invalid stock quantity');return s};
 export class InvenTreeLocationStockReader{
- private constructor(private transport:InvenTreeReadProvider,private locations:InvenTreeReadAdapter){}
+ private constructor(private transport:InvenTreeReadProvider,private locations:InvenTreeReadAdapter,private legacy=false){}
  static async open(base:string,token:string,request:typeof fetch){
-  const check=await probeSchema(base,token,[{key:'locations',path:'/api/stock/location/',method:'get'},{key:'stock',path:'/api/stock/',method:'get'}],request);
-  if(check.operations.some(o=>!o.declared))throw Error('location stock API not declared');
-  return new InvenTreeLocationStockReader(new InvenTreeReadProvider(base,token,request),new InvenTreeReadAdapter(base,token,request));
+  const check=await probeSchema(base,token,[{key:'locations',path:'/api/stock/location/',method:'get'},{key:'stock',path:'/api/stock/',method:'get'},{key:'legacy',path:'/api/part/parameter/',method:'get'},{key:'modern',path:'/api/parameter/',method:'get'}],request);
+  if(check.operations.some(o=>['locations','stock'].includes(o.key)&&!o.declared))throw Error('location stock API not declared');
+  const legacy=check.operations.some(o=>o.key==='legacy'&&o.declared)&&!check.operations.some(o=>o.key==='modern'&&o.declared);
+  return new InvenTreeLocationStockReader(new InvenTreeReadProvider(base,token,request),new InvenTreeReadAdapter(base,token,request),legacy);
  }
  async getLocationStock(locationId:string):Promise<LocationStockReadback>{
   if(id(locationId)!==locationId)throw Error('invalid location ID');
@@ -33,7 +35,7 @@ export class InvenTreeLocationStockReader{
    if(!raw||typeof raw!=='object'||Array.isArray(raw))throw Error('invalid stock row');
    const r=raw as Record<string,unknown>,stockId=id(r.pk),partId=id(r.part);
    if(id(r.location)!==locationId||seen.has(stockId))throw Error('unexpected or duplicate stock row');
-   seen.add(stockId);return {id:stockId,partId,locationId,quantity:decimal(r.quantity)};
+   seen.add(stockId);return {id:stockId,partId,locationId,quantity:this.legacy?legacyStockDecimal(r.quantity):decimal(r.quantity)};
   });
   return {locationId,items,hasPositiveQuantity:items.some(i=>/[1-9]/.test(i.quantity))};
  }

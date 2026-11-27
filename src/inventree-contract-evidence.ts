@@ -39,6 +39,32 @@ export const contractWrites:readonly WriteSpec[]=[
  write('metadata-update','/api/metadata/{model}/{id}/','PATCH','metadata'),
  write('stock-transfer','/api/stock/transfer/','POST','items items[].pk items[].quantity items[].merge location')
 ];
+// API 232 is a distinct wire contract, not a relaxation of the API 570 evidence.
+export const contractReads232:readonly ReadSpec[]=contractReads.map(r=>{
+ switch(r.key){
+ case 'template-list':return read(r.key,'/api/part/parameter/template/','pk name checkbox choices units');
+ case 'template-detail':return detail(r.key,'/api/part/parameter/template/{id}/','pk name checkbox choices units');
+ case 'category-bindings':return read(r.key,r.path,'pk category parameter_template default_value parameter_template_detail');
+ case 'parameters':return read(r.key,'/api/part/parameter/','pk part template data','part template');
+ case 'stock-list':return {...r,fields:[...r.fields.filter(k=>k!=='in_stock'),'build'],filters:[...(r.filters??[]),'in_stock']};
+ case 'location-list':case 'location-detail':return {...r,fields:r.fields.filter(k=>k!=='exclude_from_stock')};
+ case 'location-metadata':return detail(r.key,'/api/stock/location/{id}/metadata/','metadata');
+ default:return r;
+ }
+});
+export const contractWrites232:readonly WriteSpec[]=contractWrites.map(w=>{
+ switch(w.key){
+ case 'part-create':return {...w,fields:[...w.fields,'minimum_stock']};
+ case 'template-create':return write(w.key,'/api/part/parameter/template/','POST','name units description checkbox choices');
+ case 'category-association':return write(w.key,w.path,'POST','category parameter_template default_value');
+ case 'parameter-create':return write(w.key,'/api/part/parameter/','POST','part template data');
+ case 'parameter-update':return write(w.key,'/api/part/parameter/{id}/','PATCH','data');
+ case 'location-create':return {...w,fields:w.fields.filter(k=>k!=='exclude_from_stock')};
+ case 'metadata-update':return write(w.key,'/api/stock/location/{id}/metadata/','PATCH','metadata');
+ case 'stock-transfer':return {...w,fields:w.fields.filter(k=>k!=='items[].merge')};
+ default:return w;
+ }
+});
 // Resolve only local JSON pointers and ordinary allOf composition. External refs and unions are unknown.
 function resolved(root:Obj,x:unknown,depth=0,seen=new Set<string>()):Obj|undefined{
  if(depth>32||!obj(x))return;
@@ -75,14 +101,14 @@ function responseSchema(root:Obj,op:Obj,list:boolean){
   if(s)return s;
  }
 }
-export function inspectInvenTreeContract(input:unknown){
+export function inspectInvenTreeContract(input:unknown,api:232|570=570){
  if(!obj(input)||typeof input.openapi!=='string'||!input.openapi.startsWith('3.')||!obj(input.paths))throw Error('invalid OpenAPI document');
  const schema=input,paths=input.paths;
- const reads=contractReads.map(r=>{const p=own(paths,r.path),op=own(p,'get'),s=obj(op)?responseSchema(schema,op,!!r.list):undefined;
+ const reads=(api===232?contractReads232:contractReads).map(r=>{const p=own(paths,r.path),op=own(p,'get'),s=obj(op)?responseSchema(schema,op,!!r.list):undefined;
   const params=[...(Array.isArray(own(p,'parameters'))?own(p,'parameters') as unknown[]:[]),...(Array.isArray(own(op,'parameters'))?own(op,'parameters') as unknown[]:[])].map(x=>resolved(schema,x));
   return {key:r.key,path:r.path,declared:obj(op),responseFields:Object.fromEntries(r.fields.map(k=>[k,field(schema,s,k,'read')])),queryFilters:Object.fromEntries((r.filters??[]).map(k=>[k,params.some(p=>p?.in==='query'&&p.name===k)?'declared':params.some(p=>!p)?'unknown':'missing']))}
  });
- const writes=contractWrites.map(w=>{const op=own(own(paths,w.path),w.method.toLowerCase()),s=jsonSchema(schema,own(op,'requestBody'));
+ const writes=(api===232?contractWrites232:contractWrites).map(w=>{const op=own(own(paths,w.path),w.method.toLowerCase()),s=jsonSchema(schema,own(op,'requestBody'));
   const extraRequired=Array.isArray(s?.required)?s.required.filter(k=>typeof k==='string'&&!w.fields.includes(k)&&own(own(s.properties,k),'readOnly')!==true):[];
   return {key:w.key,path:w.path,method:w.method,declared:obj(op),requestFields:Object.fromEntries(w.fields.map(k=>[k,field(schema,s,k,'write')])),extraRequiredFields:extraRequired.length,writeVerified:false as const}
  });

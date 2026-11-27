@@ -8,7 +8,7 @@ type LinkKey='datasheetUrl'|'imageUrl';
 const linkKeys:LinkKey[]=['datasheetUrl','imageUrl'];
 export interface ReviewedProviderPart {
  part:PartRecord;mapping:CategoryMapping;identityConfirmed:true;baselineComplete:true;
- parameterRecords:{id:string;templateId:string;value:string;note:string}[];
+ parameterRecords:{id:string;templateId:string;value:string;note:string|null}[];
  knownSources:Record<LinkKey,string|null>;suggestions:Suggestion[];accepted:string[];
 }
 const nonblank=(x:unknown):x is string=>typeof x==='string'&&!!x.trim();
@@ -26,7 +26,7 @@ export function planProviderEnrichment(header:Header,catalog:Catalog,snapshot:As
   const category=catalog.categories.find(c=>c.key===m.categoryKey);if(!category)throw Error('unknown catalog category');
   const bindings=previewCategoryTemplateAssociations(catalog,m,s,h.instanceId),native=new Map(s.templates.map(t=>[t.id,t]));
   const records=new Map(r.parameterRecords.map(x=>[x.templateId,x]));
-  if(records.size!==r.parameterRecords.length||new Set(r.parameterRecords.map(x=>x.id)).size!==r.parameterRecords.length||r.parameterRecords.some(x=>!id(x.id)||!id(x.templateId)||typeof x.value!=='string'||x.value.length>4000||typeof x.note!=='string'||x.note.length>4000)||p.parameters.length!==records.size||new Set(p.parameters.map(x=>x.templateId)).size!==p.parameters.length||p.parameters.some(x=>{const y=records.get(x.templateId);return !y||(y.value.trim()?y.value:null)!==x.value}))throw Error('parameter baseline does not match Part detail');
+  if(records.size!==r.parameterRecords.length||new Set(r.parameterRecords.map(x=>x.id)).size!==r.parameterRecords.length||r.parameterRecords.some(x=>!id(x.id)||!id(x.templateId)||typeof x.value!=='string'||x.value.length>4000||(x.note!==null&&(typeof x.note!=='string'||x.note.length>4000)))||p.parameters.length!==records.size||new Set(p.parameters.map(x=>x.templateId)).size!==p.parameters.length||p.parameters.some(x=>{const y=records.get(x.templateId);return !y||(y.value.trim()?y.value:null)!==x.value}))throw Error('parameter baseline does not match Part detail');
   const known:Record<string,string|null>=Object.create(null);
   for(const key of category.parameters){const binding=Object.hasOwn(m.templates,key)?m.templates[key]:undefined;known[key]=binding?records.get(binding)?.value??null:null}
   const existingLinks=new Set(p.sources.map(x=>safeURL(x.url)));

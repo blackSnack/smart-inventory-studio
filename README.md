@@ -21,4 +21,4 @@ Use Node.js 22 and the pinned TypeScript dependency. Run `npm ci --ignore-script
 - [Delivery roadmap](docs/ROADMAP.md)
 - [Contributing and release gates](CONTRIBUTING.md)
 
-Inventory target: InvenTree 1.7.4, subject to actual API and device verification. Other providers may be added through the domain boundary. Production migration, upgrade and write operations require explicit authorization. See LICENSE for licensing; third-party source materials remain subject to their own terms.
+Primary compatibility target: InvenTree 0.16.7 / API 232; InvenTree 1.7.4 / API 570 remains a regression target. Actual API and device verification is required. See the [API 232 compatibility audit](docs/INVENTREE-API232-COMPATIBILITY.md). Other providers may be added through the domain boundary. Production migration, upgrade and write operations require explicit authorization. See LICENSE for licensing; third-party source materials remain subject to their own terms.

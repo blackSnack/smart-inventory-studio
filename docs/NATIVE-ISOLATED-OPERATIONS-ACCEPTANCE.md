@@ -1,6 +1,6 @@
 # QA-01 remaining native operations — unified local acceptance (#23)
 
-Operator-only test runner for a disposable InvenTree 1.7.4 / API 570 instance on an explicit loopback IP and port. Never point it at production, including a production tunnel. No setup, host scan, migration or mutation is initiated automatically. Existing fixture open() continues requiring HTTPS .test and injected fetch; the native entry does not change PWA capabilities. The user must verify disposability, exclusive access, complete visibility and actual operation/physical/reference evidence.
+Operator-only test runner for a disposable InvenTree 0.16.7 / API 232 (primary) or 1.7.4 / API 570 instance on an explicit loopback IP and port. Never point it at production, including a production tunnel. No setup, host scan, migration or mutation is initiated automatically. Existing fixture open() continues requiring HTTPS .test and injected fetch; the native entry does not change PWA capabilities. The user must verify disposability, exclusive access, complete visibility and actual operation/physical/reference evidence.
 
 ## Single CLI
 After the existing core build, provide the authorized isolated token privately using STUDIO_INVENTREE_ISOLATED_TOKEN. Use an existing restricted private directory outside the repository. Prepare one operation at a time (stable unique operation ID, private operation JSON):

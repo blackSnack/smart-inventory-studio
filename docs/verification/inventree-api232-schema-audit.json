@@ -1,0 +1,703 @@
+{
+  "source": {
+    "url": "https://github.com/inventree/schema/blob/01ae6b95d4ba6083b79de63e2615dca9cdfa75f7/export/232/api.yaml",
+    "commit": "01ae6b95d4ba6083b79de63e2615dca9cdfa75f7",
+    "blob": "e42da2e7e576be99f871374318ba925920884684",
+    "apiVersion": 232,
+    "softwareTarget": "0.16.7",
+    "characterCount": 855133,
+    "scope": "official archived schema, not local server schema; focused indentation extraction of operation methods, component refs, properties, query parameters and top-level required fields; not a general YAML validator; corrected inline empty-object properties by direct inspection of official YAML Metadata and PatchedMetadata components",
+    "sourceConfirmedExceptions": [
+      {
+        "key": "stock-list",
+        "fields": [
+          "part",
+          "include_variants",
+          "location",
+          "cascade"
+        ],
+        "source": "https://github.com/inventree/InvenTree/blob/0.16.7/src/backend/InvenTree/stock/api.py#L1130-L1175"
+      },
+      {
+        "key": "manufacturer-parts",
+        "fields": [
+          "manufacturer_detail"
+        ],
+        "source": "https://github.com/inventree/InvenTree/blob/0.16.7/src/backend/InvenTree/company/api.py#L149-L176"
+      },
+      {
+        "key": "supplier-parts",
+        "fields": [
+          "supplier_detail"
+        ],
+        "source": "https://github.com/inventree/InvenTree/blob/0.16.7/src/backend/InvenTree/company/api.py#L297-L350"
+      },
+      {
+        "key": "supplier-parts",
+        "fields": [
+          "supplier_detail"
+        ],
+        "source": "https://github.com/inventree/InvenTree/blob/0.16.7/src/backend/InvenTree/company/serializers.py#L367-L405"
+      },
+      {
+        "key": "part-create",
+        "fields": [
+          "minimum_stock"
+        ],
+        "source": "https://github.com/inventree/InvenTree/blob/0.16.7/src/backend/InvenTree/part/models.py#L1133-L1140",
+        "note": "Model default 0, schema declares required; explicitly send reviewed 0 or confirm OPTIONS/serializer behavior before write."
+      }
+    ]
+  },
+  "counts": {
+    "pathCount": 291,
+    "componentCount": 344,
+    "operationCount": 616,
+    "checks": 36,
+    "declared": 36,
+    "withGaps": 4
+  },
+  "checks": [
+    {
+      "key": "auth",
+      "method": "GET",
+      "path": "/api/user/me/",
+      "declared": true,
+      "component": "ExendedUser",
+      "fields": {
+        "pk": "declared",
+        "username": "declared",
+        "is_staff": "declared",
+        "is_superuser": "declared"
+      },
+      "query": {},
+      "extraRequired": []
+    },
+    {
+      "key": "roles",
+      "method": "GET",
+      "path": "/api/user/roles/",
+      "declared": true,
+      "component": "Role",
+      "fields": {
+        "user": "declared",
+        "roles": "declared",
+        "permissions": "declared"
+      },
+      "query": {},
+      "extraRequired": []
+    },
+    {
+      "key": "part-list",
+      "method": "GET",
+      "path": "/api/part/",
+      "declared": true,
+      "component": "Part",
+      "fields": {
+        "pk": "declared",
+        "name": "declared",
+        "IPN": "declared",
+        "description": "declared",
+        "category": "declared",
+        "active": "declared",
+        "virtual": "declared",
+        "trackable": "declared",
+        "is_template": "declared",
+        "assembly": "declared",
+        "component": "declared",
+        "units": "declared"
+      },
+      "query": {
+        "search": "declared",
+        "IPN": "declared"
+      },
+      "extraRequired": []
+    },
+    {
+      "key": "part-detail",
+      "method": "GET",
+      "path": "/api/part/{id}/",
+      "declared": true,
+      "component": "Part",
+      "fields": {
+        "pk": "declared",
+        "name": "declared",
+        "IPN": "declared",
+        "description": "declared",
+        "category": "declared",
+        "active": "declared",
+        "virtual": "declared",
+        "trackable": "declared",
+        "is_template": "declared",
+        "assembly": "declared",
+        "component": "declared",
+        "units": "declared",
+        "link": "declared",
+        "image": "declared"
+      },
+      "query": {},
+      "extraRequired": []
+    },
+    {
+      "key": "category-list",
+      "method": "GET",
+      "path": "/api/part/category/",
+      "declared": true,
+      "component": "Category",
+      "fields": {
+        "pk": "declared",
+        "name": "declared",
+        "parent": "declared",
+        "structural": "declared",
+        "description": "declared"
+      },
+      "query": {},
+      "extraRequired": []
+    },
+    {
+      "key": "category-detail",
+      "method": "GET",
+      "path": "/api/part/category/{id}/",
+      "declared": true,
+      "component": "Category",
+      "fields": {
+        "pk": "declared",
+        "name": "declared",
+        "parent": "declared",
+        "structural": "declared",
+        "description": "declared"
+      },
+      "query": {},
+      "extraRequired": []
+    },
+    {
+      "key": "template-list",
+      "method": "GET",
+      "path": "/api/part/parameter/template/",
+      "declared": true,
+      "component": "PartParameterTemplate",
+      "fields": {
+        "pk": "declared",
+        "name": "declared",
+        "units": "declared",
+        "description": "declared",
+        "checkbox": "declared",
+        "choices": "declared"
+      },
+      "query": {},
+      "extraRequired": []
+    },
+    {
+      "key": "template-detail",
+      "method": "GET",
+      "path": "/api/part/parameter/template/{id}/",
+      "declared": true,
+      "component": "PartParameterTemplate",
+      "fields": {
+        "pk": "declared",
+        "name": "declared",
+        "units": "declared",
+        "description": "declared",
+        "checkbox": "declared",
+        "choices": "declared"
+      },
+      "query": {},
+      "extraRequired": []
+    },
+    {
+      "key": "category-bindings",
+      "method": "GET",
+      "path": "/api/part/category/parameters/",
+      "declared": true,
+      "component": "CategoryParameterTemplate",
+      "fields": {
+        "pk": "declared",
+        "category": "declared",
+        "parameter_template": "declared",
+        "default_value": "declared",
+        "parameter_template_detail": "declared"
+      },
+      "query": {},
+      "extraRequired": []
+    },
+    {
+      "key": "parameters",
+      "method": "GET",
+      "path": "/api/part/parameter/",
+      "declared": true,
+      "component": "PartParameter",
+      "fields": {
+        "pk": "declared",
+        "part": "declared",
+        "template": "declared",
+        "data": "declared"
+      },
+      "query": {
+        "part": "declared",
+        "template": "declared"
+      },
+      "extraRequired": []
+    },
+    {
+      "key": "parameter-detail",
+      "method": "GET",
+      "path": "/api/part/parameter/{id}/",
+      "declared": true,
+      "component": "PartParameter",
+      "fields": {
+        "pk": "declared",
+        "part": "declared",
+        "template": "declared",
+        "data": "declared"
+      },
+      "query": {},
+      "extraRequired": []
+    },
+    {
+      "key": "manufacturer-parts",
+      "method": "GET",
+      "path": "/api/company/part/manufacturer/",
+      "declared": true,
+      "component": "ManufacturerPart",
+      "fields": {
+        "pk": "declared",
+        "part": "declared",
+        "manufacturer": "declared",
+        "manufacturer_detail": "declared",
+        "MPN": "declared",
+        "link": "declared"
+      },
+      "query": {
+        "part": "declared",
+        "manufacturer_detail": "not-in-schema"
+      },
+      "extraRequired": []
+    },
+    {
+      "key": "supplier-parts",
+      "method": "GET",
+      "path": "/api/company/part/",
+      "declared": true,
+      "component": "SupplierPart",
+      "fields": {
+        "pk": "declared",
+        "part": "declared",
+        "supplier": "declared",
+        "supplier_detail": "missing",
+        "SKU": "declared",
+        "link": "declared"
+      },
+      "query": {
+        "part": "declared",
+        "supplier_detail": "not-in-schema"
+      },
+      "extraRequired": []
+    },
+    {
+      "key": "attachments",
+      "method": "GET",
+      "path": "/api/attachment/",
+      "declared": true,
+      "component": "Attachment",
+      "fields": {
+        "pk": "declared",
+        "model_type": "declared",
+        "model_id": "declared",
+        "link": "declared",
+        "comment": "declared",
+        "attachment": "declared"
+      },
+      "query": {
+        "model_type": "declared",
+        "model_id": "declared"
+      },
+      "extraRequired": []
+    },
+    {
+      "key": "attachment-detail",
+      "method": "GET",
+      "path": "/api/attachment/{id}/",
+      "declared": true,
+      "component": "Attachment",
+      "fields": {
+        "pk": "declared",
+        "model_type": "declared",
+        "model_id": "declared",
+        "link": "declared",
+        "comment": "declared",
+        "attachment": "declared"
+      },
+      "query": {},
+      "extraRequired": []
+    },
+    {
+      "key": "stock-list",
+      "method": "GET",
+      "path": "/api/stock/",
+      "declared": true,
+      "component": "StockItem",
+      "fields": {
+        "pk": "declared",
+        "part": "declared",
+        "location": "declared",
+        "quantity": "declared",
+        "batch": "declared",
+        "serial": "declared",
+        "status": "declared",
+        "supplier_part": "declared",
+        "purchase_order": "declared",
+        "sales_order": "declared",
+        "owner": "declared",
+        "customer": "declared",
+        "parent": "declared",
+        "belongs_to": "declared",
+        "consumed_by": "declared",
+        "packaging": "declared",
+        "expiry_date": "declared",
+        "allocated": "declared",
+        "is_building": "declared",
+        "child_items": "declared",
+        "installed_items": "declared",
+        "build": "declared"
+      },
+      "query": {
+        "part": "not-in-schema",
+        "include_variants": "not-in-schema",
+        "location": "not-in-schema",
+        "cascade": "not-in-schema",
+        "in_stock": "declared",
+        "allocated": "declared"
+      },
+      "extraRequired": []
+    },
+    {
+      "key": "stock-detail",
+      "method": "GET",
+      "path": "/api/stock/{id}/",
+      "declared": true,
+      "component": "StockItem",
+      "fields": {
+        "pk": "declared",
+        "part": "declared",
+        "location": "declared",
+        "quantity": "declared",
+        "batch": "declared",
+        "serial": "declared",
+        "status": "declared",
+        "supplier_part": "declared",
+        "purchase_order": "declared",
+        "sales_order": "declared",
+        "owner": "declared",
+        "customer": "declared",
+        "parent": "declared",
+        "belongs_to": "declared",
+        "consumed_by": "declared",
+        "packaging": "declared",
+        "expiry_date": "declared",
+        "allocated": "declared",
+        "is_building": "declared",
+        "child_items": "declared",
+        "installed_items": "declared",
+        "build": "declared"
+      },
+      "query": {},
+      "extraRequired": []
+    },
+    {
+      "key": "location-list",
+      "method": "GET",
+      "path": "/api/stock/location/",
+      "declared": true,
+      "component": "Location",
+      "fields": {
+        "pk": "declared",
+        "name": "declared",
+        "parent": "declared",
+        "structural": "declared",
+        "description": "declared",
+        "external": "declared"
+      },
+      "query": {},
+      "extraRequired": []
+    },
+    {
+      "key": "location-detail",
+      "method": "GET",
+      "path": "/api/stock/location/{id}/",
+      "declared": true,
+      "component": "Location",
+      "fields": {
+        "pk": "declared",
+        "name": "declared",
+        "parent": "declared",
+        "structural": "declared",
+        "description": "declared",
+        "external": "declared"
+      },
+      "query": {},
+      "extraRequired": []
+    },
+    {
+      "key": "location-metadata",
+      "method": "GET",
+      "path": "/api/stock/location/{id}/metadata/",
+      "declared": true,
+      "component": "Metadata",
+      "fields": {
+        "metadata": "declared"
+      },
+      "query": {},
+      "extraRequired": [],
+      "shapeCaveat": "metadata: {} (unconstrained JSON; runtime object/namespace preservation must be checked)"
+    },
+    {
+      "key": "part-create",
+      "method": "POST",
+      "path": "/api/part/",
+      "declared": true,
+      "component": "Part",
+      "fields": {
+        "IPN": "declared",
+        "name": "declared",
+        "description": "declared",
+        "category": "declared",
+        "units": "declared",
+        "active": "declared",
+        "virtual": "declared",
+        "trackable": "declared",
+        "is_template": "declared",
+        "assembly": "declared",
+        "component": "declared",
+        "copy_category_parameters": "declared"
+      },
+      "query": {},
+      "extraRequired": [
+        "minimum_stock"
+      ]
+    },
+    {
+      "key": "category-create",
+      "method": "POST",
+      "path": "/api/part/category/",
+      "declared": true,
+      "component": "Category",
+      "fields": {
+        "name": "declared",
+        "parent": "declared",
+        "description": "declared",
+        "structural": "declared"
+      },
+      "query": {},
+      "extraRequired": []
+    },
+    {
+      "key": "category-edit",
+      "method": "PATCH",
+      "path": "/api/part/category/{id}/",
+      "declared": true,
+      "component": "PatchedCategory",
+      "fields": {
+        "name": "declared",
+        "parent": "declared",
+        "description": "declared"
+      },
+      "query": {},
+      "extraRequired": []
+    },
+    {
+      "key": "template-create",
+      "method": "POST",
+      "path": "/api/part/parameter/template/",
+      "declared": true,
+      "component": "PartParameterTemplate",
+      "fields": {
+        "name": "declared",
+        "units": "declared",
+        "description": "declared",
+        "checkbox": "declared",
+        "choices": "declared"
+      },
+      "query": {},
+      "extraRequired": []
+    },
+    {
+      "key": "category-association",
+      "method": "POST",
+      "path": "/api/part/category/parameters/",
+      "declared": true,
+      "component": "CategoryParameterTemplate",
+      "fields": {
+        "category": "declared",
+        "parameter_template": "declared",
+        "default_value": "declared"
+      },
+      "query": {},
+      "extraRequired": []
+    },
+    {
+      "key": "parameter-create",
+      "method": "POST",
+      "path": "/api/part/parameter/",
+      "declared": true,
+      "component": "PartParameter",
+      "fields": {
+        "part": "declared",
+        "template": "declared",
+        "data": "declared"
+      },
+      "query": {},
+      "extraRequired": []
+    },
+    {
+      "key": "parameter-update",
+      "method": "PATCH",
+      "path": "/api/part/parameter/{id}/",
+      "declared": true,
+      "component": "PatchedPartParameter",
+      "fields": {
+        "data": "declared"
+      },
+      "query": {},
+      "extraRequired": []
+    },
+    {
+      "key": "source-create",
+      "method": "POST",
+      "path": "/api/attachment/",
+      "declared": true,
+      "component": "Attachment",
+      "fields": {
+        "model_type": "declared",
+        "model_id": "declared",
+        "link": "declared",
+        "comment": "declared"
+      },
+      "query": {},
+      "extraRequired": []
+    },
+    {
+      "key": "image-attachment-create",
+      "method": "POST",
+      "path": "/api/attachment/",
+      "declared": true,
+      "component": "Attachment",
+      "fields": {
+        "model_type": "declared",
+        "model_id": "declared",
+        "attachment": "declared",
+        "comment": "declared"
+      },
+      "query": {},
+      "extraRequired": []
+    },
+    {
+      "key": "stock-create",
+      "method": "POST",
+      "path": "/api/stock/",
+      "declared": true,
+      "component": "StockItem",
+      "fields": {
+        "part": "declared",
+        "location": "declared",
+        "quantity": "declared"
+      },
+      "query": {},
+      "extraRequired": []
+    },
+    {
+      "key": "location-create",
+      "method": "POST",
+      "path": "/api/stock/location/",
+      "declared": true,
+      "component": "Location",
+      "fields": {
+        "name": "declared",
+        "parent": "declared",
+        "description": "declared",
+        "structural": "declared",
+        "external": "declared"
+      },
+      "query": {},
+      "extraRequired": []
+    },
+    {
+      "key": "location-rename",
+      "method": "PATCH",
+      "path": "/api/stock/location/{id}/",
+      "declared": true,
+      "component": "PatchedLocation",
+      "fields": {
+        "name": "declared"
+      },
+      "query": {},
+      "extraRequired": []
+    },
+    {
+      "key": "metadata-update",
+      "method": "PATCH",
+      "path": "/api/stock/location/{id}/metadata/",
+      "declared": true,
+      "component": "PatchedMetadata",
+      "fields": {
+        "metadata": "declared"
+      },
+      "query": {},
+      "extraRequired": [],
+      "shapeCaveat": "metadata: {} (unconstrained JSON; runtime object/namespace preservation must be checked)"
+    },
+    {
+      "key": "stock-transfer",
+      "method": "POST",
+      "path": "/api/stock/transfer/",
+      "declared": true,
+      "component": "StockTransfer",
+      "fields": {
+        "items": "declared",
+        "items[].pk": "declared",
+        "items[].quantity": "declared",
+        "location": "declared"
+      },
+      "query": {},
+      "extraRequired": []
+    },
+    {
+      "key": "stock-record-merge",
+      "method": "POST",
+      "path": "/api/stock/merge/",
+      "declared": true,
+      "component": "StockMerge",
+      "fields": {
+        "items": "declared",
+        "location": "declared"
+      },
+      "query": {},
+      "extraRequired": []
+    },
+    {
+      "key": "part-image-update",
+      "method": "PATCH",
+      "path": "/api/part/{id}/",
+      "declared": true,
+      "component": "PatchedPart",
+      "fields": {
+        "image": "declared"
+      },
+      "query": {},
+      "extraRequired": []
+    }
+  ],
+  "writeEnabled": false,
+  "runtimeVerified": false,
+  "current570Incompatibilities": [
+    "/api/parameter/ and /api/parameter/template/ routes absent; use /api/part/parameter/ and /api/part/parameter/template/",
+    "parameter part replaces model_type/model_id; no note",
+    "template intrinsic Part scope; no model_type/enabled/selectionlist",
+    "category relation uses parameter_template and parameter_template_detail",
+    "stock item response lacks in_stock; server-side in_stock filter exists; require positive ID membership and unfiltered baseline; do not synthesize true",
+    "stock location lacks exclude_from_stock; no silent false default until equivalent invariant verified",
+    "stock quantity/allocated number/double; transfer quantity decimal string with max 5 decimals; reject unsafe precision",
+    "transfer items[].merge absent; old move implementation splits partial and relocates whole; separate record merge is a distinct operation",
+    "metadata uses /api/stock/location/{id}/metadata/; generic route absent",
+    "native browser, receipt, enrichment, part-create, operations, production authorization hardcoded 1.7.4/570; no bypass"
+  ]
+}

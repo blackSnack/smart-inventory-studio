@@ -1,3 +1,4 @@
+import {legacyStockDecimal} from './native-legacy-stock.js';
 import {isRetiredLocationName} from './native-retired-location.js';
 import {InvenTreeReadProvider,validateAllocation,type Allocation,type Location} from './domain.js';
 import {InvenTreeReadAdapter} from './inventory-provider.js';
@@ -20,13 +21,13 @@ function selection(input:ReceiptCandidateInput){
  return r;
 }
 export class InvenTreeReceiptCandidateReader{
- private constructor(private base:URL,private token:string,private request:typeof fetch,private read:InvenTreeReadProvider,private locations:InvenTreeReadAdapter){}
- static async open(base:string,token:string,request:typeof fetch=fetch){
+ private constructor(private base:URL,private token:string,private request:typeof fetch,private read:InvenTreeReadProvider,private locations:InvenTreeReadAdapter,private legacy=false){}
+ static async open(base:string,token:string,request:typeof fetch=fetch,legacy=false){
   const u=new URL(base.endsWith('/')?base:base+'/');
   const required=['/api/part/{id}/','/api/stock/location/','/api/stock/'];
   const check=await probeSchema(u.href,token,required.map(path=>({key:path,path,method:'get'})),request);
   if(check.operations.some(o=>!o.declared))throw Error('receipt read API not declared');
-  return new InvenTreeReceiptCandidateReader(u,token,request,new InvenTreeReadProvider(u.href,token,request),new InvenTreeReadAdapter(u.href,token,request));
+  return new InvenTreeReceiptCandidateReader(u,token,request,new InvenTreeReadProvider(u.href,token,request),new InvenTreeReadAdapter(u.href,token,request),legacy);
  }
  private async snapshot(input:ReceiptCandidateInput){
   const res=await this.request(new URL('api/part/'+input.partId+'/',this.base),{method:'GET',headers:{Authorization:'Token '+this.token,Accept:'application/json'},cache:'no-store',redirect:'error',signal:AbortSignal.timeout(20000)});
@@ -43,7 +44,8 @@ export class InvenTreeReceiptCandidateReader{
    const path=[];let current:typeof leaf|undefined=leaf;
    while(current){receiptId(current.id);if(!nonblank(current.name))throw Error('invalid location name');path.unshift(current);current=current.parentId===null?undefined:tree.find(l=>l.id===current!.parentId)}
    paths[a.locationId]=path;
-   const stock=nativeReceiptStock(await this.read.list('api/stock/',{location:a.locationId,cascade:'false'}),a.locationId);
+   const rows=await this.read.list('api/stock/',{location:a.locationId,cascade:'false'});
+   const stock=nativeReceiptStock(this.legacy?rows.map(raw=>{const r=row(raw);return {...r,quantity:legacyStockDecimal(r.quantity)}}):rows,a.locationId);
    for(const s of stock){if(stockIds.has(s.id)||s.partId!==input.partId)throw Error('mixed or duplicate stock baseline');stockIds.add(s.id)}
    byLocation[a.locationId]=stock;
    selected.push({id:leaf.id,name:leaf.name,structural:false,occupants:[...new Set(stock.filter(s=>s.quantity!=='0').map(s=>s.partId))]});

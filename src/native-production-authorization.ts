@@ -2,9 +2,9 @@
 // No native writer may use a non-loopback origin without a validated target authorization.
 import {validateCatalog} from './catalog.js';
 import {snapshotKey} from './approved-snapshot.js';
-import {contractWrites} from './inventree-contract-evidence.js';
+import {contractWrites,contractWrites232} from './inventree-contract-evidence.js';
 const authorized=new WeakSet<object>();
-export interface ProductionNativeTarget {readonly base:string;readonly actorId:string;readonly schemaSha256:string;readonly catalogSha256:string;readonly approvalId:string;readonly evidenceSha256:string}
+export interface ProductionNativeTarget {readonly base:string;readonly apiVersion:232|570;readonly softwareVersion:'0.16.7'|'1.7.4';readonly actorId:string;readonly schemaSha256:string;readonly catalogSha256:string;readonly approvalId:string;readonly evidenceSha256:string}
 const obj=(x:unknown):Record<string,unknown>=>{if(!x||typeof x!=='object'||Array.isArray(x))throw Error('invalid private deployment evidence');return x as Record<string,unknown>};
 const hex=(x:unknown):x is string=>typeof x==='string'&&/^[a-f0-9]{64}$/.test(x);
 export const nativeCatalogHash=async(catalog:unknown)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(snapshotKey(validateCatalog(catalog))))),b=>b.toString(16).padStart(2,'0')).join('');
@@ -16,8 +16,9 @@ export async function authorizeProductionNativeTarget(base:string,rawCatalog:unk
  if(c.status!=='approved_for_production'||!/^1\.0(?:\.0)?$/.test(c.catalogVersion))throw Error('catalog v1.0 freeze is required before production writes');
  if(explicitApproval!==true)throw Error('separate production activation approval required');
  const e=obj(structuredClone(rawEvidence)),catalogSha256=await nativeCatalogHash(c),refs=obj(e.evidence),permissions=obj(e.operationPermissions);
- if(e.version!==1||e.targetBase!==u.href||e.catalogVersion!==c.catalogVersion||e.catalogSha256!==catalogSha256||e.softwareVersion!=='1.7.4'||e.apiVersion!==570||typeof e.actorId!=='string'||!(/^[1-9][0-9]{0,15}$/).test(e.actorId)||!Number.isSafeInteger(Number(e.actorId))||!hex(e.schemaSha256)||typeof e.approvalId!=='string'||!e.approvalId.trim()||e.approvalId.length>128||e.productionWriteAuthorized!==true||e.exclusiveWindowConfirmed!==true||productionEvidenceKeys.some(k=>!hex(refs[k]))||contractWrites.some(w=>permissions[w.key]!==true))throw Error('incomplete or stale operator-reviewed production evidence');
- const target=Object.freeze({base:u.href,actorId:e.actorId,schemaSha256:e.schemaSha256,catalogSha256,approvalId:e.approvalId,evidenceSha256:await productionEvidenceHash(e)});
+ const apiVersion=e.softwareVersion==='0.16.7'&&e.apiVersion===232?232:e.softwareVersion==='1.7.4'&&e.apiVersion===570?570:null;
+ if(e.version!==1||e.targetBase!==u.href||e.catalogVersion!==c.catalogVersion||e.catalogSha256!==catalogSha256||apiVersion===null||typeof e.actorId!=='string'||!(/^[1-9][0-9]{0,15}$/).test(e.actorId)||!Number.isSafeInteger(Number(e.actorId))||!hex(e.schemaSha256)||typeof e.approvalId!=='string'||!e.approvalId.trim()||e.approvalId.length>128||e.productionWriteAuthorized!==true||e.exclusiveWindowConfirmed!==true||productionEvidenceKeys.some(k=>!hex(refs[k]))||(apiVersion===232?contractWrites232:contractWrites).some(w=>permissions[w.key]!==true))throw Error('incomplete or stale operator-reviewed production evidence');
+ const target=Object.freeze({base:u.href,apiVersion,softwareVersion:apiVersion===232?'0.16.7' as const:'1.7.4' as const,actorId:e.actorId,schemaSha256:e.schemaSha256,catalogSha256,approvalId:e.approvalId,evidenceSha256:await productionEvidenceHash(e)});
  authorized.add(target);return target;
 }
 export function authorizedNativeBase(base:string,production?:ProductionNativeTarget){

@@ -1,3 +1,5 @@
+import {readNativeStockByLocation,verifyLegacyLocationAncestors} from './native-legacy-stock.js';
+import {nativeApiVersion,matchesPreparedApi} from './native-api-version.js';
 import {verifyNativeLayoutStock} from './native-layout-migration.js';
 import {retiredLocationName} from './native-retired-location.js';
 import {authorizedNativeBase,assertNativeTarget,assertNativeMode,nativeCatalogHash,type ProductionNativeTarget} from './native-production-authorization.js';
@@ -21,7 +23,7 @@ type Kind=typeof kinds[number];
 type Wire={method:'POST'|'PATCH';path:string;body:unknown};
 type ReadTrace={path:string;sha256:string};
 type Extra={rows?:Record<string,unknown>[];stock?:Record<string,unknown>[]};
-type Prepared={kind:'native-operations';base:string;instanceId:string;catalogSha256:string;schemaSha256:string;actorId:string;operation:Operation;wire:Wire;reads:ReadTrace[];extra:Extra;executionAllowed:false};
+type Prepared={kind:'native-operations';base:string;instanceId:string;catalogSha256:string;schemaSha256:string;actorId:string;apiVersion?:232;operation:Operation;wire:Wire;reads:ReadTrace[];extra:Extra;executionAllowed:false};
 export interface NativeOperationEvidence {
  claim(operationKey:string,binding:string):Promise<boolean>;
  record(operationKey:string,binding:string,ack:unknown):Promise<void>;
@@ -43,21 +45,21 @@ function rawOperation(raw:unknown):Operation{
  const r=obj(raw);str(r.id,128);if(!kinds.includes(r.kind as Kind))throw Error('unsupported local operation');
  const payload=obj(r.payload);snapshotKey(payload);return {id:r.id as string,kind:r.kind as Kind,payload:structuredClone(payload)};
 }
-function wirePath(op:Operation):{method:'POST'|'PATCH';path:string}{
+function wirePath(op:Operation,legacy=false):{method:'POST'|'PATCH';path:string}{
  const p=op.payload;
  switch(op.kind){
  case 'create-category':return {method:'POST',path:'/api/part/category/'};
- case 'create-parameter-template':return {method:'POST',path:'/api/parameter/template/'};
+ case 'create-parameter-template':return {method:'POST',path:legacy?'/api/part/parameter/template/':'/api/parameter/template/'};
  case 'associate-category-template':return {method:'POST',path:'/api/part/category/parameters/'};
  case 'create-location':return {method:'POST',path:'/api/stock/location/'};
  case 'rename-location':return {method:'PATCH',path:'/api/stock/location/'+id(p.locationId)+'/'};
- case 'update-location-metadata':return {method:'PATCH',path:'/api/metadata/stocklocation/'+id(p.locationId)+'/'};
+ case 'update-location-metadata':return {method:'PATCH',path:legacy?'/api/stock/location/'+id(p.locationId)+'/metadata/':'/api/metadata/stocklocation/'+id(p.locationId)+'/'};
  case 'transfer-stock':return {method:'POST',path:'/api/stock/transfer/'};
  default:throw Error('unsupported local write');
  }
 }
 function allowedRead(path:string){
- return /^\/api\/(?:|user\/me\/|schema\/|part\/category\/|part\/category\/parameters\/|parameter\/template\/|stock\/|stock\/location\/(?:[1-9][0-9]*\/)?|metadata\/stocklocation\/[1-9][0-9]*\/)$/.test(path);
+ return /^\/api\/(?:|user\/me\/|schema\/|part\/category\/|part\/category\/parameters\/|(?:part\/)?parameter\/template\/|stock\/|stock\/location\/(?:[1-9][0-9]*\/(?:metadata\/)?)?|metadata\/stocklocation\/[1-9][0-9]*\/)$/.test(path);
 }
 async function bounded(r:Response,limit:number){
  if(!r.body)return new Uint8Array();
@@ -94,8 +96,8 @@ function stockRecord(raw:unknown,location:string){
 async function extraState(ctx:LocalOperationContext,op:Operation):Promise<Extra>{
  const read=new InvenTreeReadProvider(ctx.base,ctx.token,ctx.request);
  if(op.kind==='create-category'||op.kind==='create-parameter-template'){
-  const rows=op.kind==='create-category'?await read.list('api/part/category/'):await read.list('api/parameter/template/',{for_model:'part.part'});
-  const keys=op.kind==='create-category'?['pk','name','description','parent','structural']:['pk','name','description','units','model_type','enabled','checkbox','choices','selectionlist'];
+  const rows=op.kind==='create-category'?await read.list('api/part/category/'):await read.list(ctx.apiVersion===232?'api/part/parameter/template/':'api/parameter/template/',ctx.apiVersion===232?{}:{for_model:'part.part'});
+  const keys=op.kind==='create-category'?['pk','name','description','parent','structural']:ctx.apiVersion===232?['pk','name','description','units','checkbox','choices']:['pk','name','description','units','model_type','enabled','checkbox','choices','selectionlist'];
   return {rows:sortRows(rows.map(x=>{const r=obj(x);if(keys.some(k=>!Object.hasOwn(r,k)))throw Error('incomplete definition evidence');return Object.fromEntries(keys.map(k=>[k,r[k]]))}))};
  }
  if(['create-location','rename-location','update-location-metadata','transfer-stock'].includes(op.kind)){
@@ -104,9 +106,10 @@ async function extraState(ctx:LocalOperationContext,op:Operation):Promise<Extra>
    const retiring=op.kind==='update-location-metadata'&&Array.isArray(op.payload.retiringLocationIds)?op.payload.retiringLocationIds.map(id):[];
    const leaves=op.kind==='rename-location'?[id(op.payload.locationId)]:Array.isArray(op.payload.expectedLeaves)?[...op.payload.expectedLeaves.map(x=>id(obj(x).locationId)),...retiring]:[];
    if(!leaves.length||leaves.length>10000||new Set(leaves).size!==leaves.length)throw Error('invalid conservation scope');
+   if(ctx.apiVersion===232)await verifyLegacyLocationAncestors(read,rows as unknown as import('./inventory-provider.js').LocationSummary[],op.kind==='update-location-metadata'?[id(op.payload.locationId),...leaves]:leaves);
    const stock:Record<string,unknown>[]=[];
    for(const leaf of leaves){if(!rows.some(r=>r.id===leaf&&r.structural===false)||rows.some(r=>r.parentId===leaf))throw Error('invalid conservation leaf');
-    const items=(await read.list('api/stock/',{location:leaf,cascade:'false'})).map(r=>stockRecord(r,leaf));
+    const items=(await readNativeStockByLocation(read,leaf,ctx.apiVersion===232)).map(r=>stockRecord(r,leaf));
     if((retiring.includes(leaf)||op.kind==='rename-location'&&op.payload.retireConfirmed===true)&&items.length)throw Error('retiring location retains stock records');
     if(retiring.includes(leaf)&&!rows.some(r=>r.id===leaf&&r.name===retiredLocationName(leaf)))throw Error('retired marker not verified');
     stock.push(...items);
@@ -136,7 +139,7 @@ export class NativeOperationsAcceptance{
   const u=authorizedNativeBase(base,production);if(typeof token!=='string'||!token.trim()||/[\r\n]/.test(token)||!(/^[a-f0-9]{64}$/).test(catalogSha256))throw Error('explicit isolated token/catalog hash required');
   if(production&&production.catalogSha256!==catalogSha256)throw Error('production catalog mismatch');return new NativeOperationsAcceptance(u,token,validateCatalog(structuredClone(rawCatalog)),catalogSha256,request,production);
  }
- private session(instanceId:string,op:Operation,mode:'prepare'|'execute'|'observe',prepared?:Prepared,binding?:string,operationKey?:string,store?:NativeOperationEvidence){
+ private session(instanceId:string,op:Operation,mode:'prepare'|'execute'|'observe',prepared?:Prepared,binding?:string,operationKey?:string,store?:NativeOperationEvidence,apiVersion?:232){
   let wire:Wire|undefined,sent=false,trace:ReadTrace[]=[],count=0,bytesTotal=0;
   const stop=Error('local preparation captured the write; no request sent');
   const dispatcher:typeof fetch=async(input,init)=>{
@@ -145,7 +148,7 @@ export class NativeOperationsAcceptance{
    if(u.origin!==this.base.origin||u.username||u.password||u.hash||++count>20000)throw Error('unsafe native request scope');
    if(method==='GET'){if(!allowedRead(u.pathname))throw Error('unsupported local read');}
    else{
-    const expected=wirePath(op);
+    const expected=wirePath(op,apiVersion===232);
     if(wire||u.search||method!==expected.method||u.pathname!==expected.path||typeof init?.body!=='string')throw Error('unexpected local mutation');
     wire={method:expected.method,path:u.pathname,body:JSON.parse(init.body)};snapshotKey(wire);
     if(mode==='prepare')throw stop;
@@ -164,22 +167,22 @@ export class NativeOperationsAcceptance{
    }
    return new Response([204,205,304].includes(response.status)?null:new Uint8Array(bytes).buffer,{status:response.status,headers:response.headers});
   };
-  return {ctx:createLocalOperationContext(this.base.href,this.token,instanceId,dispatcher,this.production),stop,reads:()=>traceSort(trace),wire:()=>wire,sent:()=>sent};
+  return {ctx:createLocalOperationContext(this.base.href,this.token,instanceId,dispatcher,this.production,apiVersion),stop,reads:()=>traceSort(trace),wire:()=>wire,sent:()=>sent};
  }
  private async target(ctx:LocalOperationContext){
   const get=async(path:string)=>{const r=await ctx.request(new URL(path,ctx.base));if(!r.ok)throw Error('native target probe failed');return r};
-  const version=obj(await (await get('api/')).json());if(version.server!=='InvenTree'||version.version!=='1.7.4'||version.apiVersion!==570)throw Error('isolated version mismatch');
+  const version=obj(await (await get('api/')).json());const api=nativeApiVersion(version,this.production);
   const auth=obj(await (await get('api/user/me/')).json()),actorId=id(auth.pk??auth.id);
   const schema=await get('api/schema/?format=json'),schemaSha256=await hash(new Uint8Array(await schema.arrayBuffer()));
-  assertNativeTarget(this.production,actorId,schemaSha256);return {actorId,schemaSha256};
+  assertNativeTarget(this.production,actorId,schemaSha256);return {actorId,schemaSha256,...(api===232?{apiVersion:232 as const}:{})};
  }
  private async hydrate(ctx:LocalOperationContext,op:Operation):Promise<Operation>{
   if(op.kind==='transfer-stock'){
    const p=op.payload,source=id(p.sourceId),target=id(p.targetId);if(source===target)throw Error('invalid transfer locations');
    const read=new InvenTreeReadProvider(ctx.base,ctx.token,ctx.request);
-   const expectedSource=await read.list('api/stock/',{location:source,cascade:'false'}),expectedTarget=await read.list('api/stock/',{location:target,cascade:'false'});
-   if(p.continuation!==undefined){const c=obj(p.continuation);if(!Array.isArray(c.splits)||!c.splits.length||c.splits.length>999)throw Error('invalid prior split list');const expectedPrior=[];for(const x of c.splits){const locationId=id(obj(x).locationId);expectedPrior.push({locationId,rows:await read.list('api/stock/',{location:locationId,cascade:'false'})})}return {...op,payload:{...p,expectedSource,expectedTarget,expectedPrior}}}
-   if(p.linkedExpected!==undefined){if(!Array.isArray(p.linkedExpected)||p.linkedExpected.length<2||p.linkedExpected.length>10000)throw Error('invalid linked stock evidence');const ids=[...new Set(p.linkedExpected.map(x=>id(obj(x).location)))].filter(x=>x!==source&&x!==target).sort(),expectedLinked=[];for(const locationId of ids)expectedLinked.push({locationId,rows:await read.list('api/stock/',{location:locationId,cascade:'false'})});return {...op,payload:{...p,expectedSource,expectedTarget,expectedLinked}}}
+   const legacy=ctx.apiVersion===232,expectedSource=await readNativeStockByLocation(read,source,legacy),expectedTarget=await readNativeStockByLocation(read,target,legacy);
+   if(p.continuation!==undefined){const c=obj(p.continuation);if(!Array.isArray(c.splits)||!c.splits.length||c.splits.length>999)throw Error('invalid prior split list');const expectedPrior=[];for(const x of c.splits){const locationId=id(obj(x).locationId);expectedPrior.push({locationId,rows:await readNativeStockByLocation(read,locationId,legacy)})}return {...op,payload:{...p,expectedSource,expectedTarget,expectedPrior}}}
+   if(p.linkedExpected!==undefined){if(!Array.isArray(p.linkedExpected)||p.linkedExpected.length<2||p.linkedExpected.length>10000)throw Error('invalid linked stock evidence');const ids=[...new Set(p.linkedExpected.map(x=>id(obj(x).location)))].filter(x=>x!==source&&x!==target).sort(),expectedLinked=[];for(const locationId of ids)expectedLinked.push({locationId,rows:await readNativeStockByLocation(read,locationId,legacy)});return {...op,payload:{...p,expectedSource,expectedTarget,expectedLinked}}}
    return {...op,payload:{...p,expectedSource,expectedTarget}};
   }
   if(op.kind==='associate-category-template'){
@@ -197,10 +200,13 @@ export class NativeOperationsAcceptance{
  async prepare(instanceId:string,raw:unknown):Promise<Prepared>{
   if(this.production&&await nativeCatalogHash(this.catalog)!==this.production.catalogSha256)throw Error('production catalog contents changed');
   str(instanceId);const input=rawOperation(raw);
-  const hydration=this.session(instanceId,input,'observe');
-  await this.target(hydration.ctx);
+  const probe=this.session(instanceId,input,'observe'),initial=await this.target(probe.ctx);
+  
+  const hydration=this.session(instanceId,input,'observe',undefined,undefined,undefined,undefined,initial.apiVersion);
   const operation=await this.hydrate(hydration.ctx,input);
-  const s=this.session(instanceId,operation,'prepare'),target=await this.target(s.ctx),extra=await extraState(s.ctx,operation);
+  const s=this.session(instanceId,operation,'prepare',undefined,undefined,undefined,undefined,initial.apiVersion),target=await this.target(s.ctx);matchesPreparedApi(target.apiVersion??570,initial);
+  if(target.actorId!==initial.actorId||target.schemaSha256!==initial.schemaSha256)throw Error('target changed during preparation');
+  const extra=await extraState(s.ctx,operation);
   const o=internal(operation),e=new AdapterEvidence(this.base.href,instanceId,o),t=await adapter(s.ctx,o,e);
   try{await t.send(o)}catch(err){if(err!==s.stop)throw err}
   const wire=s.wire();if(!wire||s.sent())throw Error('no single reviewed mutation captured');
@@ -219,7 +225,8 @@ export class NativeOperationsAcceptance{
  }
  async execute(raw:Prepared,approval:unknown,store:NativeOperationEvidence){
   const p=structuredClone(raw),{binding,operationKey}=await this.validate(p,approval);
-  const s=this.session(p.instanceId,p.operation,'execute',p,binding,operationKey,store),target=await this.target(s.ctx);
+  const s=this.session(p.instanceId,p.operation,'execute',p,binding,operationKey,store,p.apiVersion),target=await this.target(s.ctx);
+  matchesPreparedApi(target.apiVersion??570,p);
   if(target.schemaSha256!==p.schemaSha256||target.actorId!==p.actorId||!eq(await extraState(s.ctx,p.operation),p.extra))throw Error('approved target or baseline changed');
   const o=internal(p.operation),e=new AdapterEvidence(this.base.href,p.instanceId,o),t=await adapter(s.ctx,o,e);
   try{
@@ -236,7 +243,8 @@ export class NativeOperationsAcceptance{
   let saved;try{saved=await store.read(operationKey,binding)}catch{return result('unknown','private evidence unreadable or mismatched')}
   if(!saved)return result('unknown','no correlated acknowledgement; never resend');
   try{
-   const s=this.session(p.instanceId,p.operation,'observe'),target=await this.target(s.ctx);
+   const s=this.session(p.instanceId,p.operation,'observe',undefined,undefined,undefined,undefined,p.apiVersion),target=await this.target(s.ctx);
+   matchesPreparedApi(target.apiVersion??570,p);
    if(target.schemaSha256!==p.schemaSha256||target.actorId!==p.actorId)return result('unknown','target or schema changed');
    const o=internal(p.operation),e=new AdapterEvidence(this.base.href,p.instanceId,o,saved.ack),t=await adapter(s.ctx,o,e),observed=await t.observe(o);
    if(observed.status!=='verified')return result(observed.status,'native adapter readback not verified');

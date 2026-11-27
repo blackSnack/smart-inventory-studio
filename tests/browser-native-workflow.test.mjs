@@ -9,18 +9,20 @@ function memory(){
  const rows=new Map(),key=(s,i)=>s+'|'+i;
  return {async admit(r){const k=key(r.preparation.scope,r.preparation.id);if(rows.has(k)||[...rows.values()].some(x=>x.preparation.scope===r.preparation.scope&&['reviewed','sent','unknown'].includes(x.state)))throw Error('pending');rows.set(k,structuredClone(r))},async get(s,i){return structuredClone(rows.get(key(s,i)))},async list(s){return structuredClone([...rows.values()].filter(x=>x.preparation.scope===s))},async claim(s,i,b){const r=rows.get(key(s,i));if(r?.state!=='reviewed')return false;r.state='sent';r.ackBinding=b;return true},async acknowledge(s,i,b,ack){const r=rows.get(key(s,i));if(r.state!=='sent'||r.ackBinding!==b||r.ack!==undefined)throw Error('ack');r.ack=structuredClone(ack)},async finish(s,i,result){const r=rows.get(key(s,i));r.state=result.status;r.result=result},async abandonUnsent(s,i){const r=rows.get(key(s,i));if(r.state!=='reviewed')throw Error('already sent');r.state='blocked'}};
 }
-function fixture(){
+function fixture(legacy=false){
  const stock=[{pk:9,part:42,location:2,quantity:'10',batch:'B',serial:null,status:10}],writes=[];
- const schema={openapi:'3.0.3',paths:{'/api/part/{id}/':{get:{}},'/api/stock/location/':{get:{}},'/api/stock/':{get:{},post:{}}}};
+ const schema={openapi:'3.0.3',paths:{'/api/part/{id}/':{get:{}},'/api/stock/location/':{get:{}},'/api/stock/':{get:{},post:{}},...(legacy?{'/api/stock/location/{id}/':{get:{}}}:{})}};
+ const locations=[{pk:1,name:'root',parent:null,structural:true,external:false},{pk:2,name:'leaf',parent:1,structural:false,external:false}];
  let actor=1,lost=false;
  const request=async(u,i={})=>{const url=new URL(u),method=i.method??'GET';assert.equal(url.origin,'http://127.0.0.1:8123');assert.equal(new Headers(i.headers).get('Authorization'),'Token fixture');assert.equal(i.redirect,'error');
-  if(url.pathname==='/api/')return Response.json({server:'InvenTree',version:'1.7.4',apiVersion:570});
+  if(url.pathname==='/api/')return Response.json({server:'InvenTree',version:legacy?'0.16.7':'1.7.4',apiVersion:legacy?232:570});
   if(url.pathname==='/api/user/me/')return Response.json({pk:actor});
   if(url.pathname==='/api/schema/')return Response.json(schema);
   if(url.pathname==='/api/part/42/')return Response.json({pk:42,name:'Part',IPN:'P42',category:11,active:true,trackable:false,virtual:false});
-  if(url.pathname==='/api/stock/location/')return Response.json([{pk:1,name:'root',parent:null,structural:true},{pk:2,name:'leaf',parent:1,structural:false}]);
+  if(url.pathname==='/api/stock/location/')return Response.json(locations);
+  if(legacy&&/^\/api\/stock\/location\/[12]\/$/.test(url.pathname))return Response.json(locations.find(l=>String(l.pk)===url.pathname.split('/')[4]));
   assert.equal(url.pathname,'/api/stock/');if(method==='GET')return Response.json(stock);
-  const body=JSON.parse(i.body);writes.push(body);const created={pk:10,...body,batch:null,serial:null,status:10};stock.push(created);if(lost)throw Error('lost');return Response.json([created],{status:201});
+  const body=JSON.parse(i.body);writes.push(body);const created={pk:10,...body,batch:null,serial:null,status:10};stock.push(created);if(lost)throw Error('lost');return Response.json(legacy?created:[created],{status:201});
  };
  return {request,stock,writes,changeActor(){actor=2},lose(){lost=true}};
 }
@@ -47,3 +49,12 @@ test('loss remains unknown, reconnect observes without replay and unresolved ope
 });
 
 test('dependent receipt accepts only the verified exact creation acknowledgement',async()=>{const store=memory(),scope='disposable:'+base,item={id:'receipt:new',kind:'after-part-create',createId:'part:new',ipn:'NEW',locationId:'2',quantity:4};await assert.rejects(resolveNativeQueueItem(item,scope,store));await store.admit({state:'reviewed',preparation:{scope,id:'part:new',input:{id:'part:new',kind:'create-part',payload:{ipn:'NEW'}}}});await store.claim(scope,'part:new','a'.repeat(64));await store.acknowledge(scope,'part:new','a'.repeat(64),{stockId:'99'});await assert.rejects(resolveNativeQueueItem(item,scope,store));await store.finish(scope,'part:new',{status:'verified'});assert.deepEqual(await resolveNativeQueueItem(item,scope,store),{id:'receipt:new',kind:'receive-existing-part',payload:{partId:'99',locationId:'2',quantity:4,expectedIpn:'NEW'}});await assert.rejects(resolveNativeQueueItem({...item,ipn:'WRONG'},scope,store))});
+
+test('232 disposable browser connects, binds API version and executes reviewed receipt without production activation',async()=>{
+ const f=fixture(true),runner=await BrowserNativeWorkflow.open(base,'fixture',catalog,f.request),store=memory();
+ const info=await runner.probe();assert.equal(info.apiVersion,232);assert.equal(info.version,'0.16.7');assert.equal(info.writeEnabled,false);
+ const p=await runner.prepare(input),a=await approval(p);assert.equal(p.target.apiVersion,232);assert.equal(p.prepared.value.apiVersion,232);
+ assert.equal((await runner.execute(p,a,store)).status,'verified');
+ assert.deepEqual(f.writes,[{part:42,location:2,quantity:3}]);
+ await assert.rejects(runner.execute(p,a,store));assert.equal(f.writes.length,1);
+});

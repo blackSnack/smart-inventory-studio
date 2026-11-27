@@ -20,30 +20,31 @@ type Parsed=ReturnType<typeof parse>;
 const sorted=(rows:LocationSummary[])=>rows.slice().sort((a,b)=>a.id.localeCompare(b.id));
 export class IsolatedLocationCreateTransport implements OperationTransport{
 
- private constructor(private evidence:FixtureEvidenceStore,private base:URL,private token:string,private request:typeof fetch,private read:InvenTreeReadProvider,private locations:InvenTreeReadAdapter){}
+ private constructor(private evidence:FixtureEvidenceStore,private base:URL,private token:string,private request:typeof fetch,private read:InvenTreeReadProvider,private locations:InvenTreeReadAdapter,private legacy=false){}
  static async open(config:{base:string;token:string;fixtureOnly:true}&FixtureEvidenceConfig,request:typeof fetch){
   const evidence=fixtureEvidenceFor(config);const b=new URL(config.base.endsWith('/')?config.base:config.base+'/');if(config.fixtureOnly!==true||b.protocol!=='https:'||!b.hostname.endsWith('.test')||b.username||b.password||b.search||b.hash||!config.token.trim())throw Error('isolated fixture configuration required');
   return IsolatedLocationCreateTransport.openTransport(b,config,request,evidence);
  }
  static async openLocalAcceptance(ctx:LocalOperationContext,evidence:FixtureEvidenceStore){
   assertLocalOperationContext(ctx,evidence);const config={token:ctx.token},request=ctx.request,b=new URL(ctx.base);
-  return IsolatedLocationCreateTransport.openTransport(b,config,request,evidence);
+  return IsolatedLocationCreateTransport.openTransport(b,config,request,evidence,ctx.apiVersion===232);
  }
- private static async openTransport(b:URL,config:{token:string},request:typeof fetch,evidence:FixtureEvidenceStore){
+ private static async openTransport(b:URL,config:{token:string},request:typeof fetch,evidence:FixtureEvidenceStore,legacy=false){
   const e=await probeSchema(b.href,config.token,[{key:'locations',path:'/api/stock/location/',method:'get'},{key:'create',path:'/api/stock/location/',method:'post'},{key:'detail',path:'/api/stock/location/{id}/',method:'get'},{key:'stock',path:'/api/stock/',method:'get'}],request);
-  if(e.operations.some(o=>!o.declared))throw Error('location create API not declared');return new IsolatedLocationCreateTransport(evidence,b,config.token,request,new InvenTreeReadProvider(b.href,config.token,request),new InvenTreeReadAdapter(b.href,config.token,request));
+  if(e.operations.some(o=>!o.declared))throw Error('location create API not declared');return new IsolatedLocationCreateTransport(evidence,b,config.token,request,new InvenTreeReadProvider(b.href,config.token,request),new InvenTreeReadAdapter(b.href,config.token,request),legacy);
  }
  private async call(path:string,method:'GET'|'POST',body?:Record<string,unknown>){const r=await this.request(new URL(path,this.base),{method,headers:{Authorization:'Token '+this.token,Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},redirect:'error',cache:'no-store',signal:AbortSignal.timeout(20000),...(body?{body:JSON.stringify(body)}:{})});if(!r.ok)throw Error('location HTTP '+r.status);return obj(await r.json())}
  private parent(rows:LocationSummary[],p:Parsed){if(p.parentId!==null&&!rows.some(x=>x.id===p.parentId&&x.name===p.parentName&&x.structural))throw Error('approved structural parent changed')}
- private verify(raw:unknown,p:Parsed){const r=obj(raw);if(r.name!==p.name||r.description!==p.description||(r.parent===null?null:id(r.parent))!==p.parentId||r.structural!==p.structural||r.external!==false||r.exclude_from_stock!==false)throw Error('location readback mismatch');return id(r.pk)}
+ private async legacyParent(rows:LocationSummary[],p:Parsed){if(!this.legacy)return;let current=p.parentId;const seen=new Set<string>();while(current!==null){if(seen.has(current))throw Error('cyclic location ancestry');seen.add(current);const expected=rows.find(x=>x.id===current);if(!expected)throw Error('legacy location ancestor missing');const raw=await this.call('api/stock/location/'+current+'/','GET');if(id(raw.pk)!==current||raw.name!==expected.name||raw.structural!==expected.structural||raw.external!==false||(raw.parent===null?null:id(raw.parent))!==expected.parentId)throw Error('legacy external or changed parent location');current=expected.parentId}}
+ private verify(raw:unknown,p:Parsed){const r=obj(raw);if(r.name!==p.name||r.description!==p.description||(r.parent===null?null:id(r.parent))!==p.parentId||r.structural!==p.structural||r.external!==false||(!this.legacy&&r.exclude_from_stock!==false))throw Error('location readback mismatch');return id(r.pk)}
  async send(o:Operation){const s=structuredClone(o),p=parse(s),key=snapshotKey(s);if(!await this.evidence.claim(s))throw Error('already attempted; readback only');
-  const before=sorted(await this.locations.getLocations());this.parent(before,p);
+  const before=sorted(await this.locations.getLocations());this.parent(before,p);await this.legacyParent(before,p);
   if(before.some(x=>x.parentId===p.parentId&&x.name.trim().toLowerCase()===p.name.toLowerCase()))throw Error('existing sibling requires review');
-  const result=await this.call('api/stock/location/','POST',{name:p.name,description:p.description,parent:p.parentId===null?null:Number(p.parentId),structural:p.structural,external:false,exclude_from_stock:false});
+  const result=await this.call('api/stock/location/','POST',{name:p.name,description:p.description,parent:p.parentId===null?null:Number(p.parentId),structural:p.structural,external:false,...(this.legacy?{}:{exclude_from_stock:false})});
   const newId=this.verify(result,p);if(before.some(x=>x.id===newId))throw Error('existing ID returned for create');await this.evidence.record(s,{key,id:newId,before});
  }
  async observe(o:Operation):Promise<Observation>{try{const s=structuredClone(o),p=parse(s),a=await this.evidence.read<{key:string;id:string;before:LocationSummary[]}>(s);if(!a||a.key!==snapshotKey(s))return {status:'unknown',evidence:'Fixture: no correlated location acknowledgement; no replay'};
-  const rows=sorted(await this.locations.getLocations());this.parent(rows,p);const x=rows.find(l=>l.id===a.id);
+  const rows=sorted(await this.locations.getLocations());this.parent(rows,p);await this.legacyParent(rows,p);const x=rows.find(l=>l.id===a.id);
   if(!x)return {status:'unknown',evidence:'Fixture: acknowledged location not visible'};
   if(x.name!==p.name||x.parentId!==p.parentId||x.structural!==p.structural||snapshotKey(rows.filter(l=>l.id!==a.id))!==snapshotKey(a.before))return {status:'blocked',evidence:'Fixture: location tree changed'};
   try{if(this.verify(await this.call('api/stock/location/'+a.id+'/','GET'),p)!==a.id)throw Error('wrong location ID')}catch{return {status:'blocked',evidence:'Fixture: location detail conflict'}}
