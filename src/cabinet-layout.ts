@@ -28,12 +28,14 @@ export function validateCabinet(c:CabinetLayout):void{
 }
 export function newCabinet(id:string,name:string,dims:Dimensions,prefix:string,template?:DrawerTemplate):CabinetLayout{
  if(!nonempty(prefix))throw Error('missing naming prefix');
+ if(template&&dims.layers*dims.rows*dims.cols*template.count>100000)throw Error('柜体存储格容量超限');
  const cells=planExpansion([],dims).create.map(c=>makeCell(id,c,nameFor(prefix,c),template));
  const next:CabinetLayout={schemaVersion:1,id,name,revision:0,dimensions:{...dims},cells};validateCabinet(next);return next;
 }
 export function expandCabinet(layout:CabinetLayout,dims:Dimensions,prefix:string,template?:DrawerTemplate):CabinetLayout{
  validateCabinet(layout);if(!nonempty(prefix)||dims.layers<layout.dimensions.layers||dims.rows<layout.dimensions.rows||dims.cols<layout.dimensions.cols)throw Error('cannot shrink cabinet');
  const p=planExpansion(layout.cells,dims),names=new Set(layout.cells.map(c=>c.name));
+ if(template&&layout.cells.reduce((n,c)=>n+c.drawer.compartments.length,0)+p.create.length*template.count>100000)throw Error('柜体存储格容量超限');
  const created=p.create.map(c=>{const base=nameFor(prefix,c);let name=base,n=1;while(names.has(name))name=base+'-'+(++n);names.add(name);return makeCell(layout.id,c,name,template)});
  const next={...layout,revision:layout.revision+1,dimensions:{...dims},cells:[...layout.cells,...created]};validateCabinet(next);return next;
 }

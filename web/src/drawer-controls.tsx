@@ -1,0 +1,18 @@
+import {useState,useRef,useEffect} from 'react';
+import {Button} from './ui';
+import {MAX_COMPARTMENTS,type Drawer} from '../../src/storage-layout';
+export type Axis='horizontal'|'vertical';
+export function CountChoice({value,onChange,min=1,max=MAX_COMPARTMENTS}:{value:string;onChange:(v:string)=>void;min?:number;max?:number}){
+ const [custom,setCustom]=useState(!['1','2','3','4','5'].includes(value));const input=useRef<HTMLInputElement>(null);
+ useEffect(()=>{if(custom)input.current?.focus()},[custom]);
+ const valid=Number.isSafeInteger(Number(value))&&Number(value)>=min&&Number(value)<=max;
+ return <fieldset className="space-y-2"><legend>存储格数量</legend><div className="grid grid-cols-3 gap-2">{[1,2,3,4,5].filter(n=>n>=min).map(n=><Button key={n} disabled={n>max} variant={!custom&&value===String(n)?'primary':'secondary'} aria-pressed={!custom&&value===String(n)} onClick={()=>{setCustom(false);onChange(String(n))}}>{n} 格</Button>)}<Button variant={custom?'primary':'secondary'} aria-pressed={custom} disabled={max<min} onClick={()=>{setCustom(true);onChange('')}}>自定义</Button></div>{custom&&<label className="block">自定义格数<input ref={input} type="number" min={min} max={max} step="1" value={value} onChange={e=>onChange(e.target.value)} aria-invalid={!valid}/></label>}{custom&&!valid&&value!==''&&<p role="alert" className="text-sm text-warn">请输入 {min}–{max} 的整数</p>}</fieldset>
+}
+export function AxisChoice({value,onChange}:{value:Axis;onChange:(a:Axis)=>void}){return <fieldset className="space-y-2"><legend>分隔方向</legend><div className="grid grid-cols-2 gap-2">{(['vertical','horizontal'] as const).map(a=><Button key={a} aria-pressed={a===value} variant={a===value?'primary':'secondary'} className="flex-col" onClick={()=>onChange(a)}><svg width="48" height="28" viewBox="0 0 48 28" aria-hidden="true"><rect x="1" y="1" width="46" height="26" rx="3" fill="none" stroke="currentColor"/><path d={a==='vertical'?'M24 1v26':'M1 14h46'} stroke="currentColor"/></svg>{a==='vertical'?'左右排列':'上下排列'}</Button>)}</div></fieldset>}
+export function DrawerDiagram({drawer,selected=[],onSelect,occupied}:{drawer:Drawer;selected?:string[];onSelect?:(id:string)=>void;occupied?:(id:string)=>boolean}){
+ const cells=drawer.compartments;
+ const small=cells.length>8||cells.some(r=>r.width/drawer.width<.15||r.height/drawer.height<.19);
+ const geometry=(r:typeof cells[number])=>({left:100*r.x/drawer.width+'%',top:100*r.y/drawer.height+'%',width:100*r.width/drawer.width+'%',height:100*r.height/drawer.height+'%'});
+ return <><div className="ux-drawer-diagram" role={!onSelect||small?'img':undefined} aria-label="抽屉分隔布局">{cells.map((r,i)=>{const label='子格 '+(i+1),active=selected.includes(r.id),full=occupied?.(r.id);const cls='ux-drawer-cell '+(active?'ux-selected':full?'ux-occupied':'');return onSelect&&!small?<button key={r.id} type="button" className={cls} style={geometry(r)} aria-label={label} aria-pressed={active} onClick={()=>onSelect(r.id)}>{i+1}{full&&<small>有库存</small>}</button>:<div key={r.id} className={cls} style={geometry(r)}>{cells.length<=12?i+1:''}</div>})}</div>{onSelect&&small&&<div className="grid grid-cols-3 gap-2">{cells.map((r,i)=><Button key={r.id} aria-label={'子格 '+(i+1)} aria-pressed={selected.includes(r.id)} variant={selected.includes(r.id)?'primary':'secondary'} onClick={()=>onSelect(r.id)}>{i+1}{occupied?.(r.id)?' · 有库存':''}</Button>)}</div>}</>
+}
+export function RatioPreview({weights,axis}:{weights:number[];axis:Axis}){const total=weights.reduce((a,b)=>a+b,0);return <div className="ux-ratio-preview" style={{flexDirection:axis==='vertical'?'row':'column'}} aria-label="分隔预览">{weights.map((w,i)=><div key={i} style={{flex:w/total}}>{weights.length<=12?i+1:''}</div>)}</div>}
