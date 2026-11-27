@@ -8,16 +8,22 @@ const id=(x:unknown):string=>{const s=typeof x==='number'&&Number.isSafeInteger(
 const nullableId=(x:unknown)=>x===null?null:id(x);
 const text=(x:unknown)=>{if(x!==null&&typeof x!=='string')throw Error('missing stock text');return x};
 function decimal(x:unknown){const s=typeof x==='number'&&Number.isSafeInteger(x)?String(x):x;if(typeof s!=='string'||s.length>128||!/^\d+(?:\.\d+)?$/.test(s))throw Error('invalid transfer quantity');const [a,b='']=s.split('.'),i=a.replace(/^0+(?=\d)/,''),f=b.replace(/0+$/,'');return f?i+'.'+f:i}
+// Exact subtraction in a common decimal scale, never floating point.
+function remainder(total:string,move:string){const [a,b='']=total.split('.'),[c,d='']=move.split('.'),scale=Math.max(b.length,d.length),n=BigInt(a+b.padEnd(scale,'0'))-BigInt(c+d.padEnd(scale,'0'));if(n<0n)throw Error('transfer exceeds approved stock');const digits=n.toString().padStart(scale+1,'0');return decimal(scale?digits.slice(0,-scale)+'.'+digits.slice(-scale):digits)}
 function row(x:unknown){const r=obj(x);if(typeof r.in_stock!=='boolean'||typeof r.is_building!=='boolean')throw Error('missing stock lifecycle evidence');return {id:id(r.pk),part:id(r.part),location:id(r.location),quantity:decimal(r.quantity),batch:text(r.batch),serial:text(r.serial),status:id(r.status),supplier:nullableId(r.supplier_part),purchase:nullableId(r.purchase_order),sales:nullableId(r.sales_order),owner:nullableId(r.owner),customer:nullableId(r.customer),parent:nullableId(r.parent),belongsTo:nullableId(r.belongs_to),consumedBy:nullableId(r.consumed_by),packaging:text(r.packaging),expiry:text(r.expiry_date),allocated:decimal(r.allocated),inStock:r.in_stock,isBuilding:r.is_building,children:decimal(r.child_items),installed:decimal(r.installed_items)}}
 type Stock=ReturnType<typeof row>;
 const sort=(rows:Stock[])=>rows.slice().sort((a,b)=>a.id.localeCompare(b.id));
 function scoped(raw:unknown,location:string){if(!Array.isArray(raw))throw Error('approved stock baseline required');const rows=sort(raw.map(row));if(new Set(rows.map(r=>r.id)).size!==rows.length||rows.some(r=>r.location!==location))throw Error('stock baseline scope mismatch');return rows}
 function parse(o:Operation){
- if(o.kind!=='transfer-stock'||!o.id.trim()||o.payload.physicalConfirmed!==true)throw Error('explicit whole transfer approval required');const p=o.payload,source=id(p.sourceId),target=id(p.targetId),stockId=id(p.stockItemId),partId=id(p.partId),quantity=decimal(p.quantity);
+ if(o.kind!=='transfer-stock'||!o.id.trim()||o.payload.physicalConfirmed!==true)throw Error('explicit transfer approval required');const p=o.payload,source=id(p.sourceId),target=id(p.targetId),stockId=id(p.stockItemId),partId=id(p.partId),quantity=decimal(p.quantity);
  if(source===target||quantity==='0')throw Error('invalid transfer scope');
  const before=sort([...scoped(p.expectedSource,source),...scoped(p.expectedTarget,target)]),item=before.find(x=>x.id===stockId);
- if(new Set(before.map(x=>x.id)).size!==before.length||before.some(x=>x.part!==partId)||!item||item.location!==source||item.quantity!==quantity||item.allocated!=='0'||item.status!=='10'||!item.inStock||item.isBuilding||item.customer!==null||item.parent!==null||item.belongsTo!==null||item.consumedBy!==null||item.sales!==null||item.children!=='0'||item.installed!=='0')throw Error('only reviewed whole unallocated ordinary stock can move');
- return {source,target,stockId,partId,quantity,before,after:sort(before.map(x=>x.id===stockId?{...x,location:target}:x))};
+ if(new Set(before.map(x=>x.id)).size!==before.length||before.some(x=>x.part!==partId)||!item||item.location!==source||item.allocated!=='0'||item.status!=='10'||!item.inStock||item.isBuilding||item.customer!==null||item.parent!==null||item.belongsTo!==null||item.consumedBy!==null||item.sales!==null||item.children!=='0'||item.installed!=='0')throw Error('only reviewed unallocated ordinary stock can move');
+ const remaining=remainder(item.quantity,quantity),split=remaining!=='0';
+ if(split&&(p.splitConfirmed!==true||item.serial!==null&&item.serial.trim()!==''))throw Error('explicit nonserialized split approval required');
+ const after=sort(before.map(x=>x.id!==stockId?x:split?{...x,quantity:remaining,children:'1'}:{...x,location:target}));
+ const expectedChild=split?{...item,location:target,quantity,parent:stockId}:null;
+ return {source,target,stockId,partId,quantity,before,after,expectedChild};
 }
 type Parsed=ReturnType<typeof parse>;
 export class IsolatedStockTransferTransport implements OperationTransport{
@@ -35,7 +41,10 @@ export class IsolatedStockTransferTransport implements OperationTransport{
   const r=await this.request(new URL('api/stock/transfer/',this.base),{method:'POST',headers:{Authorization:'Token '+this.token,Accept:'application/json','Content-Type':'application/json'},cache:'no-store',redirect:'error',signal:AbortSignal.timeout(20000),body:JSON.stringify({items:[{pk:Number(p.stockId),quantity:p.quantity,merge:false}],location:Number(p.target)})});if(!r.ok)throw Error('transfer HTTP '+r.status);this.ack.set(s.id,key);
  }
  async observe(o:Operation):Promise<Observation>{try{const s=structuredClone(o),p=parse(s),rows=await this.current(p);if(this.ack.get(s.id)!==snapshotKey(s))return {status:'unknown',evidence:'Fixture: no correlated transfer acknowledgement; no replay'};
-  if(snapshotKey(rows)===snapshotKey(p.after))return {status:'verified',evidence:'Fixture: same StockItem ID and exact whole quantity moved; prior references preserved'};
+  if(!p.expectedChild&&snapshotKey(rows)===snapshotKey(p.after))return {status:'verified',evidence:'Fixture: same StockItem ID and exact whole quantity moved; prior references preserved'};
+  if(p.expectedChild){const known=new Set(p.before.map(x=>x.id)),created=rows.filter(x=>!known.has(x.id)),existing=rows.filter(x=>known.has(x.id));
+   if(created.length===1&&snapshotKey(existing)===snapshotKey(p.after)&&snapshotKey(created[0])===snapshotKey({...p.expectedChild,id:created[0].id}))return {status:'verified',evidence:'Fixture: original ID and exact remainder retained, new child linked to source, moved quantity and prior references verified'};
+  }
   if(snapshotKey(rows)===snapshotKey(p.before))return {status:'unknown',evidence:'Fixture: original stock location remains; no replay'};
   return {status:'blocked',evidence:'Fixture: stock transfer conservation conflict'};
  }catch{return {status:'unknown',evidence:'Fixture: transfer readback unavailable'}}}
