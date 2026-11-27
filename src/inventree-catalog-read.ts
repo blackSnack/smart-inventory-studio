@@ -59,6 +59,20 @@ export class InvenTreeCatalogReadAdapter implements CatalogReadPort{
    return parameters.map(p=>{const template=templates.get(p.templateId);return template?{...p,template}:p});
   }catch{return parameters} // Optional label metadata must not hide valid values.
  }
+ // Raw record identity and note are required by the reviewed parameter write transport.
+ async getParameterRecords(partId:string){
+  id(partId);const seen=new Set<string>();
+  return (await this.list('api/parameter/',{model_type:'part.part',model_id:partId})).map(r=>{
+   const templateId=id(r.template);if(r.model_type!=='part.part'||id(r.model_id)!==partId||seen.has(templateId))throw Error('invalid parameter baseline scope');
+   seen.add(templateId);return {id:id(r.pk),templateId,value:str(r.data),note:str(r.note)};
+  });
+ }
+ async readEnrichmentCandidate(partId:string){
+  const part=await this.getPart(partId),parameterRecords=await this.getParameterRecords(partId);
+  const values=new Map(parameterRecords.map(r=>[r.templateId,r.value.trim()?r.value:null]));
+  if(values.size!==part.parameters.length||part.parameters.some(p=>!values.has(p.templateId)||values.get(p.templateId)!==p.value))throw Error('parameter detail changed during baseline read');
+  return {part,parameterRecords,baselineComplete:false as const};
+ }
  async getPart(partId:string):Promise<PartRecord>{
   id(partId);const url=new URL('api/part/'+partId+'/',this.base);
   const response=await this.request(url,{method:'GET',headers:{Authorization:'Token '+this.token,Accept:'application/json'},cache:'no-store',redirect:'error',signal:AbortSignal.timeout(20000)});
