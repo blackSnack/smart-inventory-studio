@@ -1,6 +1,7 @@
 import {validateCabinet,type CabinetLayout,type ExistingLocation} from './cabinet-layout.js';
 import {planCabinetMetadata,readCabinetMetadata,type CabinetMetadata,type LeafBinding} from './cabinet-metadata.js';
 import type {ApprovedPlan,Operation} from './operation-journal.js';
+import {verifyMigrationStock,type MigrationStockSnapshot} from './migration-stock-evidence.js';
 export interface LegacyMigrationInput {rootId:string;layout:CabinetLayout;bindings:LeafBinding[];locations:ExistingLocation[];metadata:Record<string,unknown>}
 export interface LegacyRename {locationId:string;parentId:string;from:string;to:string}
 export interface LegacyMigrationPreview {rootId:string;renames:LegacyRename[];binding:CabinetMetadata;previousMetadata:Record<string,unknown>;nextMetadata:Record<string,unknown>}
@@ -43,4 +44,9 @@ export function verifyLegacyMigration(preview:LegacyMigrationPreview,before:Exis
  for(const [id,l] of old){const r=next.get(id),change=preview.renames.find(x=>x.locationId===id);if(!r||r.parentId!==l.parentId||r.structural!==l.structural||r.name!==(change?.to??l.name))return false}
  return equal(readCabinetMetadata(metadata,after,preview.rootId),preview.binding);
  }catch{return false}
+}
+
+// Full software readback requires both layout integrity and exact StockItem conservation.
+export function verifyLegacyMigrationWithStock(preview:LegacyMigrationPreview,before:ExistingLocation[],after:ExistingLocation[],metadata:Record<string,unknown>,stockBefore:MigrationStockSnapshot,stockAfter:MigrationStockSnapshot){
+ return verifyLegacyMigration(preview,before,after,metadata)&&verifyMigrationStock(stockBefore,stockAfter,new Set(before.map(l=>l.id)),new Set(after.map(l=>l.id)));
 }
