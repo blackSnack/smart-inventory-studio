@@ -2,13 +2,14 @@ import {useCallback,useEffect,useRef,useState} from 'react';import {Button,Modal
 const CURRENT=history[0].version;
 const delay=(ms:number)=>new Promise<void>(r=>setTimeout(r,ms));
 function workerMatches(worker:ServiceWorker|null,target:ReleaseManifest):Promise<boolean>{if(!worker)return Promise.resolve(false);return new Promise(resolve=>{const channel=new MessageChannel();const finish=(v:boolean)=>{clearTimeout(timer);channel.port1.close();resolve(v)};const timer=setTimeout(()=>finish(false),1200);channel.port1.onmessage=e=>finish(e.data?.version===target.version&&e.data?.commit===target.commit);try{worker.postMessage({type:'GET_VERSION'},[channel.port2])}catch{finish(false)}})}
-export function VersionStatus(){
+export function VersionStatus({request=0}:{request?:number}){
  const [latest,setLatest]=useState<ReleaseManifest|null>(null),[open,setOpen]=useState(false),[checking,setChecking]=useState(false),[applying,setApplying]=useState(false),[error,setError]=useState(''),[confirmed,setConfirmed]=useState(false);
  const reg=useRef<ServiceWorkerRegistration|null>(null),inFlight=useRef(false),applyingRef=useRef(false);
  const check=useCallback(async()=>{if(inFlight.current||applyingRef.current||!import.meta.env.PROD)return;inFlight.current=true;setChecking(true);try{const m=await fetchReleaseManifest();setLatest(compareVersions(m.version,CURRENT)>0?m:null);setError('');if(compareVersions(m.version,CURRENT)>0&&reg.current)void reg.current.update().catch(()=>{});}catch{setError('暂时无法检查版本，请稍后重试。')}finally{inFlight.current=false;setChecking(false)}},[]);
  useEffect(()=>{if(!import.meta.env.PROD)return;let disposed=false;if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js',{scope:'./',updateViaCache:'none'}).then(r=>{if(!disposed)reg.current=r}).catch(()=>{});}
  const resume=()=>{if(document.visibilityState==='visible')void check()};void check();const timer=setInterval(resume,60000);document.addEventListener('visibilitychange',resume);window.addEventListener('online',resume);return()=>{disposed=true;clearInterval(timer);document.removeEventListener('visibilitychange',resume);window.removeEventListener('online',resume)}},[check]);
  useEffect(()=>{setConfirmed(false)},[latest?.version,latest?.commit]);
+ useEffect(()=>{if(request){setOpen(true);void check()}},[request,check]);
  async function apply(){if(!latest||!confirmed||applyingRef.current)return;applyingRef.current=true;setApplying(true);setError('');try{
  const fresh=await fetchReleaseManifest();if(fresh.version!==latest.version||fresh.commit!==latest.commit){setLatest(compareVersions(fresh.version,CURRENT)>0?fresh:null);throw Error('发布版本已变化，请重新确认。')}
  if(!('serviceWorker' in navigator)){location.reload();return}
