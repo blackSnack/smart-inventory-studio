@@ -25,7 +25,7 @@ export class InvenTreeAssociationReader{
     const choices=str(r.choices),selection=r.selectionlist===null?null:id(r.selectionlist);
     const reviewed=confirmed.find(c=>c.templateId===tid);let type=r.model_type===null?'unknown':r.checkbox?'boolean':choices.trim()||selection!==null?'enum':'unknown';
     if(reviewed){if(r.model_type!== 'part.part'||type!=='unknown'||name!==reviewed.name||unit!==reviewed.unit||r.enabled!==true)throw Error('reviewed scalar definition changed');type=reviewed.type;seen.add(tid)}
-    return {id:tid,name,unit,type,enabled:r.enabled};
+    return {id:tid,name,unit,type,enabled:r.enabled,scalarReviewable:r.model_type==='part.part'&&!r.checkbox&&!choices.trim()&&selection===null};
    }),
    relations:relations.map(x=>{const r=obj(x);return {id:id(r.pk),categoryId:id(r.category),templateId:id(r.template)}})
   };

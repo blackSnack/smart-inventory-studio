@@ -39,6 +39,9 @@ def exercise_live_enrichment(page,base,capture=None):
    failed=False;route.fulfill(status=429,headers=headers);return
   ev=[{'url':'https://example.test/spec','locator':'page 3'}]
   suggestions=[{'key':'resistance','value':'20kΩ','evidence':ev},{'key':'rated_voltage','value':'25V','evidence':ev}]
+  if data['mpn']=='FIX-42':
+   assert data['known']['datasheetUrl'] is None
+   suggestions.append({'key':'datasheetUrl','value':'https://example.test/spec','evidence':ev})
   route.fulfill(json={'choices':[{'message':{'content':json.dumps({'suggestions':suggestions})}}]},headers=headers)
  page.route('https://batch-inventory.example.test/**',inventory);page.route('https://batch-gateway.example.test/**',agent)
  page.goto(base);page.get_by_role('button',name='设置',exact=True).click();page.get_by_role('button',name='真实库存只读验证').click()
@@ -49,6 +52,8 @@ def exercise_live_enrichment(page,base,capture=None):
  for ipn in ['R-01','R-02']:
   row=page.get_by_role('region',name='审核 '+ipn)
   row.get_by_label('标准分类 '+ipn).select_option('resistor.smd')
+  if ipn=='R-01':
+   row.get_by_text('已有资料与缺项确认',exact=True).click();row.get_by_label('已核对原有资料，缺少数据手册').check()
   row.get_by_label('已核对公开型号、分类及勾选映射').check()
  page.get_by_label('Agent API Base URL').fill('https://batch-gateway.example.test/v1');page.get_by_label('API Key',exact=True).fill('fixture-ai');page.get_by_label('模型或 Agent ID').fill('fixture')
  assert page.get_by_role('button',name='获取资料',exact=True).is_disabled()
@@ -56,13 +61,15 @@ def exercise_live_enrichment(page,base,capture=None):
  page.get_by_role('region',name='审核 R-02').get_by_role('alert').wait_for();page.get_by_label('采用 R-01 额定电压').wait_for()
  assert page.get_by_label('采用 R-01 阻值').is_disabled();assert page.get_by_role('link',name='page 3 · example.test').count()>=1
  page.get_by_label('采用 R-01 额定电压').check();page.get_by_role('button',name='重试失败项').click();page.get_by_label('采用 R-02 额定电压').wait_for();assert requests.count('FIX-42')==1 and requests.count('FIX-43')==2
- assert page.get_by_label('采用 R-01 额定电压').is_checked();page.get_by_label('采用 R-02 额定电压').check()
+ assert page.get_by_label('采用 R-01 额定电压').is_checked();page.get_by_label('采用 R-02 额定电压').check();page.get_by_label('采用 R-01 数据手册').check()
  if capture:capture(page,'27-mobile-live-enrichment' if page.viewport_size['width']<768 else '28-desktop-live-enrichment')
- page.get_by_label('已核对选中字段的来源',exact=False).check();page.get_by_role('button',name='生成审核计划（2）').click();page.get_by_text('已生成 2 项待执行操作，未写入库存。').wait_for()
- if capture:capture(page,'29-mobile-live-enrichment-plan' if page.viewport_size['width']<768 else '30-desktop-live-enrichment-plan')
+ page.get_by_label('已核对选中字段的来源',exact=False).check();page.get_by_role('button',name='生成审核计划（3）').click();page.get_by_text('已生成 3 项待执行操作，未写入库存。').wait_for()
+ if capture:capture(page,'29-mobile-live-enrichment-plan' if page.viewport_size['width']<768 else '30-desktop-live-enrichment-plan',page.get_by_role('region',name='审核计划结果'))
  with page.expect_download() as downloaded:page.get_by_role('button',name='导出审核计划').click()
- data=json.loads(downloaded.value.path().read_text());assert data['status']=='reviewed_candidate_not_executable';assert len(data['plan']['operations'])==2
- assert all(o['kind']=='set-part-parameter' and o['payload']['value']=='25V' and o['payload']['templateId']=='6' for o in data['plan']['operations'])
- stale=True;page.get_by_label('已核对选中字段的来源',exact=False).check();page.get_by_role('button',name='生成审核计划（2）').click();page.get_by_role('alert').filter(has_text='审核计划未生成').wait_for();assert page.get_by_role('button',name='导出审核计划').count()==0
+ data=json.loads(downloaded.value.path().read_text());assert data['status']=='reviewed_candidate_not_executable';assert len(data['plan']['operations'])==3
+ assert [o['kind'] for o in data['plan']['operations']]==['set-part-parameter','set-part-source','set-part-parameter']
+ assert all(o['payload']['value']=='25V' and o['payload']['templateId']=='6' for o in data['plan']['operations'] if o['kind']=='set-part-parameter')
+ assert data['plan']['operations'][1]['payload']['url']=='https://example.test/spec'
+ stale=True;page.get_by_label('已核对选中字段的来源',exact=False).check();page.get_by_role('button',name='生成审核计划（3）').click();page.get_by_role('alert').filter(has_text='审核计划未生成').wait_for();assert page.get_by_role('button',name='导出审核计划').count()==0
  assert all(m in ('GET','OPTIONS') for m in seen)
  page.get_by_role('button',name='返回元件').click();page.get_by_role('button',name='放弃审核').click();page.get_by_role('button',name='查看 R-01 详情').click();page.get_by_role('dialog').get_by_role('button',name='补全资料',exact=True).click();page.get_by_role('heading',name='批量资料补全 · 只读').wait_for();assert page.get_by_role('region',name='审核 R-02').count()==0

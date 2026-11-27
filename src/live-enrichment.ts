@@ -23,7 +23,7 @@ export function mappingCandidates(catalog:Catalog,b:LiveBaseline,s:AssociationSn
  if(!category||!p.categoryId||!s.categories.some(c=>c.id===p.categoryId))throw Error('分类待核对');
  const direct=new Set(s.relations.filter(r=>r.categoryId===p.categoryId).map(r=>r.templateId));
  return category.parameters.flatMap(key=>{const f=catalog.fieldDefinitions[key];if(f.type!=='string'&&f.type!=='number')return [];const names=new Set([f.labelZh,f.labelEn,...(f.aliases??[])]);
- const candidates=s.templates.filter(t=>direct.has(t.id)&&t.enabled&&t.type==='unknown'&&t.unit===f.unit&&names.has(t.name));return candidates.length===1?[{key,template:candidates[0],type:f.type as 'string'|'number'}]:[]}).filter((x,_,all)=>all.filter(y=>y.template.id===x.template.id).length===1);
+ const candidates=s.templates.filter(t=>direct.has(t.id)&&t.enabled&&t.type==='unknown'&&(!Object.hasOwn(t,'scalarReviewable')||(t as typeof t&{scalarReviewable:boolean}).scalarReviewable===true)&&t.unit===f.unit&&names.has(t.name));return candidates.length===1?[{key,template:candidates[0],type:f.type as 'string'|'number'}]:[]}).filter((x,_,all)=>all.filter(y=>y.template.id===x.template.id).length===1);
 }
 export function scalarReviews(catalog:Catalog,b:LiveBaseline,s:AssociationSnapshot,config:LiveMapping):ScalarTypeReview[]{
  const candidates=mappingCandidates(catalog,b,s,config.categoryKey);

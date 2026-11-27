@@ -11,9 +11,10 @@ root=Path(__file__).resolve().parents[1]
 out=root/'design-evidence';out.mkdir(exist_ok=True)
 server=ThreadingHTTPServer(('127.0.0.1',0),partial(SimpleHTTPRequestHandler,directory=str(root/'web'/'dist')))
 Thread(target=server.serve_forever,daemon=True).start()
-def capture(page,name):
+def capture(page,name,anchor=None):
  page.evaluate('document.fonts.ready')
- page.evaluate('window.scrollTo(0,0)')
+ if anchor is None:page.evaluate('window.scrollTo(0,0)')
+ else:anchor.evaluate("e=>e.scrollIntoView({block:'start'})")
  page.wait_for_timeout(120)
  assert page.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth+1'),name
  for group in page.locator('.studio-search-group').all():
