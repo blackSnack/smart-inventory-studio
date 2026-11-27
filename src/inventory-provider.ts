@@ -1,3 +1,4 @@
+import {legacyStockDecimal} from './native-legacy-stock.js';
 import {InvenTreeReadProvider} from './domain.js';
 import {probeSchema} from './provider-schema.js';import type {ParameterSearchPort,SearchParameterTemplate,SearchParameterValue} from './inventory-contract.js';
 export interface PartSummary {id:string;name:string;ipn:string|null;description:string;categoryId:string|null}
@@ -32,8 +33,13 @@ export class InvenTreeReadAdapter implements InventoryReadPort,ParameterSearchPo
  async searchParts(query:string):Promise<PartSummary[]>{const seen=new Set<string>();return (await this.transport.searchParts(query)).map(x=>{const r=row(x),pid=id(r.pk);if(seen.has(pid))throw Error('duplicate part');seen.add(pid);return {id:pid,name:str(r.name),ipn:r.IPN==null?null:str(r.IPN),description:str(r.description??''),categoryId:optionalId(r.category)}})}
  async getStockByPart(partId:string):Promise<StockDistribution[]>{
   const result=new Map<string|null,StockDistribution>();const seen=new Set<string>();
-  for(const x of await this.transport.getStockByPart(partId)){const r=row(x),sid=id(r.pk),pid=id(r.part);if(!Object.hasOwn(r,'location'))throw Error('missing stock location evidence');const loc=optionalId(r.location);if(pid!==partId||seen.has(sid))throw Error('unexpected or duplicate stock row');seen.add(sid);
-   const item=result.get(loc)??{partId,locationId:loc,quantity:'0',stockItemIds:[]};item.quantity=add(item.quantity,quantity(r.quantity));item.stockItemIds.push(sid);result.set(loc,item);
+  const rows=await this.transport.getStockByPart(partId);let legacy=this.legacyParameters;
+  if(!legacy&&rows.some(x=>{const q=row(x).quantity;return typeof q==='number'&&!Number.isSafeInteger(q)})){
+   const check=await probeSchema(this.base,this.token,[{key:'legacy',path:'/api/part/parameter/',method:'get'},{key:'modern',path:'/api/parameter/',method:'get'}],this.request);
+   legacy=check.operations.some(o=>o.key==='legacy'&&o.declared)&&!check.operations.some(o=>o.key==='modern'&&o.declared);
+  }
+  for(const x of rows){const r=row(x),sid=id(r.pk),pid=id(r.part);if(!Object.hasOwn(r,'location'))throw Error('missing stock location evidence');const loc=optionalId(r.location);if(pid!==partId||seen.has(sid))throw Error('unexpected or duplicate stock row');seen.add(sid);
+   const item=result.get(loc)??{partId,locationId:loc,quantity:'0',stockItemIds:[]};item.quantity=add(item.quantity,legacy?legacyStockDecimal(r.quantity):quantity(r.quantity));item.stockItemIds.push(sid);result.set(loc,item);
   }return [...result.values()];
  }
  async getLocations():Promise<LocationSummary[]>{
