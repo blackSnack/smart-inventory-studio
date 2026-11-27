@@ -1,0 +1,36 @@
+# InvenTree API 232 compatibility audit (#157)
+
+Target: InvenTree 0.16.7 / API 232, alongside existing 1.7.4 / API 570. The local read probe returned 200 for identity, roles, part, category, parameter template/value, stock and location. This is not write or browser acceptance.
+
+## Tagged server contracts
+
+- [Part endpoints](https://github.com/inventree/InvenTree/blob/0.16.7/src/backend/InvenTree/part/api.py) and [serializers](https://github.com/inventree/InvenTree/blob/0.16.7/src/backend/InvenTree/part/serializers.py): legacy PartParameterTemplate has no enabled/model_type/selectionlist fields; it is intrinsically scoped to Part and has checkbox/choices. Legacy parameter values use part/template/data; category associations use parameter_template and parameter_template_detail. No modern note field. Legacy scalar semantics still require explicit review.
+- [Stock endpoints](https://github.com/inventree/InvenTree/blob/0.16.7/src/backend/InvenTree/stock/api.py), [serializers](https://github.com/inventree/InvenTree/blob/0.16.7/src/backend/InvenTree/stock/serializers.py), [model](https://github.com/inventree/InvenTree/blob/0.16.7/src/backend/InvenTree/stock/models.py): stock transfer POST supports items[].pk, items[].quantity, location; optional fields batch/status/packaging, not merge. Model move splits on partial quantity, relocates on full quantity. Do not send modern merge:false as if enforced. Validate exact lineage and quantity, server settings, target occupancy, and failure/readback behavior before enabling.
+- Location-specific metadata route is declared in the tagged [stock API](https://github.com/inventree/InvenTree/blob/0.16.7/src/backend/InvenTree/stock/api.py): /api/stock/location/{id}/metadata/. The read adapter now selects that route if declared. Attachment list/create and link/file representation are present in [common API](https://github.com/inventree/InvenTree/blob/0.16.7/src/backend/InvenTree/common/api.py) and [serializer](https://github.com/inventree/InvenTree/blob/0.16.7/src/backend/InvenTree/common/serializers.py); runtime permission and model choices still need verification.
+
+## Implementation increment
+
+Both exact version pairs (0.16.7/API 232 and 1.7.4/API 570) are selected explicitly in native and browser workflows. Legacy Part creation sends minimum_stock:0; ordinary receipt checks the single-object acknowledgement. Parameter creation/update, scalar templates, category association, source links, location creation/rename, metadata, full and partial transfers use version-specific wire contracts. Missing parameter note remains null. Legacy stock lifecycle is cross-checked against complete unfiltered, positive and negative in_stock results and a repeated baseline; unsupported quantity precision, external ancestry and inconsistent filters block mutation. The old transfer payload does not send merge. Cabinet layout split/merge preserves StockItem lineage and does not merge/delete stock records.
+
+Production authorization binds the exact software/API pair while retaining HTTPS, frozen catalog, private evidence, permissions and per-operation approval. The draft catalog still blocks production activation. No production authorization or write has been performed.
+
+## Remaining acceptance
+
+- Run exact-head core and React CI; synthetic fixtures cover both dialects, native browser receipt, source/parameter/category/location writes, full/partial transfer, cabinet layout split/merge, and rejection of unsafe authorization.
+- Execute the [API 232 isolated acceptance checklist](INVENTREE-API232-ACCEPTANCE.md) against an authorized disposable 0.16.7 instance. Actual schema, runtime permissions, pagination, readback and native audit must be confirmed. CI is not real-instance acceptance.
+- Existing connection/persistence #155/PR #156 and real integration/device acceptance #23/#24 remain separate. Issue #157 remains open until its acceptance criteria are met.
+- Binary image upload, supplier/manufacturer identity creation, stock-record merge/delete and unrestricted category reparenting are not implemented by this compatibility increment.
+
+## Official schema audit: API 232 is the primary acceptance baseline
+
+Pinned upstream [API 232 OpenAPI export](https://github.com/inventree/schema/blob/01ae6b95d4ba6083b79de63e2615dca9cdfa75f7/export/232/api.yaml), blob e42da2e7e576be99f871374318ba925920884684; [0.16.7 API version source](https://github.com/inventree/InvenTree/blob/0.16.7/src/backend/InvenTree/InvenTree/api_version.py) confirms 232. The archived export contains 291 paths and 616 HTTP operations. The [machine-extracted audit matrix](verification/inventree-api232-schema-audit.json) checks 36 relevant read/write operation contracts (including proposed image and record merge, separate from cabinet layout merge): all 36 methods/routes declared; 4 entries have schema-level discrepancies or extra required fields. The export is not the user's server schema.
+
+- Manufacturer/supplier detail query flags and supplier_detail are implemented in tagged source but not fully advertised in the exported schema. Validate actual returned company IDs and details; missing evidence is not an empty company.
+- Stock filters part, include_variants, location, cascade are implemented in StockList despite being omitted in the schema. Require exact row scope and pagination tests; no silently widened scope.
+- Part creation schema lists minimum_stock as required (model default 0). Explicitly validate reviewed default and request contract before writes.
+- StockItem lacks in_stock in its response; the server implements a separate in_stock filter and model lifecycle predicate. Do not set in_stock=true by default or filter away rows during baseline collection. Verify lifecycle membership, allocations, reference fields and lineage against the actual instance. Location lacks exclude_from_stock; do not default to false to satisfy a modern guard.
+- Stock quantity and allocated are number/double in the old schema; transfer quantity is a decimal string with up to 5 decimal places. Preserve safe integer and exact decimal invariants; block unsupported precision. No per-item merge flag. Stock record merge is a separate endpoint, not layout merge.
+- Metadata field is unconstrained JSON in the schema; require object shape, namespace isolation and full readback. Images/attachments have declared routes; multipart and actual file behavior need isolated runtime tests.
+- Existing API 570 schema/authorization gates remain intact; 232 native writes must get their own reviewed contract. A route or field declaration never authorizes a write.
+
+Offline reproduction with the actual instance's read-only JSON schema: `node scripts/audit-inventree-api232.mjs local-schema.json`. Reports SHA-256, all 36 operation results, per-field status/type, filters, content type and extra required fields; exit 2 for gaps, 1 for malformed/wrong-version input, 0 for declaration checks only. Does not access a network or grant writes. Keep local schema and credentials out of version control; upload only sanitized evidence if required. Official matrix was extracted from upstream YAML with targeted indentation inspection, not a general YAML validator. The offline JSON audit and synthetic tests are committed. Actual instance evidence remains pending.

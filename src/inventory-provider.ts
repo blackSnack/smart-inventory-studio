@@ -1,3 +1,4 @@
+import {legacyStockDecimal} from './native-legacy-stock.js';
 import {InvenTreeReadProvider} from './domain.js';
 import {probeSchema} from './provider-schema.js';import type {ParameterSearchPort,SearchParameterTemplate,SearchParameterValue} from './inventory-contract.js';
 export interface PartSummary {id:string;name:string;ipn:string|null;description:string;categoryId:string|null}
@@ -19,17 +20,26 @@ function add(a:string,b:string):string {const [ai,af='']=a.split('.'),[bi,bf='']
 export class InvenTreeReadAdapter implements InventoryReadPort,ParameterSearchPort{
  private transport:InvenTreeReadProvider;
  private searchTemplates:SearchParameterTemplate[]|null=null;
+ private legacyParameters=false;
  constructor(private base:string,private token:string,private request:typeof fetch=fetch){this.transport=new InvenTreeReadProvider(base,token,request)}
  async probe():Promise<SearchParameterTemplate[]>{
-  this.searchTemplates=null;const check=await probeSchema(this.base,this.token,[{key:'parameters',path:'/api/parameter/',method:'get'},{key:'templates',path:'/api/parameter/template/',method:'get'}],this.request);if(!check.operations.every(o=>o.declared))throw Error('parameter API not declared');
-  const all=(await this.transport.list('api/parameter/template/',{for_model:'part.part'})).map(x=>{const r=row(x);if((r.model_type!=='part.part'&&r.model_type!==null)||typeof r.enabled!=='boolean'||typeof r.units!=='string')throw Error('unexpected parameter template');return {id:id(r.pk),name:str(r.name),unit:r.units.trim()||null,enabled:r.enabled}});if(new Set(all.map(x=>x.id)).size!==all.length)throw Error('duplicate template');this.searchTemplates=all.filter(t=>t.enabled).map(({id,name,unit})=>({id,name,unit}));return structuredClone(this.searchTemplates);
+  this.searchTemplates=null;const check=await probeSchema(this.base,this.token,[{key:'parameters',path:'/api/parameter/',method:'get'},{key:'templates',path:'/api/parameter/template/',method:'get'},{key:'legacy-parameters',path:'/api/part/parameter/',method:'get'},{key:'legacy-templates',path:'/api/part/parameter/template/',method:'get'}],this.request);
+  const declared=(key:string)=>check.operations.some(o=>o.key===key&&o.declared);
+  const modern=declared('parameters')&&declared('templates'),legacy=declared('legacy-parameters')&&declared('legacy-templates');
+  if(!modern&&!legacy)throw Error('parameter API not declared');this.legacyParameters=!modern&&legacy;
+  const all=(await this.transport.list(this.legacyParameters?'api/part/parameter/template/':'api/parameter/template/',this.legacyParameters?{}:{for_model:'part.part'})).map(x=>{const r=row(x);if((!this.legacyParameters&&((r.model_type!=='part.part'&&r.model_type!==null)||typeof r.enabled!=='boolean'))||typeof r.units!=='string')throw Error('unexpected parameter template');return {id:id(r.pk),name:str(r.name),unit:r.units.trim()||null,enabled:this.legacyParameters||r.enabled===true}});if(new Set(all.map(x=>x.id)).size!==all.length)throw Error('duplicate template');this.searchTemplates=all.filter(t=>t.enabled).map(({id,name,unit})=>({id,name,unit}));return structuredClone(this.searchTemplates);
  }
- async values(templateId:string):Promise<SearchParameterValue[]>{if(!this.searchTemplates?.some(t=>t.id===templateId))throw Error('parameter template not probed');const seen=new Set<string>(),parts=new Set<string>();return (await this.transport.list('api/parameter/',{model_type:'part.part',template:templateId})).map(x=>{const r=row(x),pk=id(r.pk),partId=id(r.model_id);if(r.model_type!=='part.part'||id(r.template)!==templateId||seen.has(pk)||parts.has(partId))throw Error('unexpected or duplicate parameter value');seen.add(pk);parts.add(partId);const value=str(r.data);return {partId,templateId,value:value.trim()||null}})}
+ async values(templateId:string):Promise<SearchParameterValue[]>{if(!this.searchTemplates?.some(t=>t.id===templateId))throw Error('parameter template not probed');const seen=new Set<string>(),parts=new Set<string>();return (await this.transport.list(this.legacyParameters?'api/part/parameter/':'api/parameter/',this.legacyParameters?{template:templateId}:{model_type:'part.part',template:templateId})).map(x=>{const r=row(x),pk=id(r.pk),partId=id(this.legacyParameters?r.part:r.model_id);if((!this.legacyParameters&&r.model_type!=='part.part')||id(r.template)!==templateId||seen.has(pk)||parts.has(partId))throw Error('unexpected or duplicate parameter value');seen.add(pk);parts.add(partId);const value=str(r.data);return {partId,templateId,value:value.trim()||null}})}
  async searchParts(query:string):Promise<PartSummary[]>{const seen=new Set<string>();return (await this.transport.searchParts(query)).map(x=>{const r=row(x),pid=id(r.pk);if(seen.has(pid))throw Error('duplicate part');seen.add(pid);return {id:pid,name:str(r.name),ipn:r.IPN==null?null:str(r.IPN),description:str(r.description??''),categoryId:optionalId(r.category)}})}
  async getStockByPart(partId:string):Promise<StockDistribution[]>{
   const result=new Map<string|null,StockDistribution>();const seen=new Set<string>();
-  for(const x of await this.transport.getStockByPart(partId)){const r=row(x),sid=id(r.pk),pid=id(r.part);if(!Object.hasOwn(r,'location'))throw Error('missing stock location evidence');const loc=optionalId(r.location);if(pid!==partId||seen.has(sid))throw Error('unexpected or duplicate stock row');seen.add(sid);
-   const item=result.get(loc)??{partId,locationId:loc,quantity:'0',stockItemIds:[]};item.quantity=add(item.quantity,quantity(r.quantity));item.stockItemIds.push(sid);result.set(loc,item);
+  const rows=await this.transport.getStockByPart(partId);let legacy=this.legacyParameters;
+  if(!legacy&&rows.some(x=>{const q=row(x).quantity;return typeof q==='number'&&!Number.isSafeInteger(q)})){
+   const check=await probeSchema(this.base,this.token,[{key:'legacy',path:'/api/part/parameter/',method:'get'},{key:'modern',path:'/api/parameter/',method:'get'}],this.request);
+   legacy=check.operations.some(o=>o.key==='legacy'&&o.declared)&&!check.operations.some(o=>o.key==='modern'&&o.declared);
+  }
+  for(const x of rows){const r=row(x),sid=id(r.pk),pid=id(r.part);if(!Object.hasOwn(r,'location'))throw Error('missing stock location evidence');const loc=optionalId(r.location);if(pid!==partId||seen.has(sid))throw Error('unexpected or duplicate stock row');seen.add(sid);
+   const item=result.get(loc)??{partId,locationId:loc,quantity:'0',stockItemIds:[]};item.quantity=add(item.quantity,legacy?legacyStockDecimal(r.quantity):quantity(r.quantity));item.stockItemIds.push(sid);result.set(loc,item);
   }return [...result.values()];
  }
  async getLocations():Promise<LocationSummary[]>{

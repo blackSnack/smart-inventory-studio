@@ -9,8 +9,9 @@ const approval={disposableInstanceConfirmed:true,writeAuthorized:true,visibility
 const approve=async p=>({...approval,approvedPreparationSha256:await nativeReceiptPreparationHash(p)});
 const input={partId:'42',quantity:3,allocations:[{locationId:'2',quantity:3}]};
 const base='http://127.0.0.1:8123/';
-function fixture(){
- const info={server:'InvenTree',version:'1.7.4',apiVersion:570},schema={openapi:'3.0.3',paths:{'/api/part/{id}/':{get:{}},'/api/stock/location/':{get:{}},'/api/stock/':{get:{},post:{}}}};
+function fixture(legacy=false){
+ const info={server:'InvenTree',version:legacy?'0.16.7':'1.7.4',apiVersion:legacy?232:570},schema={openapi:'3.0.3',paths:{'/api/part/{id}/':{get:{}},'/api/stock/location/':{get:{}},'/api/stock/':{get:{},post:{}},...(legacy?{'/api/stock/location/{id}/':{get:{}}}:{})}};
+ const locations=[{pk:1,name:'root',parent:null,structural:true,external:false},{pk:2,name:'leaf',parent:1,structural:false,external:false}];
  const stock=[{pk:9,part:42,location:2,quantity:'10',batch:'B',serial:null,status:10}],writes=[];let lost=false;
  const request=async(u,i)=>{
   const url=new URL(u),method=i.method??'GET';assert.equal(url.origin,'http://127.0.0.1:8123');assert.equal(i.redirect,'error');assert.equal(i.headers.Authorization,'Token fixture');
@@ -18,12 +19,13 @@ function fixture(){
   if(url.pathname==='/api/user/me/')return Response.json({pk:1});
   if(url.pathname==='/api/schema/')return Response.json(schema);
   if(url.pathname==='/api/part/42/')return Response.json({pk:42,name:'Part',IPN:'P42',category:11,active:true,trackable:false,virtual:false});
-  if(url.pathname==='/api/stock/location/')return Response.json([{pk:1,name:'root',parent:null,structural:true},{pk:2,name:'leaf',parent:1,structural:false}]);
+  if(url.pathname==='/api/stock/location/')return Response.json(locations);
+  if(legacy&&/^\/api\/stock\/location\/[12]\/$/.test(url.pathname))return Response.json(locations.find(l=>String(l.pk)===url.pathname.split('/')[4]));
   assert.equal(url.pathname,'/api/stock/');
   if(method==='GET'){assert.equal(url.searchParams.get('location'),'2');return Response.json(stock)}
-  assert.equal(method,'POST');const body=JSON.parse(i.body);writes.push(body);const created={pk:10,...body,batch:null,serial:null,status:10};stock.push(created);if(lost)throw Error('lost');return Response.json([created],{status:201});
+  assert.equal(method,'POST');const body=JSON.parse(i.body);writes.push(body);const created={pk:10,...body,batch:null,serial:null,status:10};stock.push(created);if(lost)throw Error('lost');return Response.json(legacy?created:[created],{status:201});
  };
- return {runner:NativeReceiptAcceptance.open(base,'fixture',request),stock,writes,info,schema,lose(){lost=true}};
+ return {runner:NativeReceiptAcceptance.open(base,'fixture',request),stock,writes,info,schema,locations,lose(){lost=true}};
 }
 function journal(t){const dir=mkdtempSync(join(tmpdir(),'studio-native-fixture-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));return ()=>new LocalNativeReceiptEvidence(dir)}
 test('local acceptance requires explicit loopback port and approvals; preparation is read-only',async t=>{
@@ -47,4 +49,13 @@ test('lost acknowledgement remains unknown after reopen; no replay, and stale ba
 test('write-once evidence refuses concurrent same binding and preserves missing acknowledgement',async t=>{
  const open=journal(t),key='a'.repeat(64),a=open(),b=open();assert.equal(await a.claim(key),true);assert.equal(await b.claim(key),false);assert.deepEqual(await b.read(key),{});
  await a.acknowledge(key,'42');assert.deepEqual(await b.read(key),{stockId:'42'});await assert.rejects(b.acknowledge(key,'43'));
+});
+
+test('232 ordinary receipt accepts single StockItem response, checks location external status and never replays',async t=>{
+ const f=fixture(true),e=journal(t),p=await f.runner.prepare('fixture',input),a=await approve(p);
+ assert.equal(p.apiVersion,232);assert.equal(f.writes.length,0);
+ f.locations[0].external=true;await assert.rejects(f.runner.execute(p,a,e()),/external/);assert.equal(f.writes.length,0);
+ f.locations[0].external=false;assert.equal((await f.runner.execute(p,a,e())).status,'verified');
+ assert.deepEqual(f.writes,[{part:42,location:2,quantity:3}]);
+ await assert.rejects(f.runner.execute(p,a,e()));assert.equal(f.writes.length,1);
 });

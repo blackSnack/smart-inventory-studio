@@ -25,37 +25,39 @@ const ops={
  whole:{id:'whole',kind:'transfer-stock',payload:{physicalConfirmed:true,sourceId:'2',targetId:'3',stockItemId:'9',partId:'42',quantity:'10.25'}},
  split:{id:'split',kind:'transfer-stock',payload:{physicalConfirmed:true,sourceId:'2',targetId:'3',stockItemId:'9',partId:'42',quantity:'4.125',splitConfirmed:true}}
 };
-function fixture(){
+function fixture(legacy=false){
  const categories=[{pk:1,name:'Root',description:'',parent:null,structural:true},{pk:2,name:'Resistors',description:'',parent:1,structural:false},{pk:5,name:'Other',description:'',parent:1,structural:false}];
- const templates=[{pk:3,name:'Resistance',description:'',units:'Ω',model_type:'part.part',enabled:true,checkbox:false,choices:'',selectionlist:null}];
- const relations=[{pk:4,category:5,template:3,default_value:'12'}];
- const locations=[{pk:1,name:'Cabinet',parent:null,structural:true},{pk:2,name:'A',parent:1,structural:false},{pk:3,name:'B',parent:1,structural:false}];
- const stocks=structuredClone([stock,dest]),writes=[];let metadata={other:4},lost=false,actor=1;
- const schema={openapi:'3.0.3',paths:{'/api/part/category/':{get:{},post:{}},'/api/parameter/template/':{get:{},post:{}},'/api/part/category/parameters/':{get:{},post:{}},'/api/stock/location/':{get:{},post:{}},'/api/stock/location/{id}/':{get:{},patch:{}},'/api/metadata/{model}/{id}/':{get:{},patch:{}},'/api/stock/':{get:{}},'/api/stock/transfer/':{post:{}}}};
+ const templates=[{pk:3,name:'Resistance',description:'',units:'Ω',checkbox:false,choices:'',...(legacy?{}:{model_type:'part.part',enabled:true,selectionlist:null})}];
+ const templatePath=legacy?'/api/part/parameter/template/':'/api/parameter/template/';
+ const relations=[{pk:4,category:5,[legacy?'parameter_template':'template']:3,default_value:'12'}];
+ const locations=[{pk:1,name:'Cabinet',parent:null,structural:true},{pk:2,name:'A',parent:1,structural:false},{pk:3,name:'B',parent:1,structural:false}].map(x=>legacy?{...x,external:false}:x);
+ const metadataPath=legacy?'/api/stock/location/1/metadata/':'/api/metadata/stocklocation/1/';
+ const stocks=structuredClone([stock,dest]),writes=[];let metadata={other:4},lost=false,actor=1,ignoreLifecycleFilter=false;
+ const schema={openapi:'3.0.3',paths:{'/api/part/category/':{get:{},post:{}},[templatePath]:{get:{},post:{}},'/api/part/category/parameters/':{get:{},post:{}},'/api/stock/location/':{get:{},post:{}},'/api/stock/location/{id}/':{get:{},patch:{}},[legacy?'/api/stock/location/{id}/metadata/':'/api/metadata/{model}/{id}/']:{get:{},patch:{}},'/api/stock/':{get:{}},'/api/stock/transfer/':{post:{}}}};
  const request=async(u,i={})=>{
   const url=new URL(u),method=i.method??'GET',path=url.pathname;assert.equal(url.origin,'http://127.0.0.1:8123');assert.equal(i.redirect,'error');assert.equal(new Headers(i.headers).get('Authorization'),'Token fixture');
-  if(path==='/api/')return Response.json({server:'InvenTree',version:'1.7.4',apiVersion:570});
+  if(path==='/api/')return Response.json({server:'InvenTree',version:legacy?'0.16.7':'1.7.4',apiVersion:legacy?232:570});
   if(path==='/api/user/me/')return Response.json({pk:actor});
   if(path==='/api/schema/')return Response.json(schema);
   if(method==='GET'){
    if(path==='/api/part/category/')return Response.json(categories);
-   if(path==='/api/parameter/template/')return Response.json(templates);
+   if(path===templatePath)return Response.json(templates);
    if(path==='/api/part/category/parameters/')return Response.json(relations);
    if(path==='/api/stock/location/')return Response.json(locations);
-   if(path==='/api/metadata/stocklocation/1/')return Response.json({metadata});
-   if(path==='/api/stock/')return Response.json(stocks.filter(r=>String(r.location)===url.searchParams.get('location')));
+   if(path===metadataPath)return Response.json({metadata});
+   if(path==='/api/stock/'){let rows=stocks.filter(r=>String(r.location)===url.searchParams.get('location'));if(legacy){const filter=url.searchParams.get('in_stock');if(filter!==null&&!ignoreLifecycleFilter)rows=rows.filter(r=>String(r.in_stock)===filter);rows=rows.map(({in_stock,...r})=>({...r,build:null,quantity:Number(r.quantity),allocated:Number(r.allocated)}))}return Response.json(rows)}
    if(/^\/api\/stock\/location\/\d+\/$/.test(path))return Response.json(locations.find(r=>r.pk===Number(path.split('/').at(-2))));
    throw Error('unexpected GET '+path);
   }
   const body=JSON.parse(i.body);writes.push({path,method,body});let result;
   if(path==='/api/part/category/'){result={pk:11,...body};categories.push(result)}
-  else if(path==='/api/parameter/template/'){result={pk:12,...body};templates.push(result)}
+  else if(path===templatePath){result={pk:12,...body};templates.push(result)}
   else if(path==='/api/part/category/parameters/'){result={pk:13,...body};relations.push(result)}
   else if(path==='/api/stock/location/'){result={pk:14+locations.filter(x=>x.pk>=14).length,...body};locations.push(result)}
   else if(/^\/api\/stock\/location\/\d+\/$/.test(path)&&method==='PATCH'){result=locations.find(x=>x.pk===Number(path.split('/').at(-2)));result.name=body.name}
-  else if(path==='/api/metadata/stocklocation/1/'&&method==='PATCH'){metadata=body.metadata;result={metadata}}
+  else if(path===metadataPath&&method==='PATCH'){metadata=body.metadata;result={metadata}}
   else if(path==='/api/stock/transfer/'){
-   assert.equal(body.items[0].merge,false);const item=stocks.find(r=>r.pk===body.items[0].pk);
+   if(legacy)assert.equal(Object.hasOwn(body.items[0],'merge'),false);else assert.equal(body.items[0].merge,false);const item=stocks.find(r=>r.pk===body.items[0].pk);
    const q=Number(body.items[0].quantity),remaining=Number(item.quantity)-q;
    if(remaining>0){stocks.push({...item,pk:Math.max(14,...stocks.map(x=>x.pk))+1,parent:item.pk,location:body.location,quantity:q.toFixed(4),child_items:0});item.quantity=remaining.toFixed(4);item.child_items++}
    else item.location=body.location;
@@ -64,7 +66,7 @@ function fixture(){
   if(lost)throw Error('lost acknowledgement');
   return Response.json(result,{status:method==='POST'?201:200});
  };
- return {runner:NativeOperationsAcceptance.open(base,'fixture',catalog,hash,request),categories,templates,relations,locations,stocks,writes,get metadata(){return metadata},setMetadata(m){metadata=structuredClone(m)},schema,lose(){lost=true},changeActor(){actor=2}};
+ return {runner:NativeOperationsAcceptance.open(base,'fixture',catalog,hash,request),categories,templates,relations,locations,stocks,writes,get metadata(){return metadata},setMetadata(m){metadata=structuredClone(m)},schema,lose(){lost=true},changeActor(){actor=2},ignoreFilter(){ignoreLifecycleFilter=true}};
 }
 function journal(t){const dir=mkdtempSync(join(tmpdir(),'studio-native-ops-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));return ()=>new LocalNativeOperationEvidence(dir)}
 async function run(f,op,e){
@@ -138,8 +140,8 @@ test('stable operation ID reservation cannot be replaced by a fresh hash',async 
  await e().record(key,a,{id:'42'});assert.deepEqual(await e().read(key,a),{ack:{id:'42'}});
 });
 
-test('native cabinet split creates missing leaves, redistributes one exact StockItem through successive verified splits, and archives empty original before metadata',async t=>{
- const f=fixture(),e=journal(t),layout=newCabinet('cab','cab',{layers:1,rows:1,cols:1},'CAB'),cell=layout.cells[0],whole=cell.drawer.compartments[0].id;
+for(const legacy of [false,true])test('native cabinet split and merge, repeated lineage, retirement and metadata / API '+(legacy?232:570),async t=>{
+ const f=fixture(legacy),e=journal(t),layout=newCabinet('cab','cab',{layers:1,rows:1,cols:1},'CAB'),cell=layout.cells[0],whole=cell.drawer.compartments[0].id;
  f.stocks.splice(1,1);const initial={...layout,cells:[{...cell,locationId:'2'}]};
  f.setMetadata({other:4,smart_inventory:{cabinet:{schemaVersion:1,revision:0,layout:initial,leafBindings:[{compartmentId:whole,locationId:'2'}]}}});
  const draft=replaceDrawer(initial,cell.id,splitCompartment(cell.drawer,whole,'vertical',[4,4,4],['a','b','c']));
@@ -171,4 +173,37 @@ test('native cabinet split creates missing leaves, redistributes one exact Stock
  for(const item of mergeQueue){const work=item.kind==='operation'?item:await resolveNativeLayoutItem(item,'fixture',store,nativeLocationTree(f.locations));const {p}=await run(f,work.payload,e),binding=await nativeOperationsPreparationHash(p),key=createHash('sha256').update(JSON.stringify({base:p.base,instanceId:p.instanceId,operationId:p.operation.id})).digest('hex'),ack=(await e().read(key,binding))?.ack;records.set(item.id,{state:'verified',ackBinding:binding,ack,preparation:{scope:'fixture',input:work}})}
  assert.deepEqual(f.stocks.map(x=>[x.pk,x.location,x.quantity,x.parent,x.child_items]),[[9,3,'4.0000',null,2],[15,3,'4.1250',9,0],[16,3,'2.1250',9,0]]);
  assert.equal(f.metadata.smart_inventory.cabinet.leafBindings.length,1);assert.equal(f.metadata.smart_inventory.cabinet.leafBindings[0].locationId,'3');assert.equal(f.stocks.reduce((n,x)=>n+Number(x.quantity),0),10.25);assert.equal(f.locations.find(x=>x.pk===14).name,retiredLocationName('14'));assert.equal(f.locations.find(x=>x.pk===15).name,retiredLocationName('15'));
+});
+
+test('232 definition operations preserve exact approved wires and old category defaults',async t=>{
+ const f=fixture(true),e=journal(t);
+ const {p}=await run(f,ops.category,e);assert.equal(p.apiVersion,232);
+ await run(f,ops.template,e);await run(f,ops.associate,e);
+ assert.deepEqual(f.writes.map(w=>w.path),['/api/part/category/','/api/part/parameter/template/','/api/part/category/parameters/']);
+ assert.deepEqual(f.writes[1].body,{name:'CPU Core',units:'',description:'Fixture',checkbox:false,choices:''});
+ assert.deepEqual(f.writes[2].body,{category:2,parameter_template:3,default_value:''});
+ assert.equal(f.relations[0].default_value,'12');
+});
+
+test('232 location creation, whole transfer and partial split use exact legacy wire and lifecycle proof',async t=>{
+ for(const op of [ops.whole,ops.split]){
+  const f=fixture(true),e=journal(t);await run(f,ops.location,e);assert.equal(Object.hasOwn(f.writes[0].body,'exclude_from_stock'),false);
+  const {p}=await run(f,op,e);assert.equal(p.apiVersion,232);
+  assert.deepEqual(f.writes[1].body,{items:[{pk:9,quantity:op.payload.quantity}],location:3});
+  assert.equal(f.stocks.reduce((n,x)=>n+Number(x.quantity),0),11.25);
+  if(op===ops.split){assert.equal(f.stocks[0].quantity,'6.1250');assert.equal(f.stocks[2].parent,9)}else assert.equal(f.stocks[0].location,3);
+ }
+});
+test('232 ignored lifecycle filters, external location and precision violations fail before mutation',async t=>{
+ const f=fixture(true);f.ignoreFilter();await assert.rejects(f.runner.prepare('fixture',ops.whole),/lifecycle filter/);assert.equal(f.writes.length,0);
+ const g=fixture(true);g.locations[0].external=true;await assert.rejects(g.runner.prepare('fixture',ops.location),/external/);await assert.rejects(g.runner.prepare('fixture',ops.whole),/external/);assert.equal(g.writes.length,0);
+ const h=fixture(true);await assert.rejects(h.runner.prepare('fixture',{...ops.split,payload:{...ops.split.payload,quantity:'0.000001'}}),/precision/);assert.equal(h.writes.length,0);
+});
+test('232 cabinet rename and metadata preserve stock and unrelated namespace',async t=>{
+ const f=fixture(true),e=journal(t),layout=newCabinet('cab','cab',{layers:1,rows:1,cols:1},'NEW');
+ const input={rootId:'1',layout,bindings:[{compartmentId:layout.cells[0].drawer.compartments[0].id,locationId:'2'}],locations:f.locations.map(x=>({id:String(x.pk),name:x.name,parentId:x.parent===null?null:String(x.parent),structural:x.structural})),metadata:f.metadata};
+ const preview=previewLegacyMigration(input),plan=planLegacyMigration({id:'migrate',instanceId:'fixture',catalogHash:hash,snapshotHash:'snapshot',approvalId:'approval',physicalConfirmed:true},input,preview),before=structuredClone(f.stocks);
+ await run(f,plan.operations[0],e);await run(f,plan.operations[1],e);
+ assert.deepEqual(f.stocks,before);assert.equal(f.metadata.other,4);assert.deepEqual(f.metadata,preview.nextMetadata);
+ assert.equal(f.writes[1].path,'/api/stock/location/1/metadata/');
 });
