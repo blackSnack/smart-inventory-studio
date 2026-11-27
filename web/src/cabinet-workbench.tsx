@@ -10,12 +10,13 @@ const uid=()=>crypto.randomUUID();
 const titles={edit:'仓储布局工作台',create:'新建柜体',expand:'扩容柜体',settings:'柜体设置'};
 export function CabinetWorkbench({mode,cabinet,warehouse,parts,occupied,onSave,onRename,busy,ready,onClose}:Props){
  const original=cabinet.layout,wide=useMediaQuery('(min-width:768px)');
+ const originalPrefix=original.cells[0]?.name.match(/^(.*)-L\d+-R\d+-C\d+(?:-\d+)?$/)?.[1]||original.id;
  const [layout,setLayout]=useState<CabinetLayout>(()=>structuredClone(original)),[past,setPast]=useState<CabinetLayout[]>([]),[future,setFuture]=useState<CabinetLayout[]>([]);
  const [confirmed,setConfirmed]=useState(false),[moves,setMoves]=useState<RelocationMove[]>([]),[error,setError]=useState(''),[discard,setDiscard]=useState(false);
- const [name,setName]=useState(mode==='create'?'':original.name),[prefix,setPrefix]=useState(mode==='create'?'':original.id),[tiers,setTiers]=useState(mode==='create'?'5':'0'),[cols,setCols]=useState(mode==='create'?'6':'0'),[count,setCount]=useState('3'),[axis,setAxis]=useState<Axis>('vertical');
+ const [name,setName]=useState(mode==='create'?'':original.name),[prefix,setPrefix]=useState(mode==='create'?'':originalPrefix),[tiers,setTiers]=useState(mode==='create'?'5':'0'),[cols,setCols]=useState(mode==='create'?'6':'0'),[count,setCount]=useState('3'),[axis,setAxis]=useState<Axis>('vertical');
  const [plane,setPlane]=useState(0),[selected,setSelected]=useState<string|null>(null),[chosen,setChosen]=useState<string[]>([]),[action,setAction]=useState<'split'|'merge'|null>(null),[customRatio,setCustomRatio]=useState(false),[ratio,setRatio]=useState('');
  const [review,setReview]=useState(false),[renames,setRenames]=useState<LocationRename[]|null>(null),[renameConfirmed,setRenameConfirmed]=useState(false);
- const dirty=layout.revision!==original.revision||layout.id!==original.id||past.length>0||name!==(mode==='create'?'':original.name)||prefix!==(mode==='create'?'':original.id)||mode==='create'&&(tiers!=='5'||cols!=='6'||count!=='3'||axis!=='vertical')||mode==='expand'&&(tiers!=='0'||cols!=='0'||count!=='3'||axis!=='vertical');
+ const dirty=layout.revision!==original.revision||layout.id!==original.id||past.length>0||name!==(mode==='create'?'':original.name)||prefix!==(mode==='create'?'':originalPrefix)||mode==='create'&&(tiers!=='5'||cols!=='6'||count!=='3'||axis!=='vertical')||mode==='expand'&&(tiers!=='0'||cols!=='0'||count!=='3'||axis!=='vertical');
  const cell=layout.cells.find(c=>c.id===selected),summary=layoutSummary(layout);
  const isBound=(c:CabinetCell)=>layout.id===original.id&&c.drawer.compartments.every(r=>Object.hasOwn(cabinet.leaves,r.id));
  const occupiedCell=(c:CabinetCell)=>original.cells.find(x=>x.id===c.id)?.drawer.compartments.some(r=>occupied.includes(cabinet.leaves[r.id]))??false;

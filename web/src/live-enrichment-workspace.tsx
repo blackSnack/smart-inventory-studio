@@ -12,12 +12,12 @@ import type {Catalog} from '../../src/catalog';
 import type {PartSummary} from '../../src/inventory-provider';
 import type {ApprovedPlan} from '../../src/operation-journal';
 import {snapshotKey} from '../../src/approved-snapshot';
-type Gateway={url:string;key:string;model:string};
+type Gateway={url:string;key:string;model:string;tested?:'ok'|'failed'};
 type Row={summary:PartSummary;baseline?:LiveBaseline;config:LiveMapping;confirmed:boolean;state:'idle'|'reading'|'read-failed'|'configure'|'pending'|'ready'|'failed';request?:EnrichmentRequest;fields:ReviewField[];suggestions:Suggestion[];accepted:string[]};
 const initial=(summary:PartSummary):Row=>({summary,config:{categoryKey:'',templates:{},missingSources:[]},confirmed:false,state:'idle',fields:[],suggestions:[],accepted:[]});
 const digest=async(x:unknown)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(snapshotKey(x)))),v=>v.toString(16).padStart(2,'0')).join('');
 export function LiveEnrichmentWorkspace({parts,instanceId,openCatalog,openAssociation,initialGateway,onGatewayChange,catalog,onClose,onExecute,executionMode}:{parts:PartSummary[];instanceId:string;openCatalog:()=>Promise<InvenTreeCatalogReadAdapter>;openAssociation:()=>Promise<InvenTreeAssociationReader>;initialGateway:Gateway;onGatewayChange:(v:Gateway)=>void;catalog:Catalog;onClose:()=>void;onExecute?:(plan:ApprovedPlan)=>void;executionMode?:'disposable'|'production'}){
- const gateway=initialGateway;const setGateway=(fn:(g:Gateway)=>Gateway)=>onGatewayChange(fn(gateway));
+ const gateway=initialGateway;const setGateway=(fn:(g:Gateway)=>Gateway)=>onGatewayChange({...fn(gateway),tested:undefined});
  const [rows,setRows]=useState(()=>parts.map(initial)),[association,setAssociation]=useState<AssociationSnapshot|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[permission,setPermission]=useState(false),[complete,setComplete]=useState(false),[plan,setPlan]=useState<ApprovedPlan|null>(null),[discard,setDiscard]=useState(false);
  const controller=useRef<AbortController|null>(null),running=useRef(false);useEffect(()=>()=>controller.current?.abort(),[]);
  const label=(k:string)=>k==='datasheetUrl'?'数据手册':k==='imageUrl'?'产品图片':catalog.fieldDefinitions[k]?.labelZh??k;
