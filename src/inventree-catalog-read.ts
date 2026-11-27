@@ -63,10 +63,10 @@ export class InvenTreeCatalogReadAdapter implements CatalogReadPort{
  }
  // Raw record identity and note are required by the reviewed parameter write transport.
  async getParameterRecords(partId:string){
-  id(partId);if(this.legacy)throw Error('legacy parameter write baseline not yet supported');const seen=new Set<string>();
-  return (await this.list('api/parameter/',{model_type:'part.part',model_id:partId})).map(r=>{
-   const templateId=id(r.template);if(r.model_type!=='part.part'||id(r.model_id)!==partId||seen.has(templateId))throw Error('invalid parameter baseline scope');
-   seen.add(templateId);return {id:id(r.pk),templateId,value:str(r.data),note:str(r.note)};
+  id(partId);const seen=new Set<string>();
+  return (await this.list(this.legacy?'api/part/parameter/':'api/parameter/',this.legacy?{part:partId}:{model_type:'part.part',model_id:partId})).map(r=>{
+   const templateId=id(r.template);if((!this.legacy&&r.model_type!=='part.part')||id(this.legacy?r.part:r.model_id)!==partId||seen.has(templateId))throw Error('invalid parameter baseline scope');
+   seen.add(templateId);return {id:id(r.pk),templateId,value:str(r.data),note:this.legacy?null:str(r.note)};
   });
  }
  async readEnrichmentCandidate(partId:string){
