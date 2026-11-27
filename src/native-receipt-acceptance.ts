@@ -41,7 +41,7 @@ export class NativeReceiptAcceptance {
  }
  private async target(requirePost:boolean){
   const version=row((await this.call('api/')).data);
-  const api=nativeApiVersion(version,!!this.production);
+  const api=nativeApiVersion(version,this.production);
   const auth=row((await this.call('api/user/me/')).data);
   const actorId=receiptId(auth.pk??auth.id);
   const schema=await this.call('api/schema/?format=json','GET',undefined,16*1024*1024);
