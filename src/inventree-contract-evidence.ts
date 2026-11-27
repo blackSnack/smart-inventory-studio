@@ -114,7 +114,7 @@ type Result={status:'ok'|'denied'|'redirect'|'http-error'|'unavailable'|'invalid
 type Sample={status:string;httpStatus?:number;missingFields?:string[];invalidFields?:string[];paging?:string};
 const positiveId=(v:unknown)=>typeof v==='number'&&Number.isSafeInteger(v)&&v>0||typeof v==='string'&&/^[1-9][0-9]{0,17}$/.test(v);
 const nullableId=(v:unknown)=>v===null||positiveId(v);
-const decimal=(v:unknown)=>typeof v==='number'&&Number.isSafeInteger(v)&&v>=0||typeof v==='string'&&/^\\d+(?:\\.\\d+)?$/.test(v);
+const decimal=(v:unknown)=>typeof v==='number'&&Number.isSafeInteger(v)&&v>=0||typeof v==='string'&&/^\d+(?:\.\d+)?$/.test(v);
 function invalidWireFields(key:string,row:unknown):string[]{
  if(!obj(row))return ['record'];
  const bad:string[]=[];const check=(k:string,p:(v:unknown)=>boolean)=>{if(Object.hasOwn(row,k)&&!p(row[k]))bad.push(k)};
