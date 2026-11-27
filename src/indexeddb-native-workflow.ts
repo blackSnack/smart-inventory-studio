@@ -33,8 +33,8 @@ export class IndexedDbNativeWorkStore implements BrowserWorkStore{
  async admit(record:BrowserWorkRecord){
   const p=structuredClone(record),scope=p.preparation.scope,id=p.preparation.id;
   if(p.state!=='reviewed'||!id||!scope)throw Error('invalid native journal admission');
-  return new Promise<void>((resolve,reject)=>{const tx=this.db.transaction(STORE,'readwrite'),s=tx.objectStore(STORE);let error:unknown;tx.oncomplete=()=>resolve();tx.onabort=()=>reject(error??tx.error??Error('native admission failed'));
-   const r=s.index('scope').getAll(scope);r.onsuccess=()=>{try{const rows=r.result as Row[];if(rows.some(x=>x.id===id||x.state==='reviewed'||x.state==='sent'||x.state==='unknown'||x.state==='blocked'&&x.ackBinding!==undefined))throw Error('unresolved native operation or duplicate ID');s.add({...p,scope,id} satisfies Row)}catch(e){error=e;tx.abort()}};
+  return new Promise<void>((resolve,reject)=>{const tx=this.db.transaction([STORE,QUEUE],'readwrite'),s=tx.objectStore(STORE),q=tx.objectStore(QUEUE);let error:unknown;tx.oncomplete=()=>resolve();tx.onabort=()=>reject(error??tx.error??Error('native admission failed'));
+   const queue=q.get(scope);queue.onsuccess=()=>{if(queue.result?.items?.[0]?.id!==id){error=Error('queue changed or stopped');tx.abort();return}const r=s.index('scope').getAll(scope);r.onsuccess=()=>{try{const rows=r.result as Row[];if(rows.some(x=>x.id===id||x.state==='reviewed'||x.state==='sent'||x.state==='unknown'||x.state==='blocked'&&x.ackBinding!==undefined))throw Error('unresolved native operation or duplicate ID');s.add({...p,scope,id} satisfies Row)}catch(e){error=e;tx.abort()}}};
   });
  }
  private change<T>(scope:string,id:string,fn:(r:Row)=>{next?:Row;value:T}):Promise<T>{
