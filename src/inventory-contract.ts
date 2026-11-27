@@ -7,6 +7,9 @@ export interface SourceRef {kind:'manufacturer'|'supplier'|'datasheet'|'image'|'
 export interface PartRecord extends PartSummary {parameters:ParameterValueRef[];sources:SourceRef[];manufacturerParts:{manufacturer:string;mpn:string}[];supplierParts:{supplier:string;sku:string}[]}
 export interface CatalogReadPort {getPart(id:string):Promise<PartRecord>;getCategories():Promise<CategoryRef[]>;getParameterTemplates(categoryId:string):Promise<ParameterTemplateRef[]>}
 export interface MetadataReadPort {getLocationMetadata(locationId:string):Promise<Record<string,unknown>>}
+export interface SearchParameterTemplate {id:string;name:string;unit:string|null}
+export interface SearchParameterValue {partId:string;templateId:string;value:string|null}
+export interface ParameterSearchPort {probe():Promise<SearchParameterTemplate[]>;values(templateId:string):Promise<SearchParameterValue[]>}
 export type InventoryFeature='read'|'partDetails'|'categories'|'parameterTemplates'|'metadata'|'write'|'stockTransfer';
 export interface InventoryFeatureSet extends InventoryCapabilities {partDetails?:boolean;categories?:boolean;operationKinds?:readonly string[]}
 export const SYNTHETIC_OPERATION_KINDS=['receive-existing-part','create-demo-part-and-receive','create-demo-catalog-part','save-demo-cabinet','enrich-demo-part','rename-demo-locations'] as const;
@@ -15,7 +18,7 @@ const supportedKinds=new Set<string>([...SYNTHETIC_OPERATION_KINDS,...PROVIDER_O
 // Object-key order is irrelevant; array order and exact scalar values are not.
 function canonical(value:unknown):string{if(value===null)return 'null';if(typeof value==='string'||typeof value==='boolean'||typeof value==='number'&&Number.isFinite(value))return JSON.stringify(value);if(Array.isArray(value))return '['+value.map(canonical).join(',')+']';if(value&&typeof value==='object'&&(Object.getPrototypeOf(value)===Object.prototype||Object.getPrototypeOf(value)===null)){const entries=Object.entries(value).filter(([,v])=>v!==undefined);return '{'+entries.sort(([a],[b])=>a<b?-1:a>b?1:0).map(([k,v])=>JSON.stringify(k)+':'+canonical(v)).join(',')+'}'}throw Error('invalid operation payload')}
 export class UnsupportedInventoryOperation extends Error{constructor(public kind:string){super('Unsupported inventory operation: '+kind);this.name='UnsupportedInventoryOperation'}}
-export interface InventoryPorts {instanceId:string;read:InventoryReadPort;catalog?:CatalogReadPort;metadata?:MetadataReadPort;operations?:OperationTransport;capabilities():Promise<InventoryFeatureSet>}
+export interface InventoryPorts {instanceId:string;read:InventoryReadPort;catalog?:CatalogReadPort;metadata?:MetadataReadPort;parameterSearch?:ParameterSearchPort;operations?:OperationTransport;capabilities():Promise<InventoryFeatureSet>}
 export class UnsupportedInventoryCapability extends Error{constructor(public feature:InventoryFeature){super('Unsupported inventory capability: '+feature);this.name='UnsupportedInventoryCapability'}}
 export class InventorySession{
  constructor(private ports:InventoryPorts){if(!ports.instanceId.trim())throw Error('inventory instance required')}
@@ -24,6 +27,8 @@ export class InventorySession{
  async searchParts(q:string):Promise<PartSummary[]>{await this.require('read');return this.ports.read.searchParts(q)}
  async getStockByPart(id:string):Promise<StockDistribution[]>{await this.require('read');return this.ports.read.getStockByPart(id)}
  async getLocations():Promise<LocationSummary[]>{await this.require('read');return this.ports.read.getLocations()}
+ async probeParameterSearch(){await this.require('read');if(!this.ports.parameterSearch)throw new UnsupportedInventoryCapability('parameterTemplates');return this.ports.parameterSearch.probe()}
+ async getSearchParameterValues(templateId:string){await this.require('read');if(!this.ports.parameterSearch)throw new UnsupportedInventoryCapability('parameterTemplates');return this.ports.parameterSearch.values(templateId)}
  async getPart(id:string){await this.require('partDetails');if(!this.ports.catalog)throw new UnsupportedInventoryCapability('partDetails');return this.ports.catalog.getPart(id)}
  async getCategories(){await this.require('categories');if(!this.ports.catalog)throw new UnsupportedInventoryCapability('categories');return this.ports.catalog.getCategories()}
  async getParameterTemplates(id:string){await this.require('parameterTemplates');if(!this.ports.catalog)throw new UnsupportedInventoryCapability('parameterTemplates');return this.ports.catalog.getParameterTemplates(id)}
