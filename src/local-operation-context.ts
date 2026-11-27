@@ -1,11 +1,11 @@
 import {authorizedNativeBase,type ProductionNativeTarget} from './native-production-authorization.js';
 // Explicit local acceptance context, separate from the fixture and PWA entry points.
 const contexts=new WeakSet<object>();
-export interface LocalOperationContext {readonly base:string;readonly token:string;readonly instanceId:string;readonly request:typeof fetch;readonly production?:ProductionNativeTarget}
+export interface LocalOperationContext {readonly base:string;readonly token:string;readonly instanceId:string;readonly request:typeof fetch;readonly production?:ProductionNativeTarget;readonly apiVersion?:232}
 export function localOperationBase(base:string){return authorizedNativeBase(base)}
 // The supplied dispatcher owns the read/write mode, exact operation allowlist and durable claim.
-export function createLocalOperationContext(base:string,token:string,instanceId:string,dispatcher:typeof fetch,production?:ProductionNativeTarget):LocalOperationContext{
- const u=authorizedNativeBase(base,production);
+export function createLocalOperationContext(base:string,token:string,instanceId:string,dispatcher:typeof fetch,production?:ProductionNativeTarget,apiVersion?:232):LocalOperationContext{
+ const u=authorizedNativeBase(base,production);if(apiVersion!==undefined&&(apiVersion!==232||production))throw Error('legacy context requires disposable instance');
  if(typeof token!=='string'||!token.trim()||/[\r\n]/.test(token)||typeof instanceId!=='string'||!instanceId.trim()||instanceId.length>256||typeof dispatcher!=='function')throw Error('invalid local acceptance context');
  const request:typeof fetch=(input,init)=>{
   if(typeof input!=='string'&&!(input instanceof URL))throw Error('invalid local request');
@@ -13,7 +13,7 @@ export function createLocalOperationContext(base:string,token:string,instanceId:
   if(target.origin!==u.origin||target.username||target.password||target.hash||!['GET','POST','PATCH'].includes(init?.method??'GET'))throw Error('unsafe local acceptance request');
   return dispatcher(target,{...init,redirect:'error',cache:'no-store'});
  };
- const ctx=Object.freeze({base:u.href,token,instanceId,request,production});
+ const ctx=Object.freeze({base:u.href,token,instanceId,request,production,...(apiVersion===232?{apiVersion}:{})});
  contexts.add(ctx);return ctx;
 }
 export function assertLocalOperationContext(ctx:LocalOperationContext,evidence?:{base:string;instanceId:string}){
