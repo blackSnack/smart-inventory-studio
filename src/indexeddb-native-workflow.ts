@@ -30,6 +30,9 @@ export class IndexedDbNativeWorkStore implements BrowserWorkStore{
  async acknowledge(scope:string,id:string,binding:string,ack:unknown){
   await this.change(scope,id,r=>{if(r.state!=='sent'||r.ackBinding!==binding||Object.hasOwn(r,'ack')||ack===undefined)throw Error('invalid acknowledgement');return {next:{...r,ack:structuredClone(ack)},value:undefined}});
  }
+ async abandonUnsent(scope:string,id:string){
+  await this.change(scope,id,r=>{if(r.state!=='reviewed'||r.ackBinding!==undefined)throw Error('only never-reserved work may be stopped');return {next:{...r,state:'blocked',result:{status:'blocked',reason:'operator stopped never-reserved operation',serverAuditRequired:true,productionWriteAllowed:false}},value:undefined}});
+ }
  async finish(scope:string,id:string,result:NativeWorkResult){
   await this.change(scope,id,r=>{if(r.state==='verified')throw Error('verified native operation is immutable');if(result.status==='verified'&&!Object.hasOwn(r,'ack'))throw Error('no correlated native acknowledgement');return {next:{...r,state:result.status,result:structuredClone(result)},value:undefined}});
  }

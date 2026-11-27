@@ -14,7 +14,7 @@ type Receipt=Awaited<ReturnType<NativeReceiptAcceptance['prepare']>>;
 type Part=Awaited<ReturnType<NativePartCreateAcceptance['prepare']>>;
 type Enrichment=Awaited<ReturnType<NativeEnrichmentAcceptance['prepare']>>;
 type Operations=Awaited<ReturnType<NativeOperationsAcceptance['prepare']>>;
-export type NativeWorkInput={id:string;kind:'receive-existing-part';payload:{partId:string;locationId:string;quantity:number}}|{id:string;kind:'create-part';payload:unknown}|{id:string;kind:'enrichment';payload:unknown}|{id:string;kind:'operation';payload:Operation};
+export type NativeWorkInput={id:string;kind:'receive-existing-part';payload:{partId:string;locationId:string;quantity:number}}|{id:string;kind:'create-part';payload:unknown}|{id:string;kind:'enrichment';payload:unknown;expectedBefore?:unknown}|{id:string;kind:'operation';payload:Operation};
 type NativePrepared={kind:'receive-existing-part';value:Receipt}|{kind:'create-part';value:Part}|{kind:'enrichment';value:Enrichment}|{kind:'operation';value:Operations};
 type Target={actorId:string;schemaSha256:string};
 export type BrowserPreparation={id:string;scope:string;target:Target;catalogHash:string;input:NativeWorkInput;prepared:NativePrepared;executionAllowed:false};
@@ -28,6 +28,7 @@ export interface BrowserWorkStore{
  acknowledge(scope:string,id:string,binding:string,ack:unknown):Promise<void>;
  get(scope:string,id:string):Promise<BrowserWorkRecord|undefined>;
  list(scope:string):Promise<BrowserWorkRecord[]>;
+ abandonUnsent(scope:string,id:string):Promise<void>;
  finish(scope:string,id:string,result:NativeWorkResult):Promise<void>;
 }
 const obj=(x:unknown):Record<string,unknown>=>{if(!x||typeof x!=='object'||Array.isArray(x))throw Error('invalid native response');return x as Record<string,unknown>};
@@ -62,6 +63,7 @@ export class BrowserNativeWorkflow{
   const read=new InvenTreeReadProvider(this.base.href,this.token,this.request);
   switch(kind){case 'categories':return read.list('api/part/category/');case 'templates':return read.list('api/parameter/template/',{for_model:'part.part'});case 'locations':return read.getLocations();case 'stock':return read.list('api/stock/',{location:validId(locationId),cascade:'false'})}
  }
+ async readMetadata(locationId:string){const r=obj((await this.get('api/metadata/stocklocation/'+validId(locationId)+'/')).data);return obj(r.metadata)}
  async searchParts(query:string){if(!query.trim())return [];return new InvenTreeReadProvider(this.base.href,this.token,this.request).searchParts(query.trim())}
  private receipt(){return NativeReceiptAcceptance.open(this.base.href,this.token,this.request)}
  private part(){return NativePartCreateAcceptance.open(this.base.href,this.token,this.request)}
@@ -73,7 +75,7 @@ export class BrowserNativeWorkflow{
   switch(input.kind){
    case 'receive-existing-part':{const p=input.payload;prepared={kind:input.kind,value:await this.receipt().prepare(this.scope,{partId:p.partId,quantity:p.quantity,allocations:[{locationId:p.locationId,quantity:p.quantity}]})};break}
    case 'create-part':prepared={kind:input.kind,value:await this.part().prepare(this.scope,input.payload)};break;
-   case 'enrichment':prepared={kind:input.kind,value:await this.enrichment().prepare(this.scope,input.payload)};break;
+   case 'enrichment':{const value=await this.enrichment().prepare(this.scope,input.payload);if(Object.hasOwn(input,'expectedBefore')&&(value.baseline.kind!=='parameter'||snapshotKey(value.baseline.before)!==snapshotKey(input.expectedBefore)))throw Error('reviewed parameter baseline changed');prepared={kind:input.kind,value};break}
    case 'operation':if(input.payload.id!==input.id)throw Error('operation ID mismatch');prepared={kind:input.kind,value:await this.operations().prepare(this.scope,input.payload)};break;
    default:throw Error('unsupported native workflow');
   }
@@ -112,6 +114,7 @@ export class BrowserNativeWorkflow{
  }
  async recover(id:string,store:BrowserWorkStore){
   const row=await store.get(this.scope,id);if(!row||row.state==='verified')throw Error('no pending native operation');
+  if(!row.ackBinding)throw Error('never reserved; explicitly stop the unsent operation');
   const p=row.preparation;await this.validate(p,row.approval);
   const r=await this.dispatch(p,store,true);await store.finish(p.scope,id,r);return r;
  }
