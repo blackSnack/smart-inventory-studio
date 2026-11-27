@@ -83,11 +83,12 @@ try:
    from urllib.parse import urlparse
    path=urlparse(req.url).path
    data={
-    '/api/schema/':{'openapi':'3.0.3','paths':{k:{'get':{}} for k in ['/api/part/{id}/','/api/part/category/','/api/part/category/parameters/','/api/parameter/','/api/company/part/manufacturer/','/api/company/part/','/api/attachment/']}},
+    '/api/schema/':{'openapi':'3.0.3','paths':{k:{'get':{}} for k in ['/api/part/{id}/','/api/part/category/','/api/part/category/parameters/','/api/parameter/','/api/parameter/template/','/api/company/part/manufacturer/','/api/company/part/','/api/attachment/']}},
     '/api/stock/location/':[{'pk':1,'name':'A','parent':None,'structural':False}],
     '/api/part/':[{'pk':42,'name':'10k resistor','IPN':'R-01','description':'±1%','category':1}],
     '/api/part/42/':{'pk':42,'name':'10k resistor','IPN':'R-01','description':'±1%','category':1},
     '/api/stock/':[{'pk':9,'part':42,'location':1,'quantity':'100'}],
+    '/api/parameter/template/':[{'pk':5,'name':'Resistance','units':'Ω','model_type':'part.part','enabled':True}],
     '/api/parameter/':[{'pk':20,'model_id':42,'model_type':'part.part','template':5,'data':'10kΩ'}],
     '/api/company/part/manufacturer/':[{'pk':21,'part':42,'manufacturer':3,'manufacturer_detail':{'pk':3,'name':'Fixture Maker'},'MPN':'FIX-10K'}],
     '/api/company/part/':[{'pk':22,'part':42,'supplier':9,'supplier_detail':{'pk':9,'name':'Fixture Supplier'},'SKU':'SKU-10K'}],
@@ -101,7 +102,7 @@ try:
    page.get_by_role('button',name='设置',exact=True).click();page.get_by_role('button',name='真实库存只读验证').click()
    page.get_by_label('服务地址').fill('https://inventory.example.test');page.get_by_label('只读 API Token').fill('synthetic-test');page.get_by_role('button',name='测试并连接').click()
    page.get_by_text('已连接 · 只读',exact=True).wait_for();page.get_by_label('全局库存搜索').fill('10k');page.get_by_role('button',name='搜索',exact=True).click()
-   page.get_by_role('button',name='查看 R-01 详情').click();dialog=page.get_by_role('dialog',name='元件详情');dialog.get_by_text('FIX-10K',exact=True).wait_for();capture(page,label)
+   page.get_by_role('button',name='查看 R-01 详情').click();dialog=page.get_by_role('dialog',name='元件详情');dialog.get_by_text('FIX-10K',exact=True).wait_for();dialog.get_by_text('Resistance · Ω',exact=True).wait_for();capture(page,label)
    live.close()
   b.close()
 finally:server.shutdown()

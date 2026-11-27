@@ -2,7 +2,7 @@ import type {InventoryReadPort,InventoryCapabilities,PartSummary,LocationSummary
 import type {ApprovedPlan,OperationTransport,Operation} from './operation-journal.js';
 export interface CategoryRef {id:string;name:string;parentId:string|null}
 export interface ParameterTemplateRef {id:string;name:string;unit:string|null;type:string}
-export interface ParameterValueRef {templateId:string;value:string|null}
+export interface ParameterValueRef {templateId:string;value:string|null;template?:{name:string;unit:string|null}}
 export interface SourceRef {kind:'manufacturer'|'supplier'|'datasheet'|'image'|'other';url:string;label:string}
 export interface PartRecord extends PartSummary {parameters:ParameterValueRef[];sources:SourceRef[];manufacturerParts:{manufacturer:string;mpn:string}[];supplierParts:{supplier:string;sku:string}[]}
 export interface CatalogReadPort {getPart(id:string):Promise<PartRecord>;getCategories():Promise<CategoryRef[]>;getParameterTemplates(categoryId:string):Promise<ParameterTemplateRef[]>}
