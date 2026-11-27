@@ -44,9 +44,9 @@ def exercise_live_enrichment(page,base,capture=None):
    suggestions.append({'key':'datasheetUrl','value':'https://example.test/spec','evidence':ev})
   route.fulfill(json={'choices':[{'message':{'content':json.dumps({'suggestions':suggestions})}}]},headers=headers)
  page.route('https://batch-inventory.example.test/**',inventory);page.route('https://batch-gateway.example.test/**',agent)
- page.goto(base);page.get_by_role('button',name='设置',exact=True).click();page.get_by_role('button',name='真实库存只读验证').click()
+ page.goto(base);page.get_by_role('button',name='设置',exact=True).click();page.get_by_role('button',name='配置 InvenTree').click()
  page.get_by_label('服务地址').fill('https://batch-inventory.example.test');page.get_by_label('只读 API Token').fill('fixture-token');page.get_by_role('button',name='测试并连接').click()
- page.get_by_text('已连接 · 只读',exact=True).wait_for();page.get_by_label('全局库存搜索').fill('fixture');page.get_by_role('button',name='搜索',exact=True).click()
+ page.get_by_text('已连接 · 只读',exact=True).wait_for();page.get_by_role('button',name='首页',exact=True).click();page.get_by_label('全局库存搜索').fill('fixture');page.get_by_role('button',name='搜索',exact=True).click()
  page.get_by_label('选择 R-01 补全',exact=True).check();page.get_by_label('选择 R-02 补全',exact=True).check();page.get_by_role('button',name='批量补全资料').click()
  page.get_by_role('button',name='读取待审核元件').click()
  for ipn in ['R-01','R-02']:

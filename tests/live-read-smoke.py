@@ -49,7 +49,7 @@ try:
   page.route('https://inventory.example.test/**',api)
   page.goto(f'http://127.0.0.1:{server.server_port}/');page.get_by_role('button',name='设置',exact=True).click();page.get_by_role('button',name='配置 InvenTree').click()
   page.get_by_label('服务地址').fill('https://inventory.example.test');page.get_by_label('只读 API Token').fill('synthetic-test');page.get_by_role('button',name='测试并连接').click()
-  page.get_by_text('已连接 · 只读',exact=True).wait_for();page.get_by_role('button',name='首页',exact=True).click();page.get_by_label('全局库存搜索').fill('10k');page.get_by_role('button',name='搜索',exact=True).click()
+  page.get_by_text('已连接 · 只读',exact=True).wait_for();assert page.get_by_role('heading',name='设置',exact=True).is_visible();page.get_by_role('button',name='首页',exact=True).click();page.get_by_label('全局库存搜索').fill('10k');page.get_by_role('button',name='搜索',exact=True).click()
   page.get_by_text('找到 2 种元件').wait_for();page.get_by_text('Cabinet A / A-01',exact=True).wait_for();page.get_by_text('100 件',exact=True).wait_for();page.get_by_text('已建档，暂无库存记录').wait_for()
   assert not any('/api/schema/' in u for m,u in seen)
   page.get_by_role('button',name='查看 R-01 详情').click();dialog=page.get_by_role('dialog',name='元件详情');dialog.get_by_role('alert').wait_for();assert not any('/api/part/42/' in u for m,u in seen)
