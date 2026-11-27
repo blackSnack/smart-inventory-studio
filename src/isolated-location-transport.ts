@@ -1,5 +1,6 @@
+import {assertLocalOperationContext,type LocalOperationContext} from './local-operation-context.js';
 import {probeSchema} from './provider-schema.js';
-import {readCabinetMetadata} from './cabinet-metadata.js';
+import {readCabinetMetadata,planCabinetMetadata} from './cabinet-metadata.js';
 import {InvenTreeReadAdapter,type LocationSummary} from './inventory-provider.js';
 import type {Operation,OperationTransport,Observation} from './operation-journal.js';
 // Explicit fixture-only transport. Never constructed by the production PWA.
@@ -27,17 +28,24 @@ function parse(operation:Operation):Rename|Meta{
 }
 function leaf(locations:LocationSummary[],locationId:string,parentId:string){const x=locations.find(l=>l.id===locationId);if(!x||x.parentId!==parentId||x.structural||locations.some(l=>l.parentId===locationId))throw Error('location precondition changed');return x}
 export class IsolatedLocationTransport implements OperationTransport{
- private constructor(private base:URL,private token:string,private metadataModel:string,private request:typeof fetch,private adapter:InvenTreeReadAdapter){}
+ private constructor(private base:URL,private token:string,private metadataModel:string,private request:typeof fetch,private adapter:InvenTreeReadAdapter,private allowManagedRevision=false){}
  static async open(config:{base:string;token:string;metadataModel:string;fixtureOnly:true},request:typeof fetch){
   const u=new URL(config.base.endsWith('/')?config.base:config.base+'/');if(config.fixtureOnly!==true||u.protocol!=='https:'||!u.hostname.endsWith('.test')||u.username||u.password||u.search||u.hash||!config.token.trim()||!/^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)?$/.test(config.metadataModel))throw Error('isolated fixture configuration required');
+  return IsolatedLocationTransport.openTransport(u,config,request);
+ }
+ static async openLocalAcceptance(ctx:LocalOperationContext){
+  assertLocalOperationContext(ctx);const config={token:ctx.token,metadataModel:'stocklocation'},request=ctx.request,u=new URL(ctx.base);
+  return IsolatedLocationTransport.openTransport(u,config,request,true);
+ }
+ private static async openTransport(u:URL,config:{token:string;metadataModel:string},request:typeof fetch,allowManagedRevision=false){
   const evidence=await probeSchema(u.href,config.token,[...required],request);if(evidence.operations.some(o=>!o.declared))throw Error('migration API not declared');
-  return new IsolatedLocationTransport(u,config.token,config.metadataModel,request,new InvenTreeReadAdapter(u.href,config.token,request));
+  return new IsolatedLocationTransport(u,config.token,config.metadataModel,request,new InvenTreeReadAdapter(u.href,config.token,request),allowManagedRevision);
  }
  private async call(path:string,method:'GET'|'PATCH',body?:Record<string,unknown>){const r=await this.request(new URL(path,this.base),{method,headers:{Authorization:'Token '+this.token,Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},redirect:'error',cache:'no-store',signal:AbortSignal.timeout(20000),...(body?{body:JSON.stringify(body)}:{})});if(!r.ok)throw Error('migration HTTP '+r.status);return r.json()}
  private async locations(){const l=await this.adapter.getLocations();if(new Set(l.map(x=>x.id)).size!==l.length)throw Error('duplicate locations');return l}
  private metadataPath(locationId:string){return 'api/metadata/'+this.metadataModel+'/'+locationId+'/'}
  private async metadata(locationId:string){const r=await this.call(this.metadataPath(locationId),'GET');if(!obj(r)||!obj(r.metadata))throw Error('invalid metadata response');return r.metadata}
- private verifyLeaves(o:Meta,l:LocationSummary[]){const root=l.find(x=>x.id===o.locationId);if(!root?.structural)throw Error('root changed');const binding=readCabinetMetadata(o.after,l,o.locationId);const compartments=binding?.layout.cells.flatMap(c=>c.drawer.compartments)??[];if(!binding||binding.revision!==0||binding.leafBindings.length!==compartments.length||binding.leafBindings.length!==o.leaves.length||binding.leafBindings.some(b=>!o.leaves.some(x=>x.locationId===b.locationId))||readCabinetMetadata(o.before,l,o.locationId)!==null)throw Error('invalid legacy binding');for(const expected of o.leaves){const x=leaf(l,expected.locationId,expected.parentId);if(x.name!==expected.name)throw Error('leaf name changed');let parent=x.parentId;const seen=new Set([x.id]);while(parent&&parent!==root.id){if(seen.has(parent))throw Error('cyclic tree');seen.add(parent);parent=l.find(y=>y.id===parent)?.parentId??null}if(parent!==root.id)throw Error('leaf outside root')}}
+ private verifyLeaves(o:Meta,l:LocationSummary[]){const root=l.find(x=>x.id===o.locationId);if(!root?.structural)throw Error('root changed');const binding=readCabinetMetadata(o.after,l,o.locationId);const compartments=binding?.layout.cells.flatMap(c=>c.drawer.compartments)??[];const previous=readCabinetMetadata(o.before,l,o.locationId);if(!binding||binding.leafBindings.length!==compartments.length||binding.leafBindings.length!==o.leaves.length||binding.leafBindings.some(b=>!o.leaves.some(x=>x.locationId===b.locationId)))throw Error('invalid legacy binding');if(this.allowManagedRevision){if(!equal(planCabinetMetadata(o.before,binding,previous?.revision??null,l,o.locationId),o.after)||previous?.leafBindings.some(b=>!binding.leafBindings.some(n=>n.locationId===b.locationId)))throw Error('invalid managed binding revision or removed location reference')}else if(binding.revision!==0||previous!==null)throw Error('invalid legacy binding');for(const expected of o.leaves){const x=leaf(l,expected.locationId,expected.parentId);if(x.name!==expected.name)throw Error('leaf name changed');let parent=x.parentId;const seen=new Set([x.id]);while(parent&&parent!==root.id){if(seen.has(parent))throw Error('cyclic tree');seen.add(parent);parent=l.find(y=>y.id===parent)?.parentId??null}if(parent!==root.id)throw Error('leaf outside root')}}
  async send(operation:Operation){const o=parse(operation),l=await this.locations();
   if(o.kind==='rename'){const x=leaf(l,o.locationId,o.parentId);if(x.name!==o.from||l.some(y=>y.id!==x.id&&y.parentId===x.parentId&&norm(y.name)===norm(o.to)))throw Error('rename precondition changed');await this.call('api/stock/location/'+o.locationId+'/','PATCH',{name:o.to});return}
   this.verifyLeaves(o,l);if(!equal(await this.metadata(o.locationId),o.before))throw Error('metadata precondition changed');await this.call(this.metadataPath(o.locationId),'PATCH',{metadata:o.after});

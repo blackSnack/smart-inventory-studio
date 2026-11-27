@@ -1,3 +1,4 @@
+import {assertLocalOperationContext,type LocalOperationContext} from './local-operation-context.js';
 import {fixtureEvidenceFor,type FixtureEvidenceConfig,type FixtureEvidenceStore} from './fixture-operation-evidence.js';
 import {probeSchema} from './provider-schema.js';
 import {InvenTreeReadProvider} from './domain.js';
@@ -42,6 +43,13 @@ export class IsolatedCategoryAssociationTransport implements OperationTransport{
  private constructor(private evidence:FixtureEvidenceStore,private base:URL,private token:string,private request:typeof fetch,private reader:InvenTreeAssociationReader,private read:InvenTreeReadProvider){}
  static async open(config:{base:string;token:string;fixtureOnly:true}&FixtureEvidenceConfig,request:typeof fetch){
   const evidence=fixtureEvidenceFor(config);const b=new URL(config.base.endsWith('/')?config.base:config.base+'/');if(config.fixtureOnly!==true||b.protocol!=='https:'||!b.hostname.endsWith('.test')||b.username||b.password||b.search||b.hash||!config.token.trim()||typeof request!=='function')throw Error('isolated fixture configuration required');
+  return IsolatedCategoryAssociationTransport.openTransport(b,config,request,evidence);
+ }
+ static async openLocalAcceptance(ctx:LocalOperationContext,evidence:FixtureEvidenceStore){
+  assertLocalOperationContext(ctx,evidence);const config={token:ctx.token},request=ctx.request,b=new URL(ctx.base);
+  return IsolatedCategoryAssociationTransport.openTransport(b,config,request,evidence);
+ }
+ private static async openTransport(b:URL,config:{token:string},request:typeof fetch,evidence:FixtureEvidenceStore){
   const e=await probeSchema(b.href,config.token,[{key:'associate',path:'/api/part/category/parameters/',method:'post'}],request);if(e.operations.some(o=>!o.declared))throw Error('association write API not declared');
   return new IsolatedCategoryAssociationTransport(evidence,b,config.token,request,await InvenTreeAssociationReader.open(b.href,config.token,request),new InvenTreeReadProvider(b.href,config.token,request));
  }
