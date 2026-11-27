@@ -3,13 +3,14 @@ from http.server import ThreadingHTTPServer,SimpleHTTPRequestHandler
 from functools import partial
 from threading import Thread
 from playwright.sync_api import sync_playwright
+from live_metadata_fixture import cabinet_response
 root=Path(__file__).resolve().parents[1]/'web'/'dist'
 server=ThreadingHTTPServer(('127.0.0.1',0),partial(SimpleHTTPRequestHandler,directory=str(root)))
 Thread(target=server.serve_forever,daemon=True).start()
 try:
  with sync_playwright() as p:
   b=p.chromium.launch();page=b.new_page(viewport={'width':390,'height':844});errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-  seen=[];detail_enabled=False;detail_fail=False;label_fail=False
+  seen=[];detail_enabled=False;detail_fail=False;label_fail=False;metadata_enabled=False;metadata_mode='valid'
   def api(route):
    req=route.request;seen.append((req.method,req.url))
    headers={'access-control-allow-origin':'*','access-control-allow-headers':'authorization,content-type','access-control-allow-methods':'GET, OPTIONS'}
@@ -18,7 +19,11 @@ try:
    if '/api/schema/' in req.url:
     paths=['/api/parameter/','/api/parameter/template/']
     if detail_enabled:paths+=['/api/part/{id}/','/api/part/category/','/api/part/category/parameters/','/api/company/part/manufacturer/','/api/company/part/','/api/attachment/']
+    if metadata_enabled:paths+=['/api/stock/location/','/api/metadata/{model}/{id}/']
     data={'openapi':'3.0.3','paths':{p:{'get':{}} for p in paths}}
+   elif '/api/metadata/stocklocation/1/' in req.url:
+    if metadata_mode=='denied':route.fulfill(status=403,headers=headers);return
+    data=cabinet_response() if metadata_mode=='valid' else {'metadata':{}}
    elif '/api/part/42/' in req.url:
     if detail_fail:route.fulfill(status=403,headers=headers);return
     data={'pk':42,'name':'10k resistor','IPN':'R-01','description':'±1%','category':1}
@@ -52,6 +57,12 @@ try:
   page.get_by_label('已核对草稿和来源',exact=False).check();assert page.get_by_role('button',name='导出审核草稿').is_enabled()
   page.get_by_label('阻值 · Ω').fill('20kΩ');assert page.get_by_role('button',name='导出审核草稿').is_disabled()
   page.get_by_label('已核对草稿和来源',exact=False).check();page.get_by_role('button',name='手动录入草稿').click();assert not page.get_by_label('已核对草稿和来源',exact=False).is_checked()
+  page.get_by_role('button',name='仓储',exact=True).click();page.get_by_text('读取柜体布局',exact=True).click();page.get_by_label('Metadata 模型标识').fill('stocklocation');page.get_by_label('柜体根库位').select_option('1');page.get_by_role('button',name='读取布局',exact=True).click();page.get_by_role('alert').wait_for()
+  metadata_enabled=True;metadata_mode='denied';page.get_by_role('button',name='读取布局',exact=True).click();page.get_by_role('alert').wait_for()
+  metadata_mode='empty';page.get_by_role('button',name='读取布局',exact=True).click();page.get_by_text('该库位没有已保存的柜体布局。').wait_for()
+  metadata_mode='valid';page.get_by_role('button',name='读取布局',exact=True).click();matrix=page.get_by_role('region',name='仓储矩阵');matrix.wait_for();matrix.get_by_text('库存未知',exact=True).wait_for();matrix.get_by_text('未绑定',exact=True).wait_for();matrix.get_by_text('未定义',exact=True).wait_for();assert matrix.get_by_text('空闲',exact=True).count()==0
+  matrix.get_by_role('button',name='A-01 库存未知').click();drawer=page.get_by_role('dialog',name='A-01');drawer.get_by_text('1 · 库位 2',exact=True).wait_for();drawer.get_by_role('button',name='关闭').click()
+  page.get_by_label('Metadata 模型标识').fill('changed');assert matrix.count()==0
   assert all(m in ('GET','OPTIONS') for m,u in seen);assert page.evaluate("!Object.values(localStorage).some(v=>v.includes('synthetic-test'))");assert not errors,errors;b.close()
 finally:server.shutdown()
 print('PASS: explicit read-only connection, global result distribution, zero stock distinction, no credential persistence (mocked network).')
