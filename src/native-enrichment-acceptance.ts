@@ -51,7 +51,7 @@ export class NativeEnrichmentAcceptance{
   return {data:JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes)) as unknown,bytes};
  }
  private async target(kind:Input['kind'],write:boolean){
-  const v=obj((await this.call('api/')).data);const api=nativeApiVersion(v,!!this.production),parameters='/'+parameterPath(api);
+  const v=obj((await this.call('api/')).data);const api=nativeApiVersion(v,this.production),parameters='/'+parameterPath(api);
   const auth=obj((await this.call('api/user/me/')).data);const actorId=id(auth.pk??auth.id);
   const schema=await this.call('api/schema/?format=json','GET',undefined,16*1024*1024);
   const required:RequiredOperation[]=[{key:'part',path:'/api/part/{id}/',method:'get'}];
