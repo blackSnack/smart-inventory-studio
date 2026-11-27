@@ -18,7 +18,7 @@ export class IsolatedPartCreateTransport implements OperationTransport{
  private constructor(private evidence:FixtureEvidenceStore,private base:URL,private token:string,private request:typeof fetch,private read:InvenTreeReadProvider){}
  static async open(config:{base:string;token:string;fixtureOnly:true}&FixtureEvidenceConfig,request:typeof fetch){
   const evidence=fixtureEvidenceFor(config);const b=new URL(config.base.endsWith('/')?config.base:config.base+'/');if(config.fixtureOnly!==true||b.protocol!=='https:'||!b.hostname.endsWith('.test')||b.username||b.password||b.search||b.hash||!config.token.trim())throw Error('isolated fixture configuration required');
-  const e=await probeSchema(b.href,config.token,[{key:'category',path:'/api/part/category/{id}/',method:'get'},{key:'parts',path:'/api/part/',method:'get'},{key:'create',path:'/api/part/',method:'post'},{key:'stock',path:'/api/stock/',method:'get'}],request);
+  const e=await probeSchema(b.href,config.token,[{key:'category',path:'/api/part/category/{id}/',method:'get'},{key:'parts',path:'/api/part/',method:'get'},{key:'create',path:'/api/part/',method:'post'},{key:'stock',path:'/api/stock/',method:'get'},{key:'parameters',path:'/api/parameter/',method:'get'}],request);
   if(e.operations.some(o=>!o.declared))throw Error('Part create API not declared');return new IsolatedPartCreateTransport(evidence,b,config.token,request,new InvenTreeReadProvider(b.href,config.token,request));
  }
  private async call(path:string,method:'GET'|'POST',body?:Record<string,unknown>){const r=await this.request(new URL(path,this.base),{method,headers:{Authorization:'Token '+this.token,Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},redirect:'error',cache:'no-store',signal:AbortSignal.timeout(20000),...(body?{body:JSON.stringify(body)}:{})});if(!r.ok)throw Error('Part HTTP '+r.status);return obj(await r.json())}
@@ -27,12 +27,13 @@ export class IsolatedPartCreateTransport implements OperationTransport{
  private verify(raw:unknown,p:Parsed){const r=obj(raw);if(r.IPN!==p.ipn||r.name!==p.name||r.description!==p.description||r.units!==p.units||id(r.category)!==p.categoryId||r.active!==true||r.virtual!==false||r.trackable!==false||r.is_template!==false||r.assembly!==false||r.component!==true)throw Error('Part readback mismatch');return id(r.pk)}
  async send(o:Operation){const s=structuredClone(o),p=parse(s),key=snapshotKey(s);if(!await this.evidence.claim(s))throw Error('already attempted; readback only');
   await this.category(p);if((await this.matching(p)).length)throw Error('existing IPN requires review');
-  const result=await this.call('api/part/','POST',{IPN:p.ipn,name:p.name,description:p.description,category:Number(p.categoryId),units:p.units,active:true,virtual:false,trackable:false,is_template:false,assembly:false,component:true});await this.evidence.record(s,{key,id:this.verify(result,p)});
+  const result=await this.call('api/part/','POST',{IPN:p.ipn,name:p.name,description:p.description,category:Number(p.categoryId),units:p.units,active:true,virtual:false,trackable:false,is_template:false,assembly:false,component:true,copy_category_parameters:false});await this.evidence.record(s,{key,id:this.verify(result,p)});
  }
  async observe(o:Operation):Promise<Observation>{try{const s=structuredClone(o),p=parse(s),ack=await this.evidence.read<{key:string;id:string}>(s);if(!ack||ack.key!==snapshotKey(s))return {status:'unknown',evidence:'Fixture: no correlated Part create acknowledgement; no replay'};
   await this.category(p);const rows=await this.matching(p);if(rows.length!==1||id(rows[0].pk)!==ack.id)return {status:'blocked',evidence:'Fixture: Part IPN or identity conflict'};
   try{this.verify(rows[0],p)}catch{return {status:'blocked',evidence:'Fixture: Part fields changed'}}
   if((await this.read.getStockByPart(ack.id)).length)return {status:'blocked',evidence:'Fixture: unexpected initial stock record'};
-  return {status:'verified',evidence:'Fixture: acknowledged partial Part record and no initial stock read back'};
+  if((await this.read.list('api/parameter/',{model_type:'part.part',model_id:ack.id})).length)return {status:'blocked',evidence:'Fixture: unexpected initial parameter record'};
+  return {status:'verified',evidence:'Fixture: acknowledged partial Part record; no initial stock or parameter records read back'};
  }catch{return {status:'unknown',evidence:'Fixture: Part readback unavailable'}}}
 }

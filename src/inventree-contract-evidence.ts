@@ -26,7 +26,7 @@ export const contractReads:readonly ReadSpec[]=[
  detail('location-metadata','/api/metadata/{model}/{id}/','metadata')
 ];
 export const contractWrites:readonly WriteSpec[]=[
- write('part-create','/api/part/','POST','IPN name description category units active virtual trackable is_template assembly component'),
+ write('part-create','/api/part/','POST','IPN name description category units active virtual trackable is_template assembly component copy_category_parameters'),
  write('category-create','/api/part/category/','POST','name parent description structural'),
  write('template-create','/api/parameter/template/','POST','name units description model_type enabled checkbox choices selectionlist'),
  write('category-association','/api/part/category/parameters/','POST','category template default_value'),
@@ -111,7 +111,26 @@ async function boundedJSON(r:Response,limit:number){
 }
 const hash=async(bytes:Uint8Array)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new Uint8Array(bytes))),b=>b.toString(16).padStart(2,'0')).join('');
 type Result={status:'ok'|'denied'|'redirect'|'http-error'|'unavailable'|'invalid-json';httpStatus?:number;data?:unknown;bytes?:Uint8Array;allow?:string[]};
-type Sample={status:string;httpStatus?:number;missingFields?:string[];paging?:string};
+type Sample={status:string;httpStatus?:number;missingFields?:string[];invalidFields?:string[];paging?:string};
+const positiveId=(v:unknown)=>typeof v==='number'&&Number.isSafeInteger(v)&&v>0||typeof v==='string'&&/^[1-9][0-9]{0,17}$/.test(v);
+const nullableId=(v:unknown)=>v===null||positiveId(v);
+const decimal=(v:unknown)=>typeof v==='number'&&Number.isSafeInteger(v)&&v>=0||typeof v==='string'&&/^\\d+(?:\\.\\d+)?$/.test(v);
+function invalidWireFields(key:string,row:unknown):string[]{
+ if(!obj(row))return ['record'];
+ const bad:string[]=[];const check=(k:string,p:(v:unknown)=>boolean)=>{if(Object.hasOwn(row,k)&&!p(row[k]))bad.push(k)};
+ const string=(v:unknown)=>typeof v==='string',nullableString=(v:unknown)=>v===null||string(v),bool=(v:unknown)=>typeof v==='boolean';
+ if(key==='location-metadata'){check('metadata',obj);return bad}
+ check('pk',positiveId);
+ for(const k of ['name','description','units','data','note','MPN','SKU','default_value','choices'])check(k,string);
+ for(const k of ['active','virtual','trackable','is_template','assembly','component','enabled','checkbox','structural','external','exclude_from_stock','in_stock','is_building'])check(k,bool);
+ for(const k of ['part','template','model_id','status','manufacturer','supplier'])check(k,positiveId);
+ for(const k of ['parent','location','category','selectionlist','supplier_part','purchase_order','sales_order','owner','customer','belongs_to','consumed_by'])check(k,nullableId);
+ for(const k of ['quantity','allocated','child_items','installed_items'])check(k,decimal);
+ for(const k of ['IPN','batch','serial','packaging','expiry_date','link','attachment','comment','model_type'])check(k,nullableString);
+ for(const k of ['manufacturer','supplier'])if(key===k+'-parts')check(k+'_detail',v=>obj(v)&&String(v.pk)===String(row[k])&&typeof v.name==='string'&&!!v.name.trim());
+ if(key==='category-bindings')check('template_detail',v=>obj(v)&&String(v.pk)===String(row.template));
+ return bad;
+}
 function statusOnly(r:Result){return {status:r.status,...(r.httpStatus===undefined?{}:{httpStatus:r.httpStatus})}}
 function pageShape(data:unknown,limit:number){
  if(Array.isArray(data))return data.length<=limit?{rows:data,mode:'unpaginated-small-sample',next:null,count:undefined}:undefined;
@@ -163,7 +182,7 @@ export async function collectInvenTreeEvidence(config:Config,request:typeof fetc
     rows.push(...secondPage);paging='two-pages-sampled';
    }
   }else rows=[first.data];
-  const missing=r.fields.filter(k=>rows.some(x=>!obj(x)||!Object.hasOwn(x,k)));
+  const missing=r.fields.filter(k=>rows.some(x=>!obj(x)||!Object.hasOwn(x,k))),invalid=[...new Set(rows.flatMap(x=>invalidWireFields(r.key,x)))];
   // Never confuse an empty collection with evidence of a compatible record.
   const scoped=rows.every(x=>{
    if(!obj(x))return false;
@@ -173,7 +192,7 @@ export async function collectInvenTreeEvidence(config:Config,request:typeof fetc
    if(!r.list&&r.key!=='location-metadata'&&String(x.pk)!==p.split('/').filter(Boolean).at(-1))return false;
    return true;
   });
-  reads[r.key]={status:!rows.length?'empty-unverified':missing.length?'fields-missing':!scoped?'scope-mismatch':'sample-compatible',httpStatus:first.httpStatus,missingFields:missing,paging};
+  reads[r.key]={status:!rows.length?'empty-unverified':missing.length?'fields-missing':invalid.length?'wire-shape-mismatch':!scoped?'scope-mismatch':'sample-shape-compatible',httpStatus:first.httpStatus,missingFields:missing,invalidFields:invalid,paging};
  }
  const cache=new Map<string,Result>();
  for(const w of contractWrites){
