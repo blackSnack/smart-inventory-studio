@@ -56,10 +56,10 @@ export class NativeReceiptAcceptance {
    if(receiptId(actual.pk)!==expected.id||actual.name!==expected.name||actual.structural!==expected.structural||actual.external!==false||(actual.parent===null?null:receiptId(actual.parent))!==expected.parentId)throw Error('legacy receipt location changed or external');
   }}
  }
- private reader(){return InvenTreeReceiptCandidateReader.open(this.base.href,this.token,this.request)}
+ private reader(api:NativeApiVersion){return InvenTreeReceiptCandidateReader.open(this.base.href,this.token,this.request,api===232)}
  async prepare(instanceId:string,input:ReceiptCandidateInput):Promise<Prepared>{
   if(input.allocations?.length!==1)throw Error('one explicit disposable receipt allocation required');
-  const {digest:schemaSha256,api}=await this.target(true),candidate=await (await this.reader()).readCandidate(instanceId,input);
+  const {digest:schemaSha256,api}=await this.target(true),candidate=await (await this.reader(api)).readCandidate(instanceId,input);
   await this.legacyLocation(candidate,api);
   return {base:this.base.href,schemaSha256,...(api===232?{apiVersion:232 as const}:{}),candidate,executionAllowed:false};
  }
@@ -73,7 +73,7 @@ export class NativeReceiptAcceptance {
  async execute(raw:Prepared,approval:unknown,evidence:NativeReceiptEvidence){
   const prepared=structuredClone(raw),binding=await this.validate(prepared,approval);
   const target=await this.target(true);matchesPreparedApi(target.api,prepared);if(target.digest!==prepared.schemaSha256)throw Error('schema changed after review');
-  const candidate=await (await this.reader()).recheck(prepared.candidate);await this.legacyLocation(candidate,target.api);
+  const candidate=await (await this.reader(target.api)).recheck(prepared.candidate);await this.legacyLocation(candidate,target.api);
   if(!await evidence.claim(binding))throw Error('receipt already attempted; observe only');
   const a=candidate.input.allocations[0];
   try{
@@ -91,7 +91,7 @@ export class NativeReceiptAcceptance {
   if(!ack?.stockId)return report('unknown','no correlated acknowledgement; never resend');
   try{
    const target=await this.target(false);matchesPreparedApi(target.api,prepared);if(target.digest!==prepared.schemaSha256)return report('unknown','schema changed');
-   const before=prepared.candidate,a=before.input.allocations[0],fresh=await (await this.reader()).readCandidate(before.instanceId,before.input);
+   const before=prepared.candidate,a=before.input.allocations[0],fresh=await (await this.reader(target.api)).readCandidate(before.instanceId,before.input);
    await this.legacyLocation(fresh,target.api);
    const stock=fresh.byLocation[a.locationId],created=stock.find(s=>s.id===ack.stockId);
    if(!created)return report('unknown','acknowledged stock not visible');
