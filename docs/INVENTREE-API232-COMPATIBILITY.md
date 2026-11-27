@@ -8,23 +8,18 @@ Target: InvenTree 0.16.7 / API 232, alongside existing 1.7.4 / API 570. The loca
 - [Stock endpoints](https://github.com/inventree/InvenTree/blob/0.16.7/src/backend/InvenTree/stock/api.py), [serializers](https://github.com/inventree/InvenTree/blob/0.16.7/src/backend/InvenTree/stock/serializers.py), [model](https://github.com/inventree/InvenTree/blob/0.16.7/src/backend/InvenTree/stock/models.py): stock transfer POST supports items[].pk, items[].quantity, location; optional fields batch/status/packaging, not merge. Model move splits on partial quantity, relocates on full quantity. Do not send modern merge:false as if enforced. Validate exact lineage and quantity, server settings, target occupancy, and failure/readback behavior before enabling.
 - Location-specific metadata route is declared in the tagged [stock API](https://github.com/inventree/InvenTree/blob/0.16.7/src/backend/InvenTree/stock/api.py): /api/stock/location/{id}/metadata/. The read adapter now selects that route if declared. Attachment list/create and link/file representation are present in [common API](https://github.com/inventree/InvenTree/blob/0.16.7/src/backend/InvenTree/common/api.py) and [serializer](https://github.com/inventree/InvenTree/blob/0.16.7/src/backend/InvenTree/common/serializers.py); runtime permission and model choices still need verification.
 
-## This increment
+## Implementation increment
 
-Schema-selected legacy parameter search, catalog details, category association and location metadata readers, preserving modern routes and fail-closed schema checks. Synthetic regression coverage only until CI completes. No write gate changed. No claim of full application support.
+Both exact version pairs (0.16.7/API 232 and 1.7.4/API 570) are selected explicitly in native and browser workflows. Legacy Part creation sends minimum_stock:0; ordinary receipt checks the single-object acknowledgement. Parameter creation/update, scalar templates, category association, source links, location creation/rename, metadata, full and partial transfers use version-specific wire contracts. Missing parameter note remains null. Legacy stock lifecycle is cross-checked against complete unfiltered, positive and negative in_stock results and a repeated baseline; unsupported quantity precision, external ancestry and inconsistent filters block mutation. The old transfer payload does not send merge. Cabinet layout split/merge preserves StockItem lineage and does not merge/delete stock records.
+
+Production authorization binds the exact software/API pair while retaining HTTPS, frozen catalog, private evidence, permissions and per-operation approval. The draft catalog still blocks production activation. No production authorization or write has been performed.
 
 ## Remaining acceptance
 
-| Workflow | 232 server evidence | Studio status |
-|---|---|---|
-| Identity, roles, part/category/stock/location reads | local 200 | runtime PWA not verified |
-| Parameter filter/search, category mapping | tagged source; main parameter endpoints local 200 | this increment; CI pending |
-| Part detail/parameters and supplier/manufacturer data | parameter shape differs; company/attachment APIs exist | read adapter implemented; runtime pending |
-| Category creation, part creation, receiving, template creation and parameter changes | list/create and detail APIs in tagged source | write payload/schema and readback pending |
-| Source links, image upload and attachment detail | attachment list/create and link/file fields present | actual image upload and link write pending |
-| Cabinet metadata read/write, location creation/rename, batch construction | location APIs and location-specific metadata exist | read adapter implemented; OPTIONS and write preservation pending |
-| Full and partial transfers; split/merge cabinet layout | native transfer and split implemented; no per-item merge flag | version-specific safety contract, isolated test pending |
-
-BrowserNativeWorkflow and native acceptance paths still require 1.7.4 / 570. Keep this restriction until full 232 contracts and safety tests are implemented. Do not broaden production authorization, catalog freeze, target binding or operation journal. Existing connection/persistence work in #155/PR #156 remains separate. No production writes or upgrade performed. Issue #157 stays open; real integration/device acceptance #23/#24 stays open.
+- Run exact-head core and React CI; synthetic fixtures cover both dialects, native browser receipt, source/parameter/category/location writes, full/partial transfer, cabinet layout split/merge, and rejection of unsafe authorization.
+- Execute the [API 232 isolated acceptance checklist](INVENTREE-API232-ACCEPTANCE.md) against an authorized disposable 0.16.7 instance. Actual schema, runtime permissions, pagination, readback and native audit must be confirmed. CI is not real-instance acceptance.
+- Existing connection/persistence #155/PR #156 and real integration/device acceptance #23/#24 remain separate. Issue #157 remains open until its acceptance criteria are met.
+- Binary image upload, supplier/manufacturer identity creation, stock-record merge/delete and unrestricted category reparenting are not implemented by this compatibility increment.
 
 ## Official schema audit: API 232 is the primary acceptance baseline
 
@@ -38,4 +33,4 @@ Pinned upstream [API 232 OpenAPI export](https://github.com/inventree/schema/blo
 - Metadata field is unconstrained JSON in the schema; require object shape, namespace isolation and full readback. Images/attachments have declared routes; multipart and actual file behavior need isolated runtime tests.
 - Existing API 570 schema/authorization gates remain intact; 232 native writes must get their own reviewed contract. A route or field declaration never authorizes a write.
 
-Offline reproduction with the actual instance's read-only JSON schema: `node scripts/audit-inventree-api232.mjs local-schema.json`. Reports SHA-256, all 36 operation results, per-field status/type, filters, content type and extra required fields; exit 2 for gaps, 1 for malformed/wrong-version input, 0 for declaration checks only. Does not access a network or grant writes. Keep local schema and credentials out of version control; upload only sanitized evidence if required. Official matrix was extracted from upstream YAML with targeted indentation inspection, not a general YAML validator. The new offline JSON audit and synthetic tests are committed; CI and actual instance evidence remain pending.
+Offline reproduction with the actual instance's read-only JSON schema: `node scripts/audit-inventree-api232.mjs local-schema.json`. Reports SHA-256, all 36 operation results, per-field status/type, filters, content type and extra required fields; exit 2 for gaps, 1 for malformed/wrong-version input, 0 for declaration checks only. Does not access a network or grant writes. Keep local schema and credentials out of version control; upload only sanitized evidence if required. Official matrix was extracted from upstream YAML with targeted indentation inspection, not a general YAML validator. The offline JSON audit and synthetic tests are committed. Actual instance evidence remains pending.
