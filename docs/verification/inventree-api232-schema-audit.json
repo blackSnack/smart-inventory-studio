@@ -6,7 +6,48 @@
     "apiVersion": 232,
     "softwareTarget": "0.16.7",
     "characterCount": 855133,
-    "scope": "official archived schema, not local server schema; focused indentation extraction of operation methods, component refs, properties, query parameters and top-level required fields; not a general YAML validator"
+    "scope": "official archived schema, not local server schema; focused indentation extraction of operation methods, component refs, properties, query parameters and top-level required fields; not a general YAML validator; corrected inline empty-object properties by direct inspection of official YAML Metadata and PatchedMetadata components",
+    "sourceConfirmedExceptions": [
+      {
+        "key": "stock-list",
+        "fields": [
+          "part",
+          "include_variants",
+          "location",
+          "cascade"
+        ],
+        "source": "https://github.com/inventree/InvenTree/blob/0.16.7/src/backend/InvenTree/stock/api.py#L1130-L1175"
+      },
+      {
+        "key": "manufacturer-parts",
+        "fields": [
+          "manufacturer_detail"
+        ],
+        "source": "https://github.com/inventree/InvenTree/blob/0.16.7/src/backend/InvenTree/company/api.py#L149-L176"
+      },
+      {
+        "key": "supplier-parts",
+        "fields": [
+          "supplier_detail"
+        ],
+        "source": "https://github.com/inventree/InvenTree/blob/0.16.7/src/backend/InvenTree/company/api.py#L297-L350"
+      },
+      {
+        "key": "supplier-parts",
+        "fields": [
+          "supplier_detail"
+        ],
+        "source": "https://github.com/inventree/InvenTree/blob/0.16.7/src/backend/InvenTree/company/serializers.py#L367-L405"
+      },
+      {
+        "key": "part-create",
+        "fields": [
+          "minimum_stock"
+        ],
+        "source": "https://github.com/inventree/InvenTree/blob/0.16.7/src/backend/InvenTree/part/models.py#L1133-L1140",
+        "note": "Model default 0, schema declares required; explicitly send reviewed 0 or confirm OPTIONS/serializer behavior before write."
+      }
+    ]
   },
   "counts": {
     "pathCount": 291,
@@ -14,7 +55,7 @@
     "operationCount": 616,
     "checks": 36,
     "declared": 36,
-    "withGaps": 6
+    "withGaps": 4
   },
   "checks": [
     {
@@ -403,10 +444,11 @@
       "declared": true,
       "component": "Metadata",
       "fields": {
-        "metadata": "missing"
+        "metadata": "declared"
       },
       "query": {},
-      "extraRequired": []
+      "extraRequired": [],
+      "shapeCaveat": "metadata: {} (unconstrained JSON; runtime object/namespace preservation must be checked)"
     },
     {
       "key": "part-create",
@@ -597,10 +639,11 @@
       "declared": true,
       "component": "PatchedMetadata",
       "fields": {
-        "metadata": "missing"
+        "metadata": "declared"
       },
       "query": {},
-      "extraRequired": []
+      "extraRequired": [],
+      "shapeCaveat": "metadata: {} (unconstrained JSON; runtime object/namespace preservation must be checked)"
     },
     {
       "key": "stock-transfer",
@@ -644,5 +687,17 @@
     }
   ],
   "writeEnabled": false,
-  "runtimeVerified": false
+  "runtimeVerified": false,
+  "current570Incompatibilities": [
+    "/api/parameter/ and /api/parameter/template/ routes absent; use /api/part/parameter/ and /api/part/parameter/template/",
+    "parameter part replaces model_type/model_id; no note",
+    "template intrinsic Part scope; no model_type/enabled/selectionlist",
+    "category relation uses parameter_template and parameter_template_detail",
+    "stock item response lacks in_stock; server-side in_stock filter exists; require positive ID membership and unfiltered baseline; do not synthesize true",
+    "stock location lacks exclude_from_stock; no silent false default until equivalent invariant verified",
+    "stock quantity/allocated number/double; transfer quantity decimal string with max 5 decimals; reject unsafe precision",
+    "transfer items[].merge absent; old move implementation splits partial and relocates whole; separate record merge is a distinct operation",
+    "metadata uses /api/stock/location/{id}/metadata/; generic route absent",
+    "native browser, receipt, enrichment, part-create, operations, production authorization hardcoded 1.7.4/570; no bypass"
+  ]
 }
