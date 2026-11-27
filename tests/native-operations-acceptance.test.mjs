@@ -140,8 +140,8 @@ test('stable operation ID reservation cannot be replaced by a fresh hash',async 
  await e().record(key,a,{id:'42'});assert.deepEqual(await e().read(key,a),{ack:{id:'42'}});
 });
 
-test('native cabinet split creates missing leaves, redistributes one exact StockItem through successive verified splits, and archives empty original before metadata',async t=>{
- const f=fixture(),e=journal(t),layout=newCabinet('cab','cab',{layers:1,rows:1,cols:1},'CAB'),cell=layout.cells[0],whole=cell.drawer.compartments[0].id;
+for(const legacy of [false,true])test('native cabinet split and merge, repeated lineage, retirement and metadata / API '+(legacy?232:570),async t=>{
+ const f=fixture(legacy),e=journal(t),layout=newCabinet('cab','cab',{layers:1,rows:1,cols:1},'CAB'),cell=layout.cells[0],whole=cell.drawer.compartments[0].id;
  f.stocks.splice(1,1);const initial={...layout,cells:[{...cell,locationId:'2'}]};
  f.setMetadata({other:4,smart_inventory:{cabinet:{schemaVersion:1,revision:0,layout:initial,leafBindings:[{compartmentId:whole,locationId:'2'}]}}});
  const draft=replaceDrawer(initial,cell.id,splitCompartment(cell.drawer,whole,'vertical',[4,4,4],['a','b','c']));
