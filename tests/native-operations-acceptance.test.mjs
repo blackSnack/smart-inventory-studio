@@ -25,21 +25,22 @@ const ops={
  whole:{id:'whole',kind:'transfer-stock',payload:{physicalConfirmed:true,sourceId:'2',targetId:'3',stockItemId:'9',partId:'42',quantity:'10.25'}},
  split:{id:'split',kind:'transfer-stock',payload:{physicalConfirmed:true,sourceId:'2',targetId:'3',stockItemId:'9',partId:'42',quantity:'4.125',splitConfirmed:true}}
 };
-function fixture(){
+function fixture(legacy=false){
  const categories=[{pk:1,name:'Root',description:'',parent:null,structural:true},{pk:2,name:'Resistors',description:'',parent:1,structural:false},{pk:5,name:'Other',description:'',parent:1,structural:false}];
- const templates=[{pk:3,name:'Resistance',description:'',units:'Ω',model_type:'part.part',enabled:true,checkbox:false,choices:'',selectionlist:null}];
- const relations=[{pk:4,category:5,template:3,default_value:'12'}];
+ const templates=[{pk:3,name:'Resistance',description:'',units:'Ω',checkbox:false,choices:'',...(legacy?{}:{model_type:'part.part',enabled:true,selectionlist:null})}];
+ const templatePath=legacy?'/api/part/parameter/template/':'/api/parameter/template/';
+ const relations=[{pk:4,category:5,[legacy?'parameter_template':'template']:3,default_value:'12'}];
  const locations=[{pk:1,name:'Cabinet',parent:null,structural:true},{pk:2,name:'A',parent:1,structural:false},{pk:3,name:'B',parent:1,structural:false}];
  const stocks=structuredClone([stock,dest]),writes=[];let metadata={other:4},lost=false,actor=1;
- const schema={openapi:'3.0.3',paths:{'/api/part/category/':{get:{},post:{}},'/api/parameter/template/':{get:{},post:{}},'/api/part/category/parameters/':{get:{},post:{}},'/api/stock/location/':{get:{},post:{}},'/api/stock/location/{id}/':{get:{},patch:{}},'/api/metadata/{model}/{id}/':{get:{},patch:{}},'/api/stock/':{get:{}},'/api/stock/transfer/':{post:{}}}};
+ const schema={openapi:'3.0.3',paths:{'/api/part/category/':{get:{},post:{}},[templatePath]:{get:{},post:{}},'/api/part/category/parameters/':{get:{},post:{}},'/api/stock/location/':{get:{},post:{}},'/api/stock/location/{id}/':{get:{},patch:{}},'/api/metadata/{model}/{id}/':{get:{},patch:{}},'/api/stock/':{get:{}},'/api/stock/transfer/':{post:{}}}};
  const request=async(u,i={})=>{
   const url=new URL(u),method=i.method??'GET',path=url.pathname;assert.equal(url.origin,'http://127.0.0.1:8123');assert.equal(i.redirect,'error');assert.equal(new Headers(i.headers).get('Authorization'),'Token fixture');
-  if(path==='/api/')return Response.json({server:'InvenTree',version:'1.7.4',apiVersion:570});
+  if(path==='/api/')return Response.json({server:'InvenTree',version:legacy?'0.16.7':'1.7.4',apiVersion:legacy?232:570});
   if(path==='/api/user/me/')return Response.json({pk:actor});
   if(path==='/api/schema/')return Response.json(schema);
   if(method==='GET'){
    if(path==='/api/part/category/')return Response.json(categories);
-   if(path==='/api/parameter/template/')return Response.json(templates);
+   if(path===templatePath)return Response.json(templates);
    if(path==='/api/part/category/parameters/')return Response.json(relations);
    if(path==='/api/stock/location/')return Response.json(locations);
    if(path==='/api/metadata/stocklocation/1/')return Response.json({metadata});
@@ -49,7 +50,7 @@ function fixture(){
   }
   const body=JSON.parse(i.body);writes.push({path,method,body});let result;
   if(path==='/api/part/category/'){result={pk:11,...body};categories.push(result)}
-  else if(path==='/api/parameter/template/'){result={pk:12,...body};templates.push(result)}
+  else if(path===templatePath){result={pk:12,...body};templates.push(result)}
   else if(path==='/api/part/category/parameters/'){result={pk:13,...body};relations.push(result)}
   else if(path==='/api/stock/location/'){result={pk:14+locations.filter(x=>x.pk>=14).length,...body};locations.push(result)}
   else if(/^\/api\/stock\/location\/\d+\/$/.test(path)&&method==='PATCH'){result=locations.find(x=>x.pk===Number(path.split('/').at(-2)));result.name=body.name}
@@ -171,4 +172,14 @@ test('native cabinet split creates missing leaves, redistributes one exact Stock
  for(const item of mergeQueue){const work=item.kind==='operation'?item:await resolveNativeLayoutItem(item,'fixture',store,nativeLocationTree(f.locations));const {p}=await run(f,work.payload,e),binding=await nativeOperationsPreparationHash(p),key=createHash('sha256').update(JSON.stringify({base:p.base,instanceId:p.instanceId,operationId:p.operation.id})).digest('hex'),ack=(await e().read(key,binding))?.ack;records.set(item.id,{state:'verified',ackBinding:binding,ack,preparation:{scope:'fixture',input:work}})}
  assert.deepEqual(f.stocks.map(x=>[x.pk,x.location,x.quantity,x.parent,x.child_items]),[[9,3,'4.0000',null,2],[15,3,'4.1250',9,0],[16,3,'2.1250',9,0]]);
  assert.equal(f.metadata.smart_inventory.cabinet.leafBindings.length,1);assert.equal(f.metadata.smart_inventory.cabinet.leafBindings[0].locationId,'3');assert.equal(f.stocks.reduce((n,x)=>n+Number(x.quantity),0),10.25);assert.equal(f.locations.find(x=>x.pk===14).name,retiredLocationName('14'));assert.equal(f.locations.find(x=>x.pk===15).name,retiredLocationName('15'));
+});
+
+test('232 definition operations preserve exact approved wires and old category defaults',async t=>{
+ const f=fixture(true),e=journal(t);
+ const {p}=await run(f,ops.category,e);assert.equal(p.apiVersion,232);
+ await run(f,ops.template,e);await run(f,ops.associate,e);
+ assert.deepEqual(f.writes.map(w=>w.path),['/api/part/category/','/api/part/parameter/template/','/api/part/category/parameters/']);
+ assert.deepEqual(f.writes[1].body,{name:'CPU Core',units:'',description:'Fixture',checkbox:false,choices:''});
+ assert.deepEqual(f.writes[2].body,{category:2,parameter_template:3,default_value:''});
+ assert.equal(f.relations[0].default_value,'12');
 });
