@@ -1,6 +1,9 @@
 import {planExpansion,type Cell} from './domain.js';
-import {validateDrawer,type Drawer} from './storage-layout.js';
+import {validateDrawer,splitByRatio,MAX_COMPARTMENTS,type Drawer} from './storage-layout.js';
 export interface Dimensions {layers:number;rows:number;cols:number}
+export interface DrawerTemplate {count:number;axis:'horizontal'|'vertical'}
+// v1 coordinates are retained: row = visible tier, col = column; layer is a legacy plane.
+export const frontDimensions=(tiers:number,columns:number):Dimensions=>({layers:1,rows:tiers,cols:columns});
 export interface CabinetCell extends Cell {locationId:string|null;drawer:Drawer}
 export interface CabinetLayout {schemaVersion:1;id:string;name:string;revision:number;dimensions:Dimensions;cells:CabinetCell[]}
 export interface ExistingLocation {id:string;name:string;parentId:string|null;structural:boolean}
@@ -8,9 +11,12 @@ export interface Binding {cellId:string;locationId:string}
 const nonempty=(s:string)=>typeof s==='string'&&s.trim().length>0;
 const coordinate=(c:Pick<Cell,'layer'|'row'|'col'>)=>c.layer+'/'+c.row+'/'+c.col;
 function nameFor(prefix:string,c:Pick<Cell,'layer'|'row'|'col'>){return prefix+'-L'+(c.layer+1)+'-R'+(c.row+1)+'-C'+(c.col+1)}
-function makeCell(id:string,c:Omit<Cell,'id'>,name:string):CabinetCell {
+function makeCell(id:string,c:Omit<Cell,'id'>,name:string,template?:DrawerTemplate):CabinetCell {
  const cellId=id+':'+coordinate(c);
- return {...c,id:cellId,name,locationId:null,drawer:{id:cellId,width:12,height:12,revision:0,compartments:[{id:cellId+':whole',x:0,y:0,width:12,height:12}]}};
+ const whole:Drawer={id:cellId,width:12,height:12,revision:0,compartments:[{id:cellId+':whole',x:0,y:0,width:12,height:12}]};
+ if(template&&(!Number.isSafeInteger(template.count)||template.count<1||template.count>MAX_COMPARTMENTS||!['horizontal','vertical'].includes(template.axis)))throw Error('初始分隔数量无效');
+ const drawer=template&&template.count>1?{...splitByRatio(whole,whole.compartments[0].id,template.axis,Array(template.count).fill(1),Array.from({length:template.count},(_,i)=>cellId+':initial:'+i)),revision:0}:whole;
+ return {...c,id:cellId,name,locationId:null,drawer};
 }
 export function validateCabinet(c:CabinetLayout):void{
  if(c.schemaVersion!==1||!nonempty(c.id)||!nonempty(c.name)||!Number.isSafeInteger(c.revision)||c.revision<0)throw Error('invalid cabinet');
@@ -20,15 +26,15 @@ export function validateCabinet(c:CabinetLayout):void{
   if(x.locationId!==null){if(!nonempty(x.locationId)||refs.has(x.locationId))throw Error('duplicate location binding');refs.add(x.locationId)}
  }
 }
-export function newCabinet(id:string,name:string,dims:Dimensions,prefix:string):CabinetLayout{
+export function newCabinet(id:string,name:string,dims:Dimensions,prefix:string,template?:DrawerTemplate):CabinetLayout{
  if(!nonempty(prefix))throw Error('missing naming prefix');
- const cells=planExpansion([],dims).create.map(c=>makeCell(id,c,nameFor(prefix,c)));
+ const cells=planExpansion([],dims).create.map(c=>makeCell(id,c,nameFor(prefix,c),template));
  const next:CabinetLayout={schemaVersion:1,id,name,revision:0,dimensions:{...dims},cells};validateCabinet(next);return next;
 }
-export function expandCabinet(layout:CabinetLayout,dims:Dimensions,prefix:string):CabinetLayout{
+export function expandCabinet(layout:CabinetLayout,dims:Dimensions,prefix:string,template?:DrawerTemplate):CabinetLayout{
  validateCabinet(layout);if(!nonempty(prefix)||dims.layers<layout.dimensions.layers||dims.rows<layout.dimensions.rows||dims.cols<layout.dimensions.cols)throw Error('cannot shrink cabinet');
  const p=planExpansion(layout.cells,dims),names=new Set(layout.cells.map(c=>c.name));
- const created=p.create.map(c=>{const base=nameFor(prefix,c);let name=base,n=1;while(names.has(name))name=base+'-'+(++n);names.add(name);return makeCell(layout.id,c,name)});
+ const created=p.create.map(c=>{const base=nameFor(prefix,c);let name=base,n=1;while(names.has(name))name=base+'-'+(++n);names.add(name);return makeCell(layout.id,c,name,template)});
  const next={...layout,revision:layout.revision+1,dimensions:{...dims},cells:[...layout.cells,...created]};validateCabinet(next);return next;
 }
 export function bindLocations(layout:CabinetLayout,bindings:Binding[],existing:ExistingLocation[]):CabinetLayout{
