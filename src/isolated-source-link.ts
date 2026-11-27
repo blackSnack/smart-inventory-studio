@@ -1,3 +1,4 @@
+import {fixtureEvidenceFor,type FixtureEvidenceConfig,type FixtureEvidenceStore} from './fixture-operation-evidence.js';
 import {probeSchema} from './provider-schema.js';
 import {InvenTreeReadProvider} from './domain.js';
 import {snapshotKey} from './approved-snapshot.js';
@@ -12,20 +13,20 @@ function parse(o:Operation){if(o.kind!=='set-part-source'||!o.id.trim())throw Er
 type Parsed=ReturnType<typeof parse>;
 const equivalent=(r:LinkRow,url:string)=>{try{return r.link!==null&&safeUrl(r.link)===url}catch{return false}};
 export class IsolatedSourceLinkTransport implements OperationTransport{
- private attempted=new Set<string>();private ack=new Map<string,{key:string;id:string;before:LinkRow[]}>();
- private constructor(private base:URL,private token:string,private request:typeof fetch,private read:InvenTreeReadProvider){}
- static async open(config:{base:string;token:string;fixtureOnly:true},request:typeof fetch){
-  const b=new URL(config.base.endsWith('/')?config.base:config.base+'/');if(config.fixtureOnly!==true||b.protocol!=='https:'||!b.hostname.endsWith('.test')||b.username||b.password||b.search||b.hash||!config.token.trim())throw Error('isolated fixture configuration required');
+
+ private constructor(private evidence:FixtureEvidenceStore,private base:URL,private token:string,private request:typeof fetch,private read:InvenTreeReadProvider){}
+ static async open(config:{base:string;token:string;fixtureOnly:true}&FixtureEvidenceConfig,request:typeof fetch){
+  const evidence=fixtureEvidenceFor(config);const b=new URL(config.base.endsWith('/')?config.base:config.base+'/');if(config.fixtureOnly!==true||b.protocol!=='https:'||!b.hostname.endsWith('.test')||b.username||b.password||b.search||b.hash||!config.token.trim())throw Error('isolated fixture configuration required');
   const e=await probeSchema(b.href,config.token,[{key:'part',path:'/api/part/{id}/',method:'get'},{key:'attachments',path:'/api/attachment/',method:'get'},{key:'create',path:'/api/attachment/',method:'post'}],request);
-  if(e.operations.some(o=>!o.declared))throw Error('source API not declared');return new IsolatedSourceLinkTransport(b,config.token,request,new InvenTreeReadProvider(b.href,config.token,request));
+  if(e.operations.some(o=>!o.declared))throw Error('source API not declared');return new IsolatedSourceLinkTransport(evidence,b,config.token,request,new InvenTreeReadProvider(b.href,config.token,request));
  }
  private async call(path:string,method:'GET'|'POST',body?:Record<string,unknown>){const r=await this.request(new URL(path,this.base),{method,headers:{Authorization:'Token '+this.token,Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},redirect:'error',cache:'no-store',signal:AbortSignal.timeout(20000),...(body?{body:JSON.stringify(body)}:{})});if(!r.ok)throw Error('source HTTP '+r.status);return obj(await r.json())}
  private async current(p:Parsed){const part=await this.call('api/part/'+p.partId+'/','GET');if(id(part.pk)!==p.partId||part.IPN!==p.ipn||part.active!==true)throw Error('Part identity changed');const rows=(await this.read.list('api/attachment/',{model_type:'part',model_id:p.partId})).map(r=>row(r,p.partId));if(new Set(rows.map(r=>r.id)).size!==rows.length)throw Error('duplicate attachment ID');return rows.sort((a,b)=>a.id.localeCompare(b.id))}
- async send(o:Operation){const s=structuredClone(o),p=parse(s),key=snapshotKey(s);if(this.attempted.has(s.id))throw Error('already attempted; readback only');this.attempted.add(s.id);const before=await this.current(p);if(before.some(r=>equivalent(r,p.url)))throw Error('existing source link requires review');
+ async send(o:Operation){const s=structuredClone(o),p=parse(s),key=snapshotKey(s);if(!await this.evidence.claim(s))throw Error('already attempted; readback only');const before=await this.current(p);if(before.some(r=>equivalent(r,p.url)))throw Error('existing source link requires review');
   const result=row(await this.call('api/attachment/','POST',{model_type:'part',model_id:Number(p.partId),link:p.url,comment:p.comment}),p.partId);
-  if(result.link!==p.url||result.comment!==p.comment||result.attachment!==null&&result.attachment!==''||before.some(r=>r.id===result.id))throw Error('source acknowledgement mismatch');this.ack.set(s.id,{key,id:result.id,before});
+  if(result.link!==p.url||result.comment!==p.comment||result.attachment!==null&&result.attachment!==''||before.some(r=>r.id===result.id))throw Error('source acknowledgement mismatch');await this.evidence.record(s,{key,id:result.id,before});
  }
- async observe(o:Operation):Promise<Observation>{try{const s=structuredClone(o),p=parse(s),ack=this.ack.get(s.id),rows=await this.current(p);if(!ack||ack.key!==snapshotKey(s))return {status:'unknown',evidence:'Fixture: no correlated link acknowledgement; no replay'};
+ async observe(o:Operation):Promise<Observation>{try{const s=structuredClone(o),p=parse(s),ack=await this.evidence.read<{key:string;id:string;before:LinkRow[]}>(s),rows=await this.current(p);if(!ack||ack.key!==snapshotKey(s))return {status:'unknown',evidence:'Fixture: no correlated link acknowledgement; no replay'};
   const created=rows.find(r=>r.id===ack.id);if(!created)return {status:'unknown',evidence:'Fixture: acknowledged attachment not visible'};
   if(created.link!==p.url||created.comment!==p.comment||created.attachment!==null&&created.attachment!==''||snapshotKey(rows.filter(r=>r.id!==ack.id))!==snapshotKey(ack.before))return {status:'blocked',evidence:'Fixture: link or attachment baseline changed'};
   return {status:'verified',evidence:'Fixture: acknowledged link and existing attachment references read back'};

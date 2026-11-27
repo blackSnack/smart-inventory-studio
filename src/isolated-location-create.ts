@@ -1,3 +1,4 @@
+import {fixtureEvidenceFor,type FixtureEvidenceConfig,type FixtureEvidenceStore} from './fixture-operation-evidence.js';
 import {probeSchema} from './provider-schema.js';
 import {InvenTreeReadProvider} from './domain.js';
 import {InvenTreeReadAdapter,type LocationSummary} from './inventory-provider.js';
@@ -16,23 +17,23 @@ function parse(o:Operation){
 type Parsed=ReturnType<typeof parse>;
 const sorted=(rows:LocationSummary[])=>rows.slice().sort((a,b)=>a.id.localeCompare(b.id));
 export class IsolatedLocationCreateTransport implements OperationTransport{
- private attempted=new Set<string>();private ack=new Map<string,{key:string;id:string;before:LocationSummary[]}>();
- private constructor(private base:URL,private token:string,private request:typeof fetch,private read:InvenTreeReadProvider,private locations:InvenTreeReadAdapter){}
- static async open(config:{base:string;token:string;fixtureOnly:true},request:typeof fetch){
-  const b=new URL(config.base.endsWith('/')?config.base:config.base+'/');if(config.fixtureOnly!==true||b.protocol!=='https:'||!b.hostname.endsWith('.test')||b.username||b.password||b.search||b.hash||!config.token.trim())throw Error('isolated fixture configuration required');
+
+ private constructor(private evidence:FixtureEvidenceStore,private base:URL,private token:string,private request:typeof fetch,private read:InvenTreeReadProvider,private locations:InvenTreeReadAdapter){}
+ static async open(config:{base:string;token:string;fixtureOnly:true}&FixtureEvidenceConfig,request:typeof fetch){
+  const evidence=fixtureEvidenceFor(config);const b=new URL(config.base.endsWith('/')?config.base:config.base+'/');if(config.fixtureOnly!==true||b.protocol!=='https:'||!b.hostname.endsWith('.test')||b.username||b.password||b.search||b.hash||!config.token.trim())throw Error('isolated fixture configuration required');
   const e=await probeSchema(b.href,config.token,[{key:'locations',path:'/api/stock/location/',method:'get'},{key:'create',path:'/api/stock/location/',method:'post'},{key:'detail',path:'/api/stock/location/{id}/',method:'get'},{key:'stock',path:'/api/stock/',method:'get'}],request);
-  if(e.operations.some(o=>!o.declared))throw Error('location create API not declared');return new IsolatedLocationCreateTransport(b,config.token,request,new InvenTreeReadProvider(b.href,config.token,request),new InvenTreeReadAdapter(b.href,config.token,request));
+  if(e.operations.some(o=>!o.declared))throw Error('location create API not declared');return new IsolatedLocationCreateTransport(evidence,b,config.token,request,new InvenTreeReadProvider(b.href,config.token,request),new InvenTreeReadAdapter(b.href,config.token,request));
  }
  private async call(path:string,method:'GET'|'POST',body?:Record<string,unknown>){const r=await this.request(new URL(path,this.base),{method,headers:{Authorization:'Token '+this.token,Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},redirect:'error',cache:'no-store',signal:AbortSignal.timeout(20000),...(body?{body:JSON.stringify(body)}:{})});if(!r.ok)throw Error('location HTTP '+r.status);return obj(await r.json())}
  private parent(rows:LocationSummary[],p:Parsed){if(p.parentId!==null&&!rows.some(x=>x.id===p.parentId&&x.name===p.parentName&&x.structural))throw Error('approved structural parent changed')}
  private verify(raw:unknown,p:Parsed){const r=obj(raw);if(r.name!==p.name||r.description!==p.description||(r.parent===null?null:id(r.parent))!==p.parentId||r.structural!==p.structural||r.external!==false||r.exclude_from_stock!==false)throw Error('location readback mismatch');return id(r.pk)}
- async send(o:Operation){const s=structuredClone(o),p=parse(s),key=snapshotKey(s);if(this.attempted.has(s.id))throw Error('already attempted; readback only');this.attempted.add(s.id);
+ async send(o:Operation){const s=structuredClone(o),p=parse(s),key=snapshotKey(s);if(!await this.evidence.claim(s))throw Error('already attempted; readback only');
   const before=sorted(await this.locations.getLocations());this.parent(before,p);
   if(before.some(x=>x.parentId===p.parentId&&x.name.trim().toLowerCase()===p.name.toLowerCase()))throw Error('existing sibling requires review');
   const result=await this.call('api/stock/location/','POST',{name:p.name,description:p.description,parent:p.parentId===null?null:Number(p.parentId),structural:p.structural,external:false,exclude_from_stock:false});
-  const newId=this.verify(result,p);if(before.some(x=>x.id===newId))throw Error('existing ID returned for create');this.ack.set(s.id,{key,id:newId,before});
+  const newId=this.verify(result,p);if(before.some(x=>x.id===newId))throw Error('existing ID returned for create');await this.evidence.record(s,{key,id:newId,before});
  }
- async observe(o:Operation):Promise<Observation>{try{const s=structuredClone(o),p=parse(s),a=this.ack.get(s.id);if(!a||a.key!==snapshotKey(s))return {status:'unknown',evidence:'Fixture: no correlated location acknowledgement; no replay'};
+ async observe(o:Operation):Promise<Observation>{try{const s=structuredClone(o),p=parse(s),a=await this.evidence.read<{key:string;id:string;before:LocationSummary[]}>(s);if(!a||a.key!==snapshotKey(s))return {status:'unknown',evidence:'Fixture: no correlated location acknowledgement; no replay'};
   const rows=sorted(await this.locations.getLocations());this.parent(rows,p);const x=rows.find(l=>l.id===a.id);
   if(!x)return {status:'unknown',evidence:'Fixture: acknowledged location not visible'};
   if(x.name!==p.name||x.parentId!==p.parentId||x.structural!==p.structural||snapshotKey(rows.filter(l=>l.id!==a.id))!==snapshotKey(a.before))return {status:'blocked',evidence:'Fixture: location tree changed'};

@@ -1,3 +1,4 @@
+import {fixtureEvidenceFor,type FixtureEvidenceConfig,type FixtureEvidenceStore} from './fixture-operation-evidence.js';
 import {probeSchema} from './provider-schema.js';
 import {InvenTreeReadProvider} from './domain.js';
 import {snapshotKey} from './approved-snapshot.js';
@@ -18,12 +19,12 @@ function parse(o:Operation){
 type Parsed=ReturnType<typeof parse>;
 function valueRow(raw:unknown,p:Parsed):ValueRow{const r=obj(raw);if(r.model_type!=='part.part'||id(r.model_id)!==p.partId||id(r.template)!==p.templateId)throw Error('parameter scope changed');return {id:id(r.pk),value:str(r.data),note:str(r.note)}}
 export class IsolatedParameterWriteTransport implements OperationTransport{
- private attempted=new Set<string>();private ack=new Map<string,{key:string;id:string}>();
- private constructor(private base:URL,private token:string,private request:typeof fetch,private read:InvenTreeReadProvider){}
- static async open(config:{base:string;token:string;fixtureOnly:true},request:typeof fetch){
-  const b=new URL(config.base.endsWith('/')?config.base:config.base+'/');if(config.fixtureOnly!==true||b.protocol!=='https:'||!b.hostname.endsWith('.test')||b.username||b.password||b.search||b.hash||!config.token.trim())throw Error('isolated fixture configuration required');
+
+ private constructor(private evidence:FixtureEvidenceStore,private base:URL,private token:string,private request:typeof fetch,private read:InvenTreeReadProvider){}
+ static async open(config:{base:string;token:string;fixtureOnly:true}&FixtureEvidenceConfig,request:typeof fetch){
+  const evidence=fixtureEvidenceFor(config);const b=new URL(config.base.endsWith('/')?config.base:config.base+'/');if(config.fixtureOnly!==true||b.protocol!=='https:'||!b.hostname.endsWith('.test')||b.username||b.password||b.search||b.hash||!config.token.trim())throw Error('isolated fixture configuration required');
   const e=await probeSchema(b.href,config.token,[{key:'part',path:'/api/part/{id}/',method:'get'},{key:'template',path:'/api/parameter/template/{id}/',method:'get'},{key:'parameter',path:'/api/parameter/',method:'get'},{key:'create',path:'/api/parameter/',method:'post'},{key:'patch',path:'/api/parameter/{id}/',method:'patch'}],request);
-  if(e.operations.some(o=>!o.declared))throw Error('parameter API not declared');return new IsolatedParameterWriteTransport(b,config.token,request,new InvenTreeReadProvider(b.href,config.token,request));
+  if(e.operations.some(o=>!o.declared))throw Error('parameter API not declared');return new IsolatedParameterWriteTransport(evidence,b,config.token,request,new InvenTreeReadProvider(b.href,config.token,request));
  }
  private async call(path:string,method:'GET'|'POST'|'PATCH',body?:Record<string,unknown>){const r=await this.request(new URL(path,this.base),{method,headers:{Authorization:'Token '+this.token,Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},redirect:'error',cache:'no-store',signal:AbortSignal.timeout(20000),...(body?{body:JSON.stringify(body)}:{})});if(!r.ok)throw Error('parameter HTTP '+r.status);return obj(await r.json())}
  private async current(p:Parsed):Promise<ValueRow|null>{
@@ -34,14 +35,14 @@ export class IsolatedParameterWriteTransport implements OperationTransport{
   if(rows.length>1)throw Error('duplicate parameter records');return rows[0]??null;
  }
  async send(o:Operation){
-  const snapshot=structuredClone(o),p=parse(snapshot),key=snapshotKey(snapshot);if(this.attempted.has(snapshot.id))throw Error('already attempted; readback only');this.attempted.add(snapshot.id);
+  const snapshot=structuredClone(o),p=parse(snapshot),key=snapshotKey(snapshot);if(!await this.evidence.claim(snapshot))throw Error('already attempted; readback only');
   if(snapshotKey(await this.current(p))!==snapshotKey(p.before))throw Error('approved parameter baseline changed');
   const raw=p.before?await this.call('api/parameter/'+p.before.id+'/','PATCH',{data:p.value}):await this.call('api/parameter/','POST',{model_type:'part.part',model_id:Number(p.partId),template:Number(p.templateId),data:p.value});
   const row=valueRow(raw,p);if(row.value!==p.value||p.before&&(row.id!==p.before.id||row.note!==p.before.note))throw Error('parameter acknowledgement mismatch');
-  this.ack.set(snapshot.id,{key,id:row.id});
+  await this.evidence.record(snapshot,{key,id:row.id});
  }
  async observe(o:Operation):Promise<Observation>{try{
-  const snapshot=structuredClone(o),p=parse(snapshot),a=this.ack.get(snapshot.id),row=await this.current(p);
+  const snapshot=structuredClone(o),p=parse(snapshot),a=await this.evidence.read<{key:string;id:string}>(snapshot),row=await this.current(p);
   if(!a||a.key!==snapshotKey(snapshot))return {status:'unknown',evidence:'Fixture: no correlated write acknowledgement; no replay'};
   if(!row)return {status:'unknown',evidence:'Fixture: parameter not visible'};
   if(row.id!==a.id||row.value!==p.value||p.before&&row.note!==p.before.note)return {status:'blocked',evidence:'Fixture: parameter readback conflict'};

@@ -1,3 +1,4 @@
+import {fixtureEvidenceFor,type FixtureEvidenceConfig} from './fixture-operation-evidence.js';
 import {PROVIDER_OPERATION_KINDS,UnsupportedInventoryOperation,type InventoryFeatureSet} from './inventory-contract.js';
 import {IsolatedLocationTransport} from './isolated-location-transport.js';
 import {IsolatedLocationCreateTransport} from './isolated-location-create.js';
@@ -9,11 +10,11 @@ import {IsolatedParameterWriteTransport} from './isolated-parameter-write.js';
 import {IsolatedSourceLinkTransport} from './isolated-source-link.js';
 import type {Operation,OperationTransport} from './operation-journal.js';
 type Kind=typeof PROVIDER_OPERATION_KINDS[number];
-type Config={base:string;token:string;fixtureOnly:true;metadataModel?:string};
+type Config={base:string;token:string;fixtureOnly:true;metadataModel?:string}&FixtureEvidenceConfig;
 export class IsolatedOperationRouter implements OperationTransport{
  private constructor(private routes:ReadonlyMap<string,OperationTransport>){}
  static async open(config:Config,kinds:readonly Kind[],request:typeof fetch){
-  const cfg={...config},selected=[...kinds];
+  const evidence=fixtureEvidenceFor(config),cfg={...config,evidence,instanceId:evidence.instanceId},selected=[...kinds];
   const base=new URL(cfg.base);if(cfg.fixtureOnly!==true||base.protocol!=='https:'||!base.hostname.endsWith('.test')||base.username||base.password||base.search||base.hash||!cfg.token.trim()||typeof request!=='function')throw Error('isolated fixture configuration required');
   if(!selected.length||new Set(selected).size!==selected.length||selected.some(k=>!PROVIDER_OPERATION_KINDS.includes(k)))throw Error('invalid fixture operation selection');
   const groups:{kinds:Kind[];open:()=>Promise<OperationTransport>}[]=[

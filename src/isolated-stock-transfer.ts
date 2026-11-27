@@ -1,3 +1,4 @@
+import {fixtureEvidenceFor,type FixtureEvidenceConfig,type FixtureEvidenceStore} from './fixture-operation-evidence.js';
 import {probeSchema} from './provider-schema.js';
 import {InvenTreeReadProvider} from './domain.js';
 import {InvenTreeReadAdapter} from './inventory-provider.js';
@@ -27,20 +28,20 @@ function parse(o:Operation){
 }
 type Parsed=ReturnType<typeof parse>;
 export class IsolatedStockTransferTransport implements OperationTransport{
- private attempted=new Set<string>();private ack=new Map<string,string>();
- private constructor(private base:URL,private token:string,private request:typeof fetch,private read:InvenTreeReadProvider,private locations:InvenTreeReadAdapter){}
- static async open(config:{base:string;token:string;fixtureOnly:true},request:typeof fetch){
-  const b=new URL(config.base.endsWith('/')?config.base:config.base+'/');if(config.fixtureOnly!==true||b.protocol!=='https:'||!b.hostname.endsWith('.test')||b.username||b.password||b.search||b.hash||!config.token.trim())throw Error('isolated fixture configuration required');
+
+ private constructor(private evidence:FixtureEvidenceStore,private base:URL,private token:string,private request:typeof fetch,private read:InvenTreeReadProvider,private locations:InvenTreeReadAdapter){}
+ static async open(config:{base:string;token:string;fixtureOnly:true}&FixtureEvidenceConfig,request:typeof fetch){
+  const evidence=fixtureEvidenceFor(config);const b=new URL(config.base.endsWith('/')?config.base:config.base+'/');if(config.fixtureOnly!==true||b.protocol!=='https:'||!b.hostname.endsWith('.test')||b.username||b.password||b.search||b.hash||!config.token.trim())throw Error('isolated fixture configuration required');
   const e=await probeSchema(b.href,config.token,[{key:'locations',path:'/api/stock/location/',method:'get'},{key:'stock',path:'/api/stock/',method:'get'},{key:'transfer',path:'/api/stock/transfer/',method:'post'}],request);
-  if(e.operations.some(o=>!o.declared))throw Error('transfer API not declared');return new IsolatedStockTransferTransport(b,config.token,request,new InvenTreeReadProvider(b.href,config.token,request),new InvenTreeReadAdapter(b.href,config.token,request));
+  if(e.operations.some(o=>!o.declared))throw Error('transfer API not declared');return new IsolatedStockTransferTransport(evidence,b,config.token,request,new InvenTreeReadProvider(b.href,config.token,request),new InvenTreeReadAdapter(b.href,config.token,request));
  }
  private async current(p:Parsed){const tree=await this.locations.getLocations();for(const id of [p.source,p.target])if(!tree.some(x=>x.id===id&&!x.structural)||tree.some(x=>x.parentId===id))throw Error('transfer leaf changed');
   const [a,b]=await Promise.all([this.read.list('api/stock/',{location:p.source,cascade:'false'}),this.read.list('api/stock/',{location:p.target,cascade:'false'})]);const rows=sort([...scoped(a,p.source),...scoped(b,p.target)]);if(new Set(rows.map(x=>x.id)).size!==rows.length)throw Error('duplicate cross-location stock');return rows}
- async send(o:Operation){const s=structuredClone(o),p=parse(s),key=snapshotKey(s);if(this.attempted.has(s.id))throw Error('already attempted; readback only');this.attempted.add(s.id);
+ async send(o:Operation){const s=structuredClone(o),p=parse(s),key=snapshotKey(s);if(!await this.evidence.claim(s))throw Error('already attempted; readback only');
   if(snapshotKey(await this.current(p))!==snapshotKey(p.before))throw Error('approved transfer baseline changed');
-  const r=await this.request(new URL('api/stock/transfer/',this.base),{method:'POST',headers:{Authorization:'Token '+this.token,Accept:'application/json','Content-Type':'application/json'},cache:'no-store',redirect:'error',signal:AbortSignal.timeout(20000),body:JSON.stringify({items:[{pk:Number(p.stockId),quantity:p.quantity,merge:false}],location:Number(p.target)})});if(!r.ok)throw Error('transfer HTTP '+r.status);this.ack.set(s.id,key);
+  const r=await this.request(new URL('api/stock/transfer/',this.base),{method:'POST',headers:{Authorization:'Token '+this.token,Accept:'application/json','Content-Type':'application/json'},cache:'no-store',redirect:'error',signal:AbortSignal.timeout(20000),body:JSON.stringify({items:[{pk:Number(p.stockId),quantity:p.quantity,merge:false}],location:Number(p.target)})});if(!r.ok)throw Error('transfer HTTP '+r.status);await this.evidence.record(s,key);
  }
- async observe(o:Operation):Promise<Observation>{try{const s=structuredClone(o),p=parse(s),rows=await this.current(p);if(this.ack.get(s.id)!==snapshotKey(s))return {status:'unknown',evidence:'Fixture: no correlated transfer acknowledgement; no replay'};
+ async observe(o:Operation):Promise<Observation>{try{const s=structuredClone(o),p=parse(s),rows=await this.current(p);if(await this.evidence.read<string>(s)!==snapshotKey(s))return {status:'unknown',evidence:'Fixture: no correlated transfer acknowledgement; no replay'};
   if(!p.expectedChild&&snapshotKey(rows)===snapshotKey(p.after))return {status:'verified',evidence:'Fixture: same StockItem ID and exact whole quantity moved; prior references preserved'};
   if(p.expectedChild){const known=new Set(p.before.map(x=>x.id)),created=rows.filter(x=>!known.has(x.id)),existing=rows.filter(x=>known.has(x.id));
    if(created.length===1&&snapshotKey(existing)===snapshotKey(p.after)&&snapshotKey(created[0])===snapshotKey({...p.expectedChild,id:created[0].id}))return {status:'verified',evidence:'Fixture: original ID and exact remainder retained, new child linked to source, moved quantity and prior references verified'};

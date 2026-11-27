@@ -1,3 +1,4 @@
+import {fixtureEvidenceFor,type FixtureEvidenceConfig,type FixtureEvidenceStore} from './fixture-operation-evidence.js';
 import {probeSchema} from './provider-schema.js';
 import {InvenTreeReadProvider} from './domain.js';
 import {snapshotKey} from './approved-snapshot.js';
@@ -30,25 +31,25 @@ function readRow(raw:unknown,kind:Definition['kind']):RecordRow{
 const path=(d:Definition)=>d.kind==='category'?'api/part/category/':'api/parameter/template/';
 const conflict=(a:Definition,b:Definition)=>a.kind===b.kind&&norm(a.name)===norm(b.name)&&(a.kind!=='category'||b.kind==='category'&&a.parentId===b.parentId);
 export class IsolatedTemplateSyncTransport implements OperationTransport{
- private attempted=new Set<string>();private ack=new Map<string,{key:string;id:string}>();
- private constructor(private base:URL,private token:string,private request:typeof fetch,private read:InvenTreeReadProvider){}
- static async open(config:{base:string;token:string;fixtureOnly:true},request:typeof fetch){
-  const b=new URL(config.base.endsWith('/')?config.base:config.base+'/');if(config.fixtureOnly!==true||b.protocol!=='https:'||!b.hostname.endsWith('.test')||b.username||b.password||b.search||b.hash||!config.token.trim())throw Error('isolated fixture configuration required');
+
+ private constructor(private evidence:FixtureEvidenceStore,private base:URL,private token:string,private request:typeof fetch,private read:InvenTreeReadProvider){}
+ static async open(config:{base:string;token:string;fixtureOnly:true}&FixtureEvidenceConfig,request:typeof fetch){
+  const evidence=fixtureEvidenceFor(config);const b=new URL(config.base.endsWith('/')?config.base:config.base+'/');if(config.fixtureOnly!==true||b.protocol!=='https:'||!b.hostname.endsWith('.test')||b.username||b.password||b.search||b.hash||!config.token.trim())throw Error('isolated fixture configuration required');
   const required=(['/api/part/category/','/api/parameter/template/'] as const).flatMap((path,i)=>(['get','post'] as const).map(method=>({key:i+method,path,method})));
   const e=await probeSchema(b.href,config.token,required,request);if(e.operations.some(o=>!o.declared))throw Error('schema sync API not declared');
-  return new IsolatedTemplateSyncTransport(b,config.token,request,new InvenTreeReadProvider(b.href,config.token,request));
+  return new IsolatedTemplateSyncTransport(evidence,b,config.token,request,new InvenTreeReadProvider(b.href,config.token,request));
  }
  private async rows(d:Definition){const records=(await this.read.list(path(d),d.kind==='template'?{for_model:'part.part'}:{})).map(x=>readRow(x,d.kind));if(new Set(records.map(x=>x.id)).size!==records.length)throw Error('duplicate schema ID');return records}
  private verify(raw:unknown,d:Definition){const row=readRow(raw,d.kind);if(snapshotKey(row.definition)!==snapshotKey(d))throw Error('schema readback mismatch');if(d.kind==='template'){const r=object(raw);if(r.model_type!=='part.part'||r.enabled!==true||r.checkbox!==false||r.choices!==''||r.selectionlist!==null)throw Error('template semantic mismatch')}return row.id}
  async send(o:Operation){
-  const snapshot=structuredClone(o),d=parse(snapshot),key=snapshotKey(snapshot);if(this.attempted.has(snapshot.id))throw Error('already attempted; readback only');this.attempted.add(snapshot.id);
+  const snapshot=structuredClone(o),d=parse(snapshot),key=snapshotKey(snapshot);if(!await this.evidence.claim(snapshot))throw Error('already attempted; readback only');
   const rows=await this.rows(d);if(d.kind==='category'&&d.parentId!==null&&!rows.some(r=>r.id===d.parentId))throw Error('category parent missing');if(rows.some(r=>conflict(r.definition,d)))throw Error('existing name requires explicit mapping, not creation');
   const body=d.kind==='category'?{name:d.name,parent:d.parentId===null?null:Number(d.parentId),description:d.description,structural:d.structural}:{name:d.name,units:d.units,description:d.description,model_type:'part.part',enabled:true,checkbox:false,choices:'',selectionlist:null};
   const res=await this.request(new URL(path(d),this.base),{method:'POST',headers:{Authorization:'Token '+this.token,Accept:'application/json','Content-Type':'application/json'},cache:'no-store',redirect:'error',signal:AbortSignal.timeout(20000),body:JSON.stringify(body)});
-  if(!res.ok)throw Error('schema create HTTP '+res.status);const pk=this.verify(await res.json(),d);if(rows.some(r=>r.id===pk))throw Error('existing ID returned for create');this.ack.set(snapshot.id,{key,id:pk});
+  if(!res.ok)throw Error('schema create HTTP '+res.status);const pk=this.verify(await res.json(),d);if(rows.some(r=>r.id===pk))throw Error('existing ID returned for create');await this.evidence.record(snapshot,{key,id:pk});
  }
  async observe(o:Operation):Promise<Observation>{try{
-  const snapshot=structuredClone(o),d=parse(snapshot),ack=this.ack.get(snapshot.id);if(!ack||ack.key!==snapshotKey(snapshot))return {status:'unknown',evidence:'Fixture: no correlated create acknowledgement; no replay'};
+  const snapshot=structuredClone(o),d=parse(snapshot),ack=await this.evidence.read<{key:string;id:string}>(snapshot);if(!ack||ack.key!==snapshotKey(snapshot))return {status:'unknown',evidence:'Fixture: no correlated create acknowledgement; no replay'};
   const raw=await this.read.list(path(d),d.kind==='template'?{for_model:'part.part'}:{}),rows=raw.map(x=>readRow(x,d.kind));if(new Set(rows.map(r=>r.id)).size!==rows.length)throw Error('duplicate schema ID');
   const matched=rows.filter(r=>conflict(r.definition,d));if(matched.length!==1||matched[0].id!==ack.id)return {status:'blocked',evidence:'Fixture: schema name or ID changed'};
   if(d.kind==='category'&&d.parentId!==null&&!rows.some(r=>r.id===d.parentId))return {status:'blocked',evidence:'Fixture: category parent changed'};
