@@ -1,3 +1,4 @@
+import {fixtureEvidenceFor,type FixtureEvidenceConfig,type FixtureEvidenceStore} from './fixture-operation-evidence.js';
 import {probeSchema} from './provider-schema.js';
 import {InvenTreeReadProvider} from './domain.js';
 import {InvenTreeReadAdapter} from './inventory-provider.js';
@@ -27,13 +28,13 @@ export function bindIsolatedReceiptBaseline(plan:ApprovedPlan,byLocation:Record<
  return next;
 }
 export class IsolatedStockReceiptTransport implements OperationTransport{
- private attempted=new Set<string>();private acknowledgements=new Map<string,{key:string;stockId:string}>();
- private constructor(private base:URL,private token:string,private request:typeof fetch,private transport:InvenTreeReadProvider,private locations:InvenTreeReadAdapter){}
- static async open(config:{base:string;token:string;fixtureOnly:true},request:typeof fetch){
-  const b=new URL(config.base.endsWith('/')?config.base:config.base+'/');if(config.fixtureOnly!==true||b.protocol!=='https:'||!b.hostname.endsWith('.test')||b.username||b.password||b.search||b.hash||!config.token.trim())throw Error('isolated fixture configuration required');
+
+ private constructor(private evidence:FixtureEvidenceStore,private base:URL,private token:string,private request:typeof fetch,private transport:InvenTreeReadProvider,private locations:InvenTreeReadAdapter){}
+ static async open(config:{base:string;token:string;fixtureOnly:true}&FixtureEvidenceConfig,request:typeof fetch){
+  const evidence=fixtureEvidenceFor(config);const b=new URL(config.base.endsWith('/')?config.base:config.base+'/');if(config.fixtureOnly!==true||b.protocol!=='https:'||!b.hostname.endsWith('.test')||b.username||b.password||b.search||b.hash||!config.token.trim())throw Error('isolated fixture configuration required');
   const e=await probeSchema(b.href,config.token,[{key:'part',path:'/api/part/{id}/',method:'get'},{key:'locations',path:'/api/stock/location/',method:'get'},{key:'stock-read',path:'/api/stock/',method:'get'},{key:'stock-create',path:'/api/stock/',method:'post'}],request);
   if(e.operations.some(o=>!o.declared))throw Error('receipt API not declared');
-  return new IsolatedStockReceiptTransport(b,config.token,request,new InvenTreeReadProvider(b.href,config.token,request),new InvenTreeReadAdapter(b.href,config.token,request));
+  return new IsolatedStockReceiptTransport(evidence,b,config.token,request,new InvenTreeReadProvider(b.href,config.token,request),new InvenTreeReadAdapter(b.href,config.token,request));
  }
  private async call(path:string,method:'GET'|'POST',body?:Record<string,unknown>){
   const r=await this.request(new URL(path,this.base),{method,headers:{Authorization:'Token '+this.token,Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},redirect:'error',cache:'no-store',signal:AbortSignal.timeout(20000),...(body?{body:JSON.stringify(body)}:{})});
@@ -48,15 +49,14 @@ export class IsolatedStockReceiptTransport implements OperationTransport{
   return list(raw.map(x=>{const r=object(x);return {id:r.pk,partId:r.part,locationId:r.location,quantity:r.quantity,batch:r.batch,serial:r.serial,status:r.status}}),p.locationId);
  }
  async send(o:Operation){
-  const snapshot=structuredClone(o),p=parse(snapshot),key=snapshotKey(snapshot);if(this.attempted.has(snapshot.id))throw Error('receipt already attempted; readback only');
-  this.attempted.add(snapshot.id);
+  const snapshot=structuredClone(o),p=parse(snapshot),key=snapshotKey(snapshot);if(!await this.evidence.claim(snapshot))throw Error('receipt already attempted; readback only');
   if(snapshotKey(await this.current(p))!==snapshotKey(p.baseline))throw Error('stock baseline changed');
   const result=await this.call('api/stock/','POST',{part:Number(p.partId),location:Number(p.locationId),quantity:p.quantity});
   const stockId=id(result.pk);if(p.baseline.some(x=>x.id===stockId)||id(result.part)!==p.partId||id(result.location)!==p.locationId||decimal(result.quantity)!==String(p.quantity))throw Error('receipt acknowledgement mismatch');
-  this.acknowledgements.set(snapshot.id,{key,stockId});
+  await this.evidence.record(snapshot,{key,stockId});
  }
  async observe(o:Operation):Promise<Observation>{try{
-  const snapshot=structuredClone(o),p=parse(snapshot),ack=this.acknowledgements.get(snapshot.id),current=await this.current(p);
+  const snapshot=structuredClone(o),p=parse(snapshot),ack=await this.evidence.read<{key:string;stockId:string}>(snapshot),current=await this.current(p);
   if(!ack||ack.key!==snapshotKey(snapshot))return {status:'unknown',evidence:'Fixture: no correlated create acknowledgement; matching stock alone is not proof; do not replay'};
   const created=current.find(x=>x.id===ack.stockId),previous=current.filter(x=>x.id!==ack.stockId);
   if(!created)return {status:'unknown',evidence:'Fixture: acknowledged stock ID not visible'};

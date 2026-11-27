@@ -1,3 +1,4 @@
+import {fixtureEvidenceFor,type FixtureEvidenceConfig,type FixtureEvidenceStore} from './fixture-operation-evidence.js';
 import {probeSchema} from './provider-schema.js';
 import {InvenTreeReadProvider} from './domain.js';
 import {InvenTreeAssociationReader,type ScalarTypeReview} from './inventree-association-read.js';
@@ -37,24 +38,24 @@ export function planIsolatedAssociation(operationId:string,catalog:Catalog,mappi
  const operation:Operation={id:operationId,kind,payload:{confirmed:true,instanceId:b.snapshot.instanceId,categoryId:mapping.remoteCategoryId,templateId:entry.templateId,baseline:b,reviews:structuredClone(reviews)}};parse(operation);return operation;
 }
 export class IsolatedCategoryAssociationTransport implements OperationTransport{
- private attempted=new Set<string>();private ack=new Map<string,{key:string;id:string}>();
- private constructor(private base:URL,private token:string,private request:typeof fetch,private reader:InvenTreeAssociationReader,private read:InvenTreeReadProvider){}
- static async open(config:{base:string;token:string;fixtureOnly:true},request:typeof fetch){
-  const b=new URL(config.base.endsWith('/')?config.base:config.base+'/');if(config.fixtureOnly!==true||b.protocol!=='https:'||!b.hostname.endsWith('.test')||b.username||b.password||b.search||b.hash||!config.token.trim()||typeof request!=='function')throw Error('isolated fixture configuration required');
+
+ private constructor(private evidence:FixtureEvidenceStore,private base:URL,private token:string,private request:typeof fetch,private reader:InvenTreeAssociationReader,private read:InvenTreeReadProvider){}
+ static async open(config:{base:string;token:string;fixtureOnly:true}&FixtureEvidenceConfig,request:typeof fetch){
+  const evidence=fixtureEvidenceFor(config);const b=new URL(config.base.endsWith('/')?config.base:config.base+'/');if(config.fixtureOnly!==true||b.protocol!=='https:'||!b.hostname.endsWith('.test')||b.username||b.password||b.search||b.hash||!config.token.trim()||typeof request!=='function')throw Error('isolated fixture configuration required');
   const e=await probeSchema(b.href,config.token,[{key:'associate',path:'/api/part/category/parameters/',method:'post'}],request);if(e.operations.some(o=>!o.declared))throw Error('association write API not declared');
-  return new IsolatedCategoryAssociationTransport(b,config.token,request,await InvenTreeAssociationReader.open(b.href,config.token,request),new InvenTreeReadProvider(b.href,config.token,request));
+  return new IsolatedCategoryAssociationTransport(evidence,b,config.token,request,await InvenTreeAssociationReader.open(b.href,config.token,request),new InvenTreeReadProvider(b.href,config.token,request));
  }
  async readCandidate(instanceId:string,reviews:ScalarTypeReview[]):Promise<Baseline>{
   const snapshot=await this.reader.readCandidate(instanceId,reviews),defaults=(await this.read.list('api/part/category/parameters/')).map(row);
   return normalized({snapshot,defaults});
  }
  private async current(p:ReturnType<typeof parse>){const b=await this.readCandidate(p.baseline.snapshot.instanceId,p.reviews);return {...b,snapshot:{...b.snapshot,complete:true}}}
- async send(o:Operation){const s=structuredClone(o),p=parse(s),key=snapshotKey(s);if(this.attempted.has(s.id))throw Error('already attempted; readback only');this.attempted.add(s.id);
+ async send(o:Operation){const s=structuredClone(o),p=parse(s),key=snapshotKey(s);if(!await this.evidence.claim(s))throw Error('already attempted; readback only');
   if(snapshotKey(await this.current(p))!==snapshotKey(p.baseline))throw Error('association baseline changed');
   const res=await this.request(new URL('api/part/category/parameters/',this.base),{method:'POST',headers:{Authorization:'Token '+this.token,Accept:'application/json','Content-Type':'application/json'},cache:'no-store',redirect:'error',signal:AbortSignal.timeout(20000),body:JSON.stringify({category:Number(p.categoryId),template:Number(p.templateId),default_value:''})});
-  if(!res.ok)throw Error('association HTTP '+res.status);const r=row(await res.json());if(r.categoryId!==p.categoryId||r.templateId!==p.templateId||r.defaultValue!==''||p.baseline.defaults.some(x=>x.id===r.id))throw Error('association acknowledgement mismatch');this.ack.set(s.id,{key,id:r.id});
+  if(!res.ok)throw Error('association HTTP '+res.status);const r=row(await res.json());if(r.categoryId!==p.categoryId||r.templateId!==p.templateId||r.defaultValue!==''||p.baseline.defaults.some(x=>x.id===r.id))throw Error('association acknowledgement mismatch');await this.evidence.record(s,{key,id:r.id});
  }
- async observe(o:Operation):Promise<Observation>{try{const s=structuredClone(o),p=parse(s),a=this.ack.get(s.id),b=await this.current(p);
+ async observe(o:Operation):Promise<Observation>{try{const s=structuredClone(o),p=parse(s),a=await this.evidence.read<{key:string;id:string}>(s),b=await this.current(p);
   if(!a||a.key!==snapshotKey(s))return {status:'unknown',evidence:'Fixture: no correlated association acknowledgement; no replay'};
   const created=b.defaults.find(r=>r.id===a.id);if(!created)return {status:'unknown',evidence:'Fixture: acknowledged association not visible'};
   if(created.categoryId!==p.categoryId||created.templateId!==p.templateId||created.defaultValue!=='')return {status:'blocked',evidence:'Fixture: association identity/default changed'};
