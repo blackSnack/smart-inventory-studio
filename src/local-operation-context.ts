@@ -5,7 +5,7 @@ export interface LocalOperationContext {readonly base:string;readonly token:stri
 export function localOperationBase(base:string){return authorizedNativeBase(base)}
 // The supplied dispatcher owns the read/write mode, exact operation allowlist and durable claim.
 export function createLocalOperationContext(base:string,token:string,instanceId:string,dispatcher:typeof fetch,production?:ProductionNativeTarget,apiVersion?:232):LocalOperationContext{
- const u=authorizedNativeBase(base,production);if(apiVersion!==undefined&&(apiVersion!==232||production))throw Error('legacy context requires disposable instance');
+ const u=authorizedNativeBase(base,production);if(apiVersion!==undefined&&(apiVersion!==232||production&&production.apiVersion!==232))throw Error('legacy context requires matching version authorization');
  if(typeof token!=='string'||!token.trim()||/[\r\n]/.test(token)||typeof instanceId!=='string'||!instanceId.trim()||instanceId.length>256||typeof dispatcher!=='function')throw Error('invalid local acceptance context');
  const request:typeof fetch=(input,init)=>{
   if(typeof input!=='string'&&!(input instanceof URL))throw Error('invalid local request');
