@@ -25,7 +25,7 @@
 输出 `snapshot/`、`inventory-baseline.json`（按 Part/StockItem/Location/批次/状态统计）、`category-inventory.csv`、`parameter-inventory.csv`、`location-tree.json`、`reference-inventory.json`。缺失、重复、疑似混装、孤儿、空位置、未知字段单独报告。不要用旧聊天的库存数字作为验收依据。
 
 ## 4. STD-01：完成共享 Schema v1.0（G2，冻结前不得写生产模板）
-本包 `catalog/electronic-parts.json` v0.2 只有 5 类、39 参数，是种子。用真实快照识别所有类别（含 MCU/连接器/模块/传感器/保护件等）；参照 LCSC 类别筛选、商品详情/合法 API 与原厂 datasheet。保存每个类别的来源 URL、观察日期、字段标签、单位/类型、别名、适用条件、原始文本。禁止抓取未经许可数据或猜测类别字段。
+本包 `catalog/electronic-parts.json` 当前为待冻结种子（版本及内容以目录本身和 SHA256SUMS 为准）。先使用 [匿名分类覆盖率工具](CATALOG-COVERAGE.md) 生成本地覆盖率与未映射报告；该工具不证明字段语义或真实快照完整性。用真实快照识别所有类别（含 MCU/连接器/模块/传感器/保护件等）；参照 LCSC 类别筛选、商品详情/合法 API 与原厂 datasheet。保存每个类别的来源 URL、观察日期、字段标签、单位/类型、别名、适用条件、原始文本。禁止抓取未经许可数据或猜测类别字段。
 稳定字段 key 不随语言变化；同名不同语义须拆分（电阻 TCR vs MLCC X7R）；额定与测量分开；保留不对称容差、范围、测试条件、封装公英制。字段可未知：null + 状态，不用 0、N/A 或常见值替代。字段角色 identity/search/description 可重叠。精确身份=经核验制造商+完整 MPN 或可核验供应商+SKU；冲突阻断。Generic 必须类别明确批准完整身份字段且均已知，默认关闭；Partial 独立来源组，不自动归并。型号后缀不可丢失。统一规格指纹仅用于候选，不替代 Part ID 或 IPN。
 交付：catalog v1.0、变更日志、JSON schema、字段映射及证据、覆盖率报告、正反测试样例；用户/项目负责人冻结版本和 SHA256 后 PWA 与整改脚本共用。未分类/未覆盖项目列为阻塞或保持 Partial，不得自行宣称标准全量完成。
 
