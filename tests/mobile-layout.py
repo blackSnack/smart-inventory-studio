@@ -44,6 +44,11 @@ try:
    page.get_by_role('button',name='技术参数筛选',exact=True).click();fit();page.get_by_role('button',name='取消',exact=True).click()
    page.get_by_role('button',name='查看 RES-001').click();fit();page.get_by_role('dialog').get_by_role('button',name='关闭').click()
    page.get_by_role('button',name='设置',exact=True).click();fit();page.get_by_text('AI Gateway · 未配置',exact=True).click();fit();page.get_by_role('button',name='取消',exact=True).click()
+   # The same shell must survive connection configuration and return to the requested page at every width.
+   page.evaluate("window.__shell=document.querySelector('[data-workspace-shell]')")
+   page.get_by_role('button',name='配置 InvenTree').click();fit();assert page.get_by_role('heading',name='设置',exact=True).count()==1
+   page.get_by_role('button',name='仓储',exact=True).click();fit();assert page.get_by_role('heading',name='仓储',exact=True).is_visible();assert page.get_by_role('button',name='编辑布局').is_visible();assert page.evaluate("window.__shell===document.querySelector('[data-workspace-shell]')")
+   page.get_by_role('button',name='设置',exact=True).click();page.get_by_role('button',name='配置 InvenTree').click();page.get_by_role('button',name='使用演示库存',exact=True).click();assert page.get_by_role('heading',name='设置',exact=True).is_visible();fit()
    context.close()
   b.close()
 finally:server.shutdown()

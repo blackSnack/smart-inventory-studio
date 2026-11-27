@@ -49,7 +49,8 @@ def exercise_native_browser(page, app_url):
         page.get_by_label('服务地址').fill(origin+'/')
         page.get_by_label('隔离实例 API Token').fill('synthetic-native')
         page.get_by_role('button',name='测试并连接').click()
-        page.get_by_text('隔离实例 · 待验收',exact=True).wait_for()
+        page.get_by_text('当前库存：隔离实例（验收）',exact=True).wait_for()
+        page.get_by_text('已连接 · 隔离验收',exact=True).wait_for()
         page.get_by_role('button',name='首页',exact=True).click()
         page.get_by_role('button',name='已有元件入库',exact=True).click()
     def prepare(location,quantity):
