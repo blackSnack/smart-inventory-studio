@@ -3,13 +3,14 @@ import {authorizedNativeBase,assertNativeTarget,assertNativeMode,type Production
 import {InvenTreeReadProvider} from './domain.js';
 import {inspectSchema,type RequiredOperation} from './provider-schema.js';
 import {snapshotKey} from './approved-snapshot.js';
+import {nativeApiVersion,parameterPath,parameterFilters,parameterOwner,matchesPreparedApi,type NativeApiVersion} from './native-api-version.js';
 import type {NativeReceiptEvidence} from './native-receipt-acceptance.js';
 type Evidence={url:string;locator:string};
 type Input={kind:'source';partId:string;ipn:string;url:string;comment:string}|{kind:'parameter';partId:string;ipn:string;templateId:string;templateName:string;units:string;value:string;evidence:Evidence[]};
 type Attachment={id:string;link:string|null;comment:string;attachment:string|null};
-type Value={id:string;value:string;note:string};
+type Value={id:string;value:string;note:string|null};
 type Baseline={kind:'source';rows:Attachment[]}|{kind:'parameter';before:Value|null};
-type Prepared={kind:'native-enrichment';base:string;instanceId:string;schemaSha256:string;input:Input;baseline:Baseline;executionAllowed:false};
+type Prepared={kind:'native-enrichment';base:string;instanceId:string;schemaSha256:string;apiVersion?:232;input:Input;baseline:Baseline;executionAllowed:false};
 const obj=(x:unknown):Record<string,unknown>=>{if(!x||typeof x!=='object'||Array.isArray(x))throw Error('invalid enrichment record');return x as Record<string,unknown>};
 const id=(x:unknown):string=>{const s=typeof x==='number'&&Number.isSafeInteger(x)?String(x):x;if(typeof s!=='string'||!(/^[1-9][0-9]{0,15}$/).test(s)||!Number.isSafeInteger(Number(s)))throw Error('invalid native ID');return s};
 const str=(x:unknown,max=4000,empty=false):string=>{if(typeof x!=='string'||x.length>max||!empty&&!x.trim())throw Error('invalid enrichment text');return x};
@@ -29,9 +30,9 @@ function attachment(raw:unknown,partId:string):Attachment{
  const r=obj(raw);if(r.model_type!=='part'||id(r.model_id)!==partId)throw Error('attachment scope changed');
  return {id:id(r.pk),link:r.link===null?null:str(r.link,4000,true),comment:str(r.comment,4000,true),attachment:r.attachment===null?null:str(r.attachment,4000,true)};
 }
-function parameter(raw:unknown,p:Extract<Input,{kind:'parameter'}>):Value{
- const r=obj(raw);if(r.model_type!=='part.part'||id(r.model_id)!==p.partId||id(r.template)!==p.templateId)throw Error('parameter scope changed');
- return {id:id(r.pk),value:str(r.data,4000,true),note:str(r.note,4000,true)};
+function parameter(raw:unknown,p:Extract<Input,{kind:'parameter'}>,api:NativeApiVersion):Value{
+ const r=obj(raw);if((api===232?id(r.part)!==p.partId:r.model_type!=='part.part'||id(r.model_id)!==p.partId)||id(r.template)!==p.templateId)throw Error('parameter scope changed');
+ return {id:id(r.pk),value:str(r.data,4000,true),note:api===232?null:str(r.note,4000,true)};
 }
 function sameUrl(r:Attachment,u:string){try{return r.link!==null&&url(r.link)===u}catch{return false}}
 export class NativeEnrichmentAcceptance{
@@ -50,24 +51,24 @@ export class NativeEnrichmentAcceptance{
   return {data:JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes)) as unknown,bytes};
  }
  private async target(kind:Input['kind'],write:boolean){
-  const v=obj((await this.call('api/')).data);if(v.server!=='InvenTree'||v.version!=='1.7.4'||v.apiVersion!==570)throw Error('isolated version mismatch');
+  const v=obj((await this.call('api/')).data);const api=nativeApiVersion(v,!!this.production),parameters='/'+parameterPath(api);
   const auth=obj((await this.call('api/user/me/')).data);const actorId=id(auth.pk??auth.id);
   const schema=await this.call('api/schema/?format=json','GET',undefined,16*1024*1024);
   const required:RequiredOperation[]=[{key:'part',path:'/api/part/{id}/',method:'get'}];
   if(kind==='source'){required.push({key:'attachments',path:'/api/attachment/',method:'get'});if(write)required.push({key:'create',path:'/api/attachment/',method:'post'})}
-  else {required.push({key:'template',path:'/api/parameter/template/{id}/',method:'get'},{key:'parameters',path:'/api/parameter/',method:'get'});if(write)required.push({key:'create',path:'/api/parameter/',method:'post'},{key:'patch',path:'/api/parameter/{id}/',method:'patch'})}
-  if(inspectSchema(schema.data,required).some(x=>!x.declared))throw Error('native enrichment API missing');const digest=await sha(schema.bytes);assertNativeTarget(this.production,actorId,digest);return digest;
+  else {required.push({key:'template',path:parameters+'template/{id}/',method:'get'},{key:'parameters',path:parameters,method:'get'});if(write)required.push({key:'create',path:parameters,method:'post'},{key:'patch',path:parameters+'{id}/',method:'patch'})}
+  if(inspectSchema(schema.data,required).some(x=>!x.declared))throw Error('native enrichment API missing');const digest=await sha(schema.bytes);assertNativeTarget(this.production,actorId,digest);return {digest,api};
  }
- private async current(p:Input):Promise<Baseline>{
+ private async current(p:Input,api:NativeApiVersion):Promise<Baseline>{
   const part=obj((await this.call('api/part/'+p.partId+'/')).data);
   if(id(part.pk)!==p.partId||part.IPN!==p.ipn||part.active!==true)throw Error('reviewed Part identity changed');
   if(p.kind==='source'){
    const rows=(await this.read.list('api/attachment/',{model_type:'part',model_id:p.partId})).map(x=>attachment(x,p.partId)).sort((a,b)=>a.id.localeCompare(b.id));
    if(new Set(rows.map(r=>r.id)).size!==rows.length)throw Error('duplicate attachment ID');return {kind:'source',rows};
   }
-  const t=obj((await this.call('api/parameter/template/'+p.templateId+'/')).data);
-  if(id(t.pk)!==p.templateId||t.model_type!=='part.part'||t.name!==p.templateName||t.units!==p.units||t.enabled!==true||t.checkbox!==false||t.choices!==''||t.selectionlist!==null)throw Error('template changed or unsupported');
-  const rows=(await this.read.list('api/parameter/',{model_type:'part.part',model_id:p.partId,template:p.templateId})).map(x=>parameter(x,p));
+  const t=obj((await this.call(parameterPath(api)+'template/'+p.templateId+'/')).data);
+  if(id(t.pk)!==p.templateId||(api===570&&(t.model_type!=='part.part'||t.enabled!==true||t.selectionlist!==null))||t.name!==p.templateName||t.units!==p.units||t.checkbox!==false||t.choices!=='')throw Error('template changed or unsupported');
+  const rows=(await this.read.list(parameterPath(api),{...parameterFilters(api,p.partId),template:p.templateId})).map(x=>parameter(x,p,api));
   if(rows.length>1)throw Error('duplicate parameter records');return {kind:'parameter',before:rows[0]??null};
  }
  private eligible(input:Input,b:Baseline){
@@ -77,9 +78,9 @@ export class NativeEnrichmentAcceptance{
  }
  async prepare(instanceId:string,raw:unknown):Promise<Prepared>{
   const input=parse(structuredClone(raw));str(instanceId,256);
-  const schemaSha256=await this.target(input.kind,true),baseline=await this.current(input);this.eligible(input,baseline);
-  if(snapshotKey(baseline)!==snapshotKey(await this.current(input)))throw Error('baseline changed during review');
-  return {kind:'native-enrichment',base:this.base.href,instanceId,schemaSha256,input,baseline,executionAllowed:false};
+  const {digest:schemaSha256,api}=await this.target(input.kind,true),baseline=await this.current(input,api);this.eligible(input,baseline);
+  if(snapshotKey(baseline)!==snapshotKey(await this.current(input,api)))throw Error('baseline changed during review');
+  return {kind:'native-enrichment',base:this.base.href,instanceId,schemaSha256,...(api===232?{apiVersion:232 as const}:{}),input,baseline,executionAllowed:false};
  }
  private async validate(prepared:Prepared,approval:unknown){
   const a=obj(approval);assertNativeMode(this.production,a);if(['writeAuthorized','visibilityConfirmed','exclusiveAccessConfirmed','identityConfirmed','sourceReviewed','fieldMappingConfirmed'].some(k=>a[k]!==true))throw Error('all local confirmations required');
@@ -90,7 +91,8 @@ export class NativeEnrichmentAcceptance{
  }
  async execute(raw:Prepared,approval:unknown,evidence:NativeReceiptEvidence){
   const prepared=structuredClone(raw),{input:p,binding}=await this.validate(prepared,approval),b=prepared.baseline;
-  if(await this.target(p.kind,true)!==prepared.schemaSha256||snapshotKey(await this.current(p))!==snapshotKey(b))throw Error('approved baseline changed');
+  const target=await this.target(p.kind,true);matchesPreparedApi(target.api,prepared);const api=target.api;
+  if(target.digest!==prepared.schemaSha256||snapshotKey(await this.current(p,api))!==snapshotKey(b))throw Error('approved baseline changed');
   if(!await evidence.claim(binding))throw Error('already attempted; observe only');
   try{
    let pk:string;
@@ -99,9 +101,9 @@ export class NativeEnrichmentAcceptance{
     if(created.link!==p.url||created.comment!==p.comment||created.attachment!==null&&created.attachment!==''||b.rows.some(r=>r.id===created.id))throw Error('attachment acknowledgement mismatch');
     pk=created.id;
    }else if(p.kind==='parameter'&&b.kind==='parameter'){
-    const data=b.before?await this.call('api/parameter/'+b.before.id+'/','PATCH',{data:p.value}):await this.call('api/parameter/','POST',{model_type:'part.part',model_id:Number(p.partId),template:Number(p.templateId),data:p.value});
-    const created=parameter(data.data,p);
-    if(created.value!==p.value||b.before&&(created.id!==b.before.id||created.note!==b.before.note)||!b.before&&created.note!=='')throw Error('parameter acknowledgement mismatch');
+    const data=b.before?await this.call(parameterPath(api)+b.before.id+'/','PATCH',{data:p.value}):await this.call(parameterPath(api),'POST',{...parameterOwner(api,p.partId),template:Number(p.templateId),data:p.value});
+    const created=parameter(data.data,p,api);
+    if(created.value!==p.value||b.before&&(created.id!==b.before.id||created.note!==b.before.note)||!b.before&&created.note!==(api===232?null:''))throw Error('parameter acknowledgement mismatch');
     pk=created.id;
    }else throw Error('baseline mismatch');
    await evidence.acknowledge(binding,pk);
@@ -113,14 +115,14 @@ export class NativeEnrichmentAcceptance{
   let ack;try{ack=await evidence.read(binding)}catch{return result('unknown','private evidence unreadable')}
   if(!ack?.stockId)return result('unknown','no correlated acknowledgement; never resend');
   try{
-   if(await this.target(p.kind,false)!==prepared.schemaSha256)return result('unknown','schema changed');
-   const fresh=await this.current(p),pk=id(ack.stockId);
+   const target=await this.target(p.kind,false);matchesPreparedApi(target.api,prepared);const api=target.api;if(target.digest!==prepared.schemaSha256)return result('unknown','schema changed');
+   const fresh=await this.current(p,api),pk=id(ack.stockId);
    if(p.kind==='source'&&b.kind==='source'&&fresh.kind==='source'){
     const created=fresh.rows.find(r=>r.id===pk);if(!created)return result('unknown','acknowledged attachment not visible');
     if(created.link!==p.url||created.comment!==p.comment||created.attachment!==null&&created.attachment!==''||snapshotKey(fresh.rows.filter(r=>r.id!==pk))!==snapshotKey(b.rows))return result('blocked','attachment baseline changed');
    }else if(p.kind==='parameter'&&b.kind==='parameter'&&fresh.kind==='parameter'){
     const row=fresh.before;if(!row)return result('unknown','parameter not visible');
-    if(row.id!==pk||row.value!==p.value||row.note!==(b.before?.note??''))return result('blocked','parameter readback conflict');
+    if(row.id!==pk||row.value!==p.value||row.note!==(b.before?.note??(api===232?null:'')))return result('blocked','parameter readback conflict');
    }else return result('blocked','baseline kind mismatch');
    return result('verified','correlated native record and reviewed readback');
   }catch{return result('unknown','enrichment readback unavailable')}
