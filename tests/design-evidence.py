@@ -52,6 +52,18 @@ try:
   dialog.get_by_role('button',name='关闭').click();page.get_by_role('button',name='编辑布局').click();dialog=page.get_by_role('dialog');dialog.get_by_label('编号前缀').fill('NEW');dialog.get_by_role('button',name='命名迁移预览',exact=True).click();dialog.get_by_role('heading',name='命名迁移预览').evaluate("e=>e.scrollIntoView({block:'start'})");capture(page,'14-mobile-rename')
   dialog.get_by_role('button',name='关闭').click();page.get_by_role('button',name='首页',exact=True).click();page.get_by_role('button',name='手动录入').click();page.get_by_label('搜索已有元件').fill('RES-001');page.get_by_role('button',name='选择 RES-001').click();page.get_by_label('本次入库数量').fill('10');page.get_by_role('button',name='添加存放位置').click();page.get_by_role('button',name='按矩阵选择',exact=True).click();page.get_by_role('region',name='仓储矩阵').evaluate("e=>e.scrollIntoView({block:'start'})");page.evaluate('document.fonts.ready');page.wait_for_timeout(120);data=page.screenshot(type='jpeg',quality=52,animations='disabled');(out/'15-mobile-matrix-putaway.jpg').write_bytes(data);print('DESIGN_IMAGE:15-mobile-matrix-putaway:'+b64encode(data).decode('ascii'),flush=True)
   context.close()
+  recovery=b.new_context(viewport={'width':390,'height':844},is_mobile=True,has_touch=True,device_scale_factor=1)
+  page=recovery.new_page();page.goto(f'http://127.0.0.1:{server.server_port}/');page.get_by_role('heading',name='Studio Workspace').wait_for()
+  page.get_by_role('button',name='设置',exact=True).click();page.get_by_text('无未完成操作',exact=True).wait_for()
+  # Isolated fixture: the pending plan is created only in this test context.
+  page.evaluate("""async()=>{const db=await new Promise((ok,fail)=>{const r=indexedDB.open('smart-inventory-journal-v1',1);r.onsuccess=()=>ok(r.result);r.onerror=()=>fail(r.error)});const plan={id:'ui-stop-fixture',instanceId:'studio-synthetic-v1',catalogHash:'test',snapshotHash:'test',approvalId:'test',operations:[{id:'ui-stop:0',kind:'receive-existing-part',payload:{}},{id:'ui-stop:1',kind:'receive-existing-part',payload:{}}]};await new Promise((ok,fail)=>{const tx=db.transaction('operations','readwrite');tx.oncomplete=ok;tx.onabort=()=>fail(tx.error);tx.objectStore('operations').add({instanceId:plan.instanceId,planId:plan.id,journal:{plan,revision:0,steps:plan.operations.map(operation=>({operation,state:'planned'}))}})});db.close()}""")
+  page.reload();page.get_by_role('button',name='设置',exact=True).click();page.get_by_role('button',name='停止剩余操作',exact=True).wait_for()
+  assert page.get_by_role('button',name='继续操作',exact=True).is_disabled()
+  capture(page,'17-recovery-pending')
+  page.get_by_role('button',name='停止剩余操作',exact=True).click();page.get_by_role('dialog',name='停止剩余操作？').wait_for();capture(page,'18-recovery-stop')
+  page.get_by_role('button',name='确认停止',exact=True).click();page.get_by_text('无未完成操作',exact=True).wait_for();page.get_by_text('已停止操作（1）',exact=True).click();page.get_by_text('已执行并核对 0 项 · 未发送 2 项',exact=True).wait_for();capture(page,'19-recovery-history')
+  page.reload();page.get_by_role('button',name='设置',exact=True).click();page.get_by_text('已停止操作（1）',exact=True).wait_for();assert page.get_by_role('button',name='继续操作',exact=True).count()==0
+  recovery.close()
   desktop=b.new_context(viewport={'width':1100,'height':760},device_scale_factor=1)
   page=desktop.new_page();page.goto(f'http://127.0.0.1:{server.server_port}/');page.get_by_role('heading',name='Studio Workspace').wait_for();capture(page,'08-desktop-home')
   page.get_by_role('button',name='手动录入').click();page.get_by_label('搜索已有元件').fill('RES-001');page.get_by_role('button',name='选择 RES-001').click()
