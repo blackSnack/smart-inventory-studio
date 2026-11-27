@@ -45,8 +45,26 @@ export function applyCabinetLayout(w:WarehouseState,draft:CabinetLayout,parts:St
  const c={layout:next,leaves};const result:WarehouseState={schemaVersion:1,cabinets:old?w.cabinets.map(x=>x.layout.id===draft.id?c:x):[...w.cabinets,c],retired:[...w.retired,...retired]};
  validateWarehouse(result);return result;
 }
-export function planCabinetSave(id:string,instanceId:string,revision:number,w:WarehouseState,draft:CabinetLayout,parts:StockedPart[],confirmed:boolean):ApprovedPlan{
+export interface RelocationPart extends StockedPart {id:string;name:string}
+export interface RelocationMove {partId:string;sourceId:string;targetId:string;quantity:number}
+export function previewCabinetRelocation(w:WarehouseState,draft:CabinetLayout,parts:RelocationPart[]){
+ const next=applyCabinetLayout(w,draft,[]),active=new Set(warehouseIds(next));const retiring=warehouseIds(w).filter(id=>!active.has(id));const old=w.cabinets.find(c=>c.layout.id===draft.id);const destination=next.cabinets.find(c=>c.layout.id===draft.id)!;
+ const sources=parts.flatMap(p=>retiring.filter(id=>(p.stock[id]??0)>0).map(id=>{const cell=old?.layout.cells.find(c=>c.drawer.compartments.some(r=>old.leaves[r.id]===id));const replacement=destination.layout.cells.find(c=>c.id===cell?.id);return {partId:p.id,partName:p.name,sourceId:id,quantity:p.stock[id],preferred:replacement?.drawer.compartments.map(r=>destination.leaves[r.id])??[]}}));
+ return {warehouse:next,sources,targets:[...active],retiring};
+}
+export function applyCabinetRelocation<T extends RelocationPart>(w:WarehouseState,draft:CabinetLayout,parts:T[],moves:RelocationMove[]){
+ if(!Array.isArray(moves))throw Error('无效库存迁移');const preview=previewCabinetRelocation(w,draft,parts),next=structuredClone(parts),active=new Set(preview.targets),retired=new Set(preview.retiring);
+ const key=(partId:string,sourceId:string)=>JSON.stringify([partId,sourceId]);const required=new Map(preview.sources.map(s=>[key(s.partId,s.sourceId),s.quantity])),totals=new Map<string,number>(),seen=new Set<string>();
+ for(const m of moves){if(!m||typeof m.partId!=='string'||typeof m.sourceId!=='string'||typeof m.targetId!=='string'||!Number.isSafeInteger(m.quantity)||m.quantity<=0||!active.has(m.targetId)||!retired.has(m.sourceId))throw Error('无效迁移目标或数量');const k=key(m.partId,m.sourceId),edge=JSON.stringify([k,m.targetId]);if(seen.has(edge)||!required.has(k))throw Error('重复或未知迁移来源');seen.add(edge);const total=(totals.get(k)??0)+m.quantity;if(!Number.isSafeInteger(total)||total>required.get(k)!)throw Error('迁移数量超出原库存');totals.set(k,total)}
+ for(const [k,q] of required)if(totals.get(k)!==q)throw Error('待移除库位的库存必须全部分配');
+ for(const p of next)for(const id of retired)delete p.stock[id];
+ const occupancy=new Map<string,string>();for(const p of next)for(const [id,q] of Object.entries(p.stock))if(q>0){if(!active.has(id)||occupancy.has(id)&&occupancy.get(id)!==p.id)throw Error('现有库存冲突');occupancy.set(id,p.id)}
+ for(const m of moves){const p=next.find(p=>p.id===m.partId)!;if(occupancy.has(m.targetId)&&occupancy.get(m.targetId)!==m.partId)throw Error('目标库位存在不同元件，禁止混装');const q=(p.stock[m.targetId]??0)+m.quantity;if(!Number.isSafeInteger(q))throw Error('迁移数量溢出');p.stock[m.targetId]=q;occupancy.set(m.targetId,m.partId)}
+ for(const p of next){const before=parts.find(x=>x.id===p.id)!;const sum=(s:Record<string,number>)=>Object.values(s).reduce((a,b)=>a+BigInt(b),0n);if(sum(before.stock)!==sum(p.stock))throw Error('库存数量不守恒')}
+ return {warehouse:preview.warehouse,parts:next};
+}
+export function planCabinetSave(id:string,instanceId:string,revision:number,w:WarehouseState,draft:CabinetLayout,parts:RelocationPart[],confirmed:boolean,moves:RelocationMove[]=[]):ApprovedPlan{
  if(!confirmed||!id||!instanceId||!Number.isSafeInteger(revision)||revision<0)throw Error('布局确认不完整');
- applyCabinetLayout(w,draft,parts);
- return {id,instanceId,catalogHash:'warehouse-layout-v1',snapshotHash:String(revision),approvalId:id,operations:[{id:id+':0',kind:'save-demo-cabinet',payload:{draft:structuredClone(draft),expectedRevision:revision}}]};
+ applyCabinetRelocation(w,draft,parts,moves);
+ return {id,instanceId,catalogHash:'warehouse-layout-v1',snapshotHash:String(revision),approvalId:id,operations:[{id:id+':0',kind:'save-demo-cabinet',payload:{draft:structuredClone(draft),expectedRevision:revision,moves:structuredClone(moves)}}]};
 }
