@@ -1,3 +1,4 @@
+import {readNativeStockByLocation,verifyLegacyLocationAncestors} from './native-legacy-stock.js';
 import {nativeApiVersion,matchesPreparedApi} from './native-api-version.js';
 import {verifyNativeLayoutStock} from './native-layout-migration.js';
 import {retiredLocationName} from './native-retired-location.js';
@@ -52,13 +53,13 @@ function wirePath(op:Operation,legacy=false):{method:'POST'|'PATCH';path:string}
  case 'associate-category-template':return {method:'POST',path:'/api/part/category/parameters/'};
  case 'create-location':return {method:'POST',path:'/api/stock/location/'};
  case 'rename-location':return {method:'PATCH',path:'/api/stock/location/'+id(p.locationId)+'/'};
- case 'update-location-metadata':return {method:'PATCH',path:'/api/metadata/stocklocation/'+id(p.locationId)+'/'};
+ case 'update-location-metadata':return {method:'PATCH',path:legacy?'/api/stock/location/'+id(p.locationId)+'/metadata/':'/api/metadata/stocklocation/'+id(p.locationId)+'/'};
  case 'transfer-stock':return {method:'POST',path:'/api/stock/transfer/'};
  default:throw Error('unsupported local write');
  }
 }
 function allowedRead(path:string){
- return /^\/api\/(?:|user\/me\/|schema\/|part\/category\/|part\/category\/parameters\/|(?:part\/)?parameter\/template\/|stock\/|stock\/location\/(?:[1-9][0-9]*\/)?|metadata\/stocklocation\/[1-9][0-9]*\/)$/.test(path);
+ return /^\/api\/(?:|user\/me\/|schema\/|part\/category\/|part\/category\/parameters\/|(?:part\/)?parameter\/template\/|stock\/|stock\/location\/(?:[1-9][0-9]*\/(?:metadata\/)?)?|metadata\/stocklocation\/[1-9][0-9]*\/)$/.test(path);
 }
 async function bounded(r:Response,limit:number){
  if(!r.body)return new Uint8Array();
@@ -105,9 +106,10 @@ async function extraState(ctx:LocalOperationContext,op:Operation):Promise<Extra>
    const retiring=op.kind==='update-location-metadata'&&Array.isArray(op.payload.retiringLocationIds)?op.payload.retiringLocationIds.map(id):[];
    const leaves=op.kind==='rename-location'?[id(op.payload.locationId)]:Array.isArray(op.payload.expectedLeaves)?[...op.payload.expectedLeaves.map(x=>id(obj(x).locationId)),...retiring]:[];
    if(!leaves.length||leaves.length>10000||new Set(leaves).size!==leaves.length)throw Error('invalid conservation scope');
+   if(ctx.apiVersion===232)await verifyLegacyLocationAncestors(read,rows as unknown as import('./inventory-provider.js').LocationSummary[],op.kind==='update-location-metadata'?[id(op.payload.locationId),...leaves]:leaves);
    const stock:Record<string,unknown>[]=[];
    for(const leaf of leaves){if(!rows.some(r=>r.id===leaf&&r.structural===false)||rows.some(r=>r.parentId===leaf))throw Error('invalid conservation leaf');
-    const items=(await read.list('api/stock/',{location:leaf,cascade:'false'})).map(r=>stockRecord(r,leaf));
+    const items=(await readNativeStockByLocation(read,leaf,ctx.apiVersion===232)).map(r=>stockRecord(r,leaf));
     if((retiring.includes(leaf)||op.kind==='rename-location'&&op.payload.retireConfirmed===true)&&items.length)throw Error('retiring location retains stock records');
     if(retiring.includes(leaf)&&!rows.some(r=>r.id===leaf&&r.name===retiredLocationName(leaf)))throw Error('retired marker not verified');
     stock.push(...items);
@@ -178,9 +180,9 @@ export class NativeOperationsAcceptance{
   if(op.kind==='transfer-stock'){
    const p=op.payload,source=id(p.sourceId),target=id(p.targetId);if(source===target)throw Error('invalid transfer locations');
    const read=new InvenTreeReadProvider(ctx.base,ctx.token,ctx.request);
-   const expectedSource=await read.list('api/stock/',{location:source,cascade:'false'}),expectedTarget=await read.list('api/stock/',{location:target,cascade:'false'});
-   if(p.continuation!==undefined){const c=obj(p.continuation);if(!Array.isArray(c.splits)||!c.splits.length||c.splits.length>999)throw Error('invalid prior split list');const expectedPrior=[];for(const x of c.splits){const locationId=id(obj(x).locationId);expectedPrior.push({locationId,rows:await read.list('api/stock/',{location:locationId,cascade:'false'})})}return {...op,payload:{...p,expectedSource,expectedTarget,expectedPrior}}}
-   if(p.linkedExpected!==undefined){if(!Array.isArray(p.linkedExpected)||p.linkedExpected.length<2||p.linkedExpected.length>10000)throw Error('invalid linked stock evidence');const ids=[...new Set(p.linkedExpected.map(x=>id(obj(x).location)))].filter(x=>x!==source&&x!==target).sort(),expectedLinked=[];for(const locationId of ids)expectedLinked.push({locationId,rows:await read.list('api/stock/',{location:locationId,cascade:'false'})});return {...op,payload:{...p,expectedSource,expectedTarget,expectedLinked}}}
+   const legacy=ctx.apiVersion===232,expectedSource=await readNativeStockByLocation(read,source,legacy),expectedTarget=await readNativeStockByLocation(read,target,legacy);
+   if(p.continuation!==undefined){const c=obj(p.continuation);if(!Array.isArray(c.splits)||!c.splits.length||c.splits.length>999)throw Error('invalid prior split list');const expectedPrior=[];for(const x of c.splits){const locationId=id(obj(x).locationId);expectedPrior.push({locationId,rows:await readNativeStockByLocation(read,locationId,legacy)})}return {...op,payload:{...p,expectedSource,expectedTarget,expectedPrior}}}
+   if(p.linkedExpected!==undefined){if(!Array.isArray(p.linkedExpected)||p.linkedExpected.length<2||p.linkedExpected.length>10000)throw Error('invalid linked stock evidence');const ids=[...new Set(p.linkedExpected.map(x=>id(obj(x).location)))].filter(x=>x!==source&&x!==target).sort(),expectedLinked=[];for(const locationId of ids)expectedLinked.push({locationId,rows:await readNativeStockByLocation(read,locationId,legacy)});return {...op,payload:{...p,expectedSource,expectedTarget,expectedLinked}}}
    return {...op,payload:{...p,expectedSource,expectedTarget}};
   }
   if(op.kind==='associate-category-template'){
@@ -199,7 +201,7 @@ export class NativeOperationsAcceptance{
   if(this.production&&await nativeCatalogHash(this.catalog)!==this.production.catalogSha256)throw Error('production catalog contents changed');
   str(instanceId);const input=rawOperation(raw);
   const probe=this.session(instanceId,input,'observe'),initial=await this.target(probe.ctx);
-  if(initial.apiVersion===232&&!['create-category','create-parameter-template','associate-category-template'].includes(input.kind))throw Error('legacy stock/location mutations not yet supported');
+  
   const hydration=this.session(instanceId,input,'observe',undefined,undefined,undefined,undefined,initial.apiVersion);
   const operation=await this.hydrate(hydration.ctx,input);
   const s=this.session(instanceId,operation,'prepare',undefined,undefined,undefined,undefined,initial.apiVersion),target=await this.target(s.ctx);matchesPreparedApi(target.apiVersion??570,initial);
@@ -224,7 +226,7 @@ export class NativeOperationsAcceptance{
  async execute(raw:Prepared,approval:unknown,store:NativeOperationEvidence){
   const p=structuredClone(raw),{binding,operationKey}=await this.validate(p,approval);
   const s=this.session(p.instanceId,p.operation,'execute',p,binding,operationKey,store,p.apiVersion),target=await this.target(s.ctx);
-  matchesPreparedApi(target.apiVersion??570,p);if(p.apiVersion===232&&!['create-category','create-parameter-template','associate-category-template'].includes(p.operation.kind))throw Error('legacy stock/location mutations not yet supported');
+  matchesPreparedApi(target.apiVersion??570,p);
   if(target.schemaSha256!==p.schemaSha256||target.actorId!==p.actorId||!eq(await extraState(s.ctx,p.operation),p.extra))throw Error('approved target or baseline changed');
   const o=internal(p.operation),e=new AdapterEvidence(this.base.href,p.instanceId,o),t=await adapter(s.ctx,o,e);
   try{
@@ -242,7 +244,7 @@ export class NativeOperationsAcceptance{
   if(!saved)return result('unknown','no correlated acknowledgement; never resend');
   try{
    const s=this.session(p.instanceId,p.operation,'observe',undefined,undefined,undefined,undefined,p.apiVersion),target=await this.target(s.ctx);
-   matchesPreparedApi(target.apiVersion??570,p);if(p.apiVersion===232&&!['create-category','create-parameter-template','associate-category-template'].includes(p.operation.kind))return result('blocked','legacy stock/location mutations not yet supported');
+   matchesPreparedApi(target.apiVersion??570,p);
    if(target.schemaSha256!==p.schemaSha256||target.actorId!==p.actorId)return result('unknown','target or schema changed');
    const o=internal(p.operation),e=new AdapterEvidence(this.base.href,p.instanceId,o,saved.ack),t=await adapter(s.ctx,o,e),observed=await t.observe(o);
    if(observed.status!=='verified')return result(observed.status,'native adapter readback not verified');
