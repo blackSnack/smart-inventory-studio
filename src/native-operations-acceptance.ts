@@ -92,7 +92,8 @@ async function extraState(ctx:LocalOperationContext,op:Operation):Promise<Extra>
  const read=new InvenTreeReadProvider(ctx.base,ctx.token,ctx.request);
  if(op.kind==='create-category'||op.kind==='create-parameter-template'){
   const rows=op.kind==='create-category'?await read.list('api/part/category/'):await read.list('api/parameter/template/',{for_model:'part.part'});
-  return {rows:sortRows(rows.map(obj))};
+  const keys=op.kind==='create-category'?['pk','name','description','parent','structural']:['pk','name','description','units','model_type','enabled','checkbox','choices','selectionlist'];
+  return {rows:sortRows(rows.map(x=>{const r=obj(x);if(keys.some(k=>!Object.hasOwn(r,k)))throw Error('incomplete definition evidence');return Object.fromEntries(keys.map(k=>[k,r[k]]))}))};
  }
  if(['create-location','rename-location','update-location-metadata','transfer-stock'].includes(op.kind)){
   const rows=sortRows((await new InvenTreeReadAdapter(ctx.base,ctx.token,ctx.request).getLocations()).map(r=>({...r})));
@@ -151,7 +152,7 @@ export class NativeOperationsAcceptance{
    if(method==='GET'&&mode!=='observe'){
     if(!response.ok)throw Error('local read denied or unavailable');
     const copy=new URL(u);copy.searchParams.sort();
-    trace.push({path:copy.pathname+copy.search,sha256:await hash(bytes)});
+    trace.push({path:copy.pathname+copy.search,sha256:await hash(u.pathname==='/api/schema/'?bytes:snapshotKey(JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes))))});
    }
    return new Response([204,205,304].includes(response.status)?null:new Uint8Array(bytes).buffer,{status:response.status,headers:response.headers});
   };
@@ -179,13 +180,14 @@ export class NativeOperationsAcceptance{
    const b=await t.readCandidate(ctx.instanceId,reviews);
    // Candidate only: complete flag is provisional for the pure planner; visibility must be independently approved before write.
    const planned=planIsolatedAssociation(op.id,this.catalog,{categoryKey,remoteCategoryId:categoryId,templates:{[fieldKey]:templateId}},fieldKey,{...b,snapshot:{...b.snapshot,complete:true}},reviews);
-   return {...planned,kind:'associate-category-template'};
+   return {...planned,kind:'associate-category-template',payload:{...planned.payload,catalogCategoryKey:categoryKey,catalogFieldKey:fieldKey}};
   }
   return op;
  }
  async prepare(instanceId:string,raw:unknown):Promise<Prepared>{
   str(instanceId);const input=rawOperation(raw);
   const hydration=this.session(instanceId,input,'observe');
+  await this.target(hydration.ctx);
   const operation=await this.hydrate(hydration.ctx,input);
   const s=this.session(instanceId,operation,'prepare'),target=await this.target(s.ctx),extra=await extraState(s.ctx,operation);
   const o=internal(operation),e=new AdapterEvidence(this.base.href,instanceId,o),t=await adapter(s.ctx,o,e);

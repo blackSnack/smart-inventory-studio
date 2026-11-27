@@ -10,7 +10,13 @@ export function localOperationBase(base:string){
 export function createLocalOperationContext(base:string,token:string,instanceId:string,dispatcher:typeof fetch):LocalOperationContext{
  const u=localOperationBase(base);
  if(typeof token!=='string'||!token.trim()||/[\r\n]/.test(token)||typeof instanceId!=='string'||!instanceId.trim()||instanceId.length>256||typeof dispatcher!=='function')throw Error('invalid local acceptance context');
- const ctx=Object.freeze({base:u.href,token,instanceId,request:dispatcher});
+ const request:typeof fetch=(input,init)=>{
+  if(typeof input!=='string'&&!(input instanceof URL))throw Error('invalid local request');
+  const target=new URL(input,u);
+  if(target.origin!==u.origin||target.username||target.password||target.hash||!['GET','POST','PATCH'].includes(init?.method??'GET'))throw Error('unsafe local acceptance request');
+  return dispatcher(target,{...init,redirect:'error',cache:'no-store'});
+ };
+ const ctx=Object.freeze({base:u.href,token,instanceId,request});
  contexts.add(ctx);return ctx;
 }
 export function assertLocalOperationContext(ctx:LocalOperationContext,evidence?:{base:string;instanceId:string}){
