@@ -32,3 +32,33 @@ export function mergeMetadata(existing:Record<string,unknown>,layout:Drawer,expe
  if(rev!==expectedRevision||layout.revision!==expectedRevision+1)throw Error('stale layout revision');
  return {...existing,smart_inventory:{...old,schemaVersion:1,revision:layout.revision,layout}};
 }
+
+// Exact proportions in the existing integer-coordinate format. Refine the
+// selected axis only, then reduce the common grid divisor. No floating-point
+// rounding or identity changes for untouched compartments.
+export const MAX_COMPARTMENTS=1000;
+const gcd=(a:bigint,b:bigint):bigint=>{while(b){const r=a%b;a=b;b=r}return a};
+export function sameCompartmentGeometry(a:Drawer,old:Compartment,b:Drawer,next:Compartment):boolean{
+ return (['x','width','y','height'] as const).every(k=>{const horizontal=k==='x'||k==='width';return BigInt(old[k])*BigInt(horizontal?b.width:b.height)===BigInt(next[k])*BigInt(horizontal?a.width:a.height)});
+}
+export function splitByRatio(d:Drawer,id:string,axis:'horizontal'|'vertical',weights:number[],newIds:string[]):Drawer{
+ validateDrawer(d);
+ const c=d.compartments.find(r=>r.id===id);
+ if(!c||!['horizontal','vertical'].includes(axis)||weights.length<2||weights.length!==newIds.length||d.compartments.length-1+weights.length>MAX_COMPARTMENTS||!weights.every(n=>Number.isSafeInteger(n)&&n>0))throw Error('分隔数量或比例无效');
+ const horizontal=axis==='vertical',size=BigInt(horizontal?c.width:c.height),total=weights.reduce((a,b)=>a+BigInt(b),0n);
+ const divisor=weights.reduce((a,b)=>gcd(a,BigInt(b)),0n),sum=total/divisor;
+ const scale=sum/gcd(size,sum);
+ let offset=0n;
+ const rects=d.compartments.flatMap(r=>{
+  const x=BigInt(r.x)*(horizontal?scale:1n),y=BigInt(r.y)*(horizontal?1n:scale),width=BigInt(r.width)*(horizontal?scale:1n),height=BigInt(r.height)*(horizontal?1n:scale);
+  if(r.id!==id)return [{id:r.id,x,y,width,height}];
+  return weights.map((w,i)=>{const length=size*scale*(BigInt(w)/divisor)/sum;const result={id:newIds[i],x:x+(horizontal?offset:0n),y:y+(horizontal?0n:offset),width:horizontal?length:width,height:horizontal?height:length};offset+=length;return result});
+ });
+ let width=BigInt(d.width)*(horizontal?scale:1n),height=BigInt(d.height)*(horizontal?1n:scale);
+ let gx=width,gy=height;
+ for(const r of rects){gx=gcd(gcd(gx,r.x),r.width);gy=gcd(gcd(gy,r.y),r.height)}
+ width/=gx;height/=gy;
+ if(width*height>1000000n)throw Error('当前分隔组合超过精确布局容量，请减少比例复杂度');
+ const next:Drawer={...d,width:Number(width),height:Number(height),revision:d.revision+1,compartments:rects.map(r=>({id:r.id,x:Number(r.x/gx),y:Number(r.y/gy),width:Number(r.width/gx),height:Number(r.height/gy)}))};
+ validateDrawer(next);return next;
+}

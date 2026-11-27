@@ -1,4 +1,5 @@
 import {newCabinet,validateCabinet,type CabinetLayout} from './cabinet-layout.js';
+import {sameCompartmentGeometry} from './storage-layout.js';
 import type {ApprovedPlan} from './operation-journal.js';
 export interface StoredCabinet {layout:CabinetLayout;leaves:Record<string,string>}
 export interface WarehouseState {schemaVersion:1;cabinets:StoredCabinet[];retired:string[];names?:Record<string,string>}
@@ -36,7 +37,7 @@ export function applyCabinetLayout(w:WarehouseState,draft:CabinetLayout,parts:St
   const before=old?.layout.cells.find(c=>c.id===cell.id);
   for(const r of cell.drawer.compartments){
    const existing=old&&Object.hasOwn(old.leaves,r.id)?old.leaves[r.id]:undefined;
-   if(existing){const previous=before?.drawer.compartments.find(x=>x.id===r.id);if(!previous||['x','y','width','height'].some(k=>previous[k as keyof typeof previous]!==r[k as keyof typeof r]))throw Error('stable leaf geometry changed');leaves[r.id]=existing;kept.add(existing);continue}
+   if(existing){const previous=before?.drawer.compartments.find(x=>x.id===r.id);if(!previous||!before||!sameCompartmentGeometry(before.drawer,previous,cell.drawer,r))throw Error('stable leaf geometry changed');leaves[r.id]=existing;kept.add(existing);continue}
    const base=cell.name+(cell.drawer.compartments.length>1?'-S'+(cell.drawer.compartments.indexOf(r)+1):'');let id=base,n=1;while(used.has(id))id=base+'-'+(++n);used.add(id);leaves[r.id]=id;
   }
   cell.locationId=cell.drawer.compartments.length===1?leaves[cell.drawer.compartments[0].id]:null;

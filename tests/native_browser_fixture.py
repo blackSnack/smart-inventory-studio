@@ -44,12 +44,14 @@ def exercise_native_browser(page, app_url):
     def connect():
         page.goto(app_url)
         page.get_by_role('button',name='设置',exact=True).click()
-        page.get_by_role('button',name='真实库存只读验证').click()
+        page.get_by_role('button',name='配置 InvenTree').click()
         page.get_by_label('连接独立测试实例进行写入验收').check()
         page.get_by_label('服务地址').fill(origin+'/')
         page.get_by_label('隔离实例 API Token').fill('synthetic-native')
         page.get_by_role('button',name='测试并连接').click()
-        page.get_by_text('隔离实例 · 待验收',exact=True).wait_for()
+        page.get_by_text('当前库存：隔离实例（验收）',exact=True).wait_for()
+        page.get_by_text('已连接 · 隔离验收',exact=True).wait_for()
+        page.get_by_role('button',name='首页',exact=True).click()
         page.get_by_role('button',name='已有元件入库',exact=True).click()
     def prepare(location,quantity):
         page.get_by_label('查找真实元件').fill('R-01')
