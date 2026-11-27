@@ -7,7 +7,10 @@ import {createHash} from 'node:crypto';
 import {NativeOperationsAcceptance,nativeOperationsPreparationHash} from '../dist/native-operations-acceptance.js';
 import {LocalNativeOperationEvidence} from '../tools/native-operation-evidence.mjs';
 import {IsolatedStockTransferTransport} from '../dist/isolated-stock-transfer.js';
-import {newCabinet} from '../dist/cabinet-layout.js';
+import {nativeLayoutMigration,nativeLocationTree,resolveNativeLayoutItem} from '../dist/native-layout-migration.js';
+import {retiredLocationName} from '../dist/native-retired-location.js';
+import {splitCompartment,mergeCompartments} from '../dist/storage-layout.js';
+import {newCabinet,replaceDrawer} from '../dist/cabinet-layout.js';
 import {previewLegacyMigration,planLegacyMigration} from '../dist/legacy-location-migration.js';
 const bytes=readFileSync(new URL('../catalog/electronic-parts.json',import.meta.url)),catalog=JSON.parse(bytes),hash=createHash('sha256').update(bytes).digest('hex');
 const base='http://127.0.0.1:8123/';
@@ -48,19 +51,20 @@ function fixture(){
   if(path==='/api/part/category/'){result={pk:11,...body};categories.push(result)}
   else if(path==='/api/parameter/template/'){result={pk:12,...body};templates.push(result)}
   else if(path==='/api/part/category/parameters/'){result={pk:13,...body};relations.push(result)}
-  else if(path==='/api/stock/location/'){result={pk:14,...body};locations.push(result)}
-  else if(path==='/api/stock/location/2/'&&method==='PATCH'){locations[1].name=body.name;result=locations[1]}
+  else if(path==='/api/stock/location/'){result={pk:14+locations.filter(x=>x.pk>=14).length,...body};locations.push(result)}
+  else if(/^\/api\/stock\/location\/\d+\/$/.test(path)&&method==='PATCH'){result=locations.find(x=>x.pk===Number(path.split('/').at(-2)));result.name=body.name}
   else if(path==='/api/metadata/stocklocation/1/'&&method==='PATCH'){metadata=body.metadata;result={metadata}}
   else if(path==='/api/stock/transfer/'){
    assert.equal(body.items[0].merge,false);const item=stocks.find(r=>r.pk===body.items[0].pk);
-   if(body.items[0].quantity==='4.125'){stocks.push({...item,pk:15,parent:item.pk,location:body.location,quantity:'4.1250'});item.quantity='6.1250';item.child_items=1}
+   const q=Number(body.items[0].quantity),remaining=Number(item.quantity)-q;
+   if(remaining>0){stocks.push({...item,pk:Math.max(14,...stocks.map(x=>x.pk))+1,parent:item.pk,location:body.location,quantity:q.toFixed(4),child_items:0});item.quantity=remaining.toFixed(4);item.child_items++}
    else item.location=body.location;
    result=body;
   }else throw Error('unexpected write '+path);
   if(lost)throw Error('lost acknowledgement');
   return Response.json(result,{status:method==='POST'?201:200});
  };
- return {runner:NativeOperationsAcceptance.open(base,'fixture',catalog,hash,request),categories,templates,relations,locations,stocks,writes,get metadata(){return metadata},schema,lose(){lost=true},changeActor(){actor=2}};
+ return {runner:NativeOperationsAcceptance.open(base,'fixture',catalog,hash,request),categories,templates,relations,locations,stocks,writes,get metadata(){return metadata},setMetadata(m){metadata=structuredClone(m)},schema,lose(){lost=true},changeActor(){actor=2}};
 }
 function journal(t){const dir=mkdtempSync(join(tmpdir(),'studio-native-ops-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));return ()=>new LocalNativeOperationEvidence(dir)}
 async function run(f,op,e){
@@ -132,4 +136,39 @@ test('stable operation ID reservation cannot be replaced by a fresh hash',async 
  assert.equal(await e().claim(key,a),true);assert.equal(await e().claim(key,b),false);
  await assert.rejects(e().record(key,b,{}));await assert.rejects(e().read(key,b));
  await e().record(key,a,{id:'42'});assert.deepEqual(await e().read(key,a),{ack:{id:'42'}});
+});
+
+test('native cabinet split creates missing leaves, redistributes one exact StockItem through successive verified splits, and archives empty original before metadata',async t=>{
+ const f=fixture(),e=journal(t),layout=newCabinet('cab','cab',{layers:1,rows:1,cols:1},'CAB'),cell=layout.cells[0],whole=cell.drawer.compartments[0].id;
+ f.stocks.splice(1,1);const initial={...layout,cells:[{...cell,locationId:'2'}]};
+ f.setMetadata({other:4,smart_inventory:{cabinet:{schemaVersion:1,revision:0,layout:initial,leafBindings:[{compartmentId:whole,locationId:'2'}]}}});
+ const draft=replaceDrawer(initial,cell.id,splitCompartment(cell.drawer,whole,'vertical',[4,4,4],['a','b','c']));
+ const oldMeta=structuredClone(f.metadata),input={rootId:'1',expectedMetadata:oldMeta,layout:draft,tree:nativeLocationTree(f.locations),bindings:{a:'3',b:'@new',c:'@new'},stocks:{'2':structuredClone(f.stocks),'3':[]},moves:[{stockItemId:'9',targetCompartmentId:'a',quantity:'4.125'},{stockItemId:'9',targetCompartmentId:'b',quantity:'2.125'},{stockItemId:'9',targetCompartmentId:'c',quantity:'4'}]};
+ let index=0;assert.throws(()=>nativeLayoutMigration({...input,moves:input.moves.slice(0,2)},()=>String(++index)));assert.throws(()=>nativeLayoutMigration({...input,stocks:{'2':input.stocks['2']}},()=>String(++index)));assert.throws(()=>nativeLayoutMigration({...input,moves:[...input.moves,{stockItemId:'9',targetCompartmentId:'c',quantity:'1'}]},()=>String(++index)));
+ const q=nativeLayoutMigration(input,()=>String(++index)),records=new Map(),store={get:async(scope,id)=>records.get(id)};
+ assert.deepEqual(q.map(x=>x.kind==='operation'?x.payload.kind:x.kind),['create-location','create-location','cabinet-transfer','cabinet-transfer','cabinet-transfer','rename-location','cabinet-finalize']);
+ await assert.rejects(resolveNativeLayoutItem(q[3],'fixture',store));
+ const retire={id:'unsafe-retire',kind:'rename-location',payload:{locationId:'2',expectedParentId:'1',expectedName:'A',name:retiredLocationName('2'),retireConfirmed:true}};await assert.rejects(f.runner.prepare('fixture',retire));assert.equal(f.writes.length,0);
+ for(const item of q){
+  const work=item.kind==='operation'?item:await resolveNativeLayoutItem(item,'fixture',store,nativeLocationTree(f.locations));
+  if(item.kind==='cabinet-finalize'){const x=f.stocks[0],old=x.supplier_part;x.supplier_part=99;await assert.rejects(f.runner.prepare('fixture',work.payload));x.supplier_part=old}
+  if(item.kind==='cabinet-transfer'&&item.prior.length){
+   const child=f.stocks.find(x=>x.parent===9),old=child.batch;child.batch='changed';await assert.rejects(f.runner.prepare('fixture',work.payload));child.batch=old;
+  }
+  const {p}=await run(f,work.payload,e),binding=await nativeOperationsPreparationHash(p),key=createHash('sha256').update(JSON.stringify({base:p.base,instanceId:p.instanceId,operationId:p.operation.id})).digest('hex');
+  // Local operation key is canonical, not insertion-order dependent.
+  const ack=(await e().read(key,binding))?.ack;assert.notEqual(ack,undefined);
+  records.set(item.id,{state:'verified',ackBinding:binding,ack,preparation:{scope:'fixture',input:work}});
+ }
+ assert.deepEqual(f.stocks.map(x=>[x.pk,x.location,x.quantity,x.parent,x.child_items]),[[9,15,'4.0000',null,2],[15,3,'4.1250',9,0],[16,14,'2.1250',9,0]]);
+ assert.equal(f.locations.find(x=>x.pk===2).name,retiredLocationName('2'));assert.equal(f.metadata.other,4);assert.deepEqual(f.metadata.smart_inventory.cabinet.leafBindings.map(b=>b.locationId),['3','14','15']);
+ assert.equal(f.stocks.reduce((n,x)=>n+Number(x.quantity),0),10.25);assert.equal(f.writes.length,7);
+ const blocked={...ops.location,id:'reserved',payload:{...ops.location.payload,name:retiredLocationName('999')}};await assert.rejects(f.runner.prepare('fixture',blocked));
+ const current=f.metadata.smart_inventory.cabinet.layout,drawer=current.cells[0].drawer,merged=replaceDrawer(current,current.cells[0].id,mergeCompartments(drawer,['a','b','c'],'merged'));
+ const mergeInput={rootId:'1',expectedMetadata:structuredClone(f.metadata),layout:merged,tree:nativeLocationTree(f.locations),bindings:{merged:'3'},stocks:Object.fromEntries([3,14,15].map(id=>[String(id),structuredClone(f.stocks.filter(x=>x.location===id))])),moves:[{stockItemId:'16',targetCompartmentId:'merged',quantity:'2.125'},{stockItemId:'9',targetCompartmentId:'merged',quantity:'4'}]};
+ assert.throws(()=>nativeLayoutMigration({...mergeInput,stocks:{...mergeInput.stocks,'3':[]}},()=>String(++index)));
+ const mergeQueue=nativeLayoutMigration(mergeInput,()=>String(++index));
+ for(const item of mergeQueue){const work=item.kind==='operation'?item:await resolveNativeLayoutItem(item,'fixture',store,nativeLocationTree(f.locations));const {p}=await run(f,work.payload,e),binding=await nativeOperationsPreparationHash(p),key=createHash('sha256').update(JSON.stringify({base:p.base,instanceId:p.instanceId,operationId:p.operation.id})).digest('hex'),ack=(await e().read(key,binding))?.ack;records.set(item.id,{state:'verified',ackBinding:binding,ack,preparation:{scope:'fixture',input:work}})}
+ assert.deepEqual(f.stocks.map(x=>[x.pk,x.location,x.quantity,x.parent,x.child_items]),[[9,3,'4.0000',null,2],[15,3,'4.1250',9,0],[16,3,'2.1250',9,0]]);
+ assert.equal(f.metadata.smart_inventory.cabinet.leafBindings.length,1);assert.equal(f.metadata.smart_inventory.cabinet.leafBindings[0].locationId,'3');assert.equal(f.stocks.reduce((n,x)=>n+Number(x.quantity),0),10.25);assert.equal(f.locations.find(x=>x.pk===14).name,retiredLocationName('14'));assert.equal(f.locations.find(x=>x.pk===15).name,retiredLocationName('15'));
 });

@@ -1,3 +1,4 @@
+import {layoutDependencies} from './native-layout-migration.js';
 import type {BrowserWorkStore,BrowserWorkRecord,NativeWorkResult,NativeQueueItem} from './browser-native-workflow.js';
 type Row=BrowserWorkRecord&{scope:string;id:string};
 const STORE='native-operations',QUEUE='native-queues';
@@ -12,7 +13,7 @@ export class IndexedDbNativeWorkStore implements BrowserWorkStore{
  }
  async saveQueue(scope:string,items:NativeQueueItem[]){
   const copy=structuredClone(items);if(!scope||!copy.length||copy.length>1000||new Set(copy.map(x=>x.id)).size!==copy.length||copy.some(x=>typeof x.id!=='string'||!x.id||x.id.length>128))throw Error('invalid native queue');
-  for(let i=0;i<copy.length;i++){const x=copy[i];if(x.kind==='after-part-create'&&!copy.slice(0,i).some(p=>p.id===x.createId&&p.kind==='create-part'))throw Error('missing preceding Part creation')}
+  for(let i=0;i<copy.length;i++){const x=copy[i];if(layoutDependencies(x).some(id=>!copy.slice(0,i).some(p=>p.id===id)))throw Error('missing prior layout operation');if((x.kind==='after-part-create'||x.kind==='after-part-enrichment')&&!copy.slice(0,i).some(p=>p.id===x.createId&&p.kind==='create-part'))throw Error('missing preceding Part creation')}
   return new Promise<void>((resolve,reject)=>{const tx=this.db.transaction([QUEUE,STORE],'readwrite'),q=tx.objectStore(QUEUE),s=tx.objectStore(STORE);let error:unknown;tx.oncomplete=()=>resolve();tx.onabort=()=>reject(error??tx.error??Error('queue save failed'));
    const r=q.get(scope);r.onsuccess=()=>{if(r.result){error=Error('existing queue must be resumed or stopped');tx.abort();return}const h=s.index('scope').getAll(scope);h.onsuccess=()=>{const rows=h.result as Row[];if(rows.some(x=>copy.some(i=>i.id===x.id)||x.state==='reviewed'||x.state==='sent'||x.state==='unknown'||x.state==='blocked'&&x.ackBinding!==undefined)){error=Error('unresolved or repeated operation');tx.abort();return}q.add({scope,items:copy})}};
   });
