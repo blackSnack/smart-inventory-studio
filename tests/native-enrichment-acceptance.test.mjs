@@ -9,26 +9,26 @@ const source={kind:'source',partId:'42',ipn:'FIX-001',url:'https://example.test/
 const param={kind:'parameter',partId:'42',ipn:'FIX-001',templateId:'5',templateName:'Resistance',units:'Ω',value:'10kΩ',evidence:[{url:'https://example.test/spec',locator:'table'}]};
 const approve=async p=>({approvedPreparationSha256:await nativeEnrichmentPreparationHash(p),disposableInstanceConfirmed:true,writeAuthorized:true,visibilityConfirmed:true,exclusiveAccessConfirmed:true,identityConfirmed:true,sourceReviewed:true,fieldMappingConfirmed:true});
 const existing={pk:9,model_type:'part.part',model_id:42,template:5,data:'',note:'keep'};
-function fixture(initial=[]){
- const base='http://127.0.0.1:8123/',part={pk:42,IPN:'FIX-001',active:true},template={pk:5,model_type:'part.part',name:'Resistance',units:'Ω',enabled:true,checkbox:false,choices:'',selectionlist:null};
- const schema={openapi:'3.0.3',paths:{'/api/part/{id}/':{get:{}},'/api/attachment/':{get:{},post:{}},'/api/parameter/template/{id}/':{get:{}},'/api/parameter/':{get:{},post:{}},'/api/parameter/{id}/':{patch:{}}}};
+function fixture(initial=[],legacy=false){
+ const base='http://127.0.0.1:8123/',part={pk:42,IPN:'FIX-001',active:true},template={pk:5,name:'Resistance',units:'Ω',checkbox:false,choices:'',...(legacy?{}:{model_type:'part.part',enabled:true,selectionlist:null})};
+ const pathPrefix=legacy?'/api/part/parameter/':'/api/parameter/';
+ const schema={openapi:'3.0.3',paths:{'/api/part/{id}/':{get:{}},'/api/attachment/':{get:{},post:{}},[pathPrefix+'template/{id}/']:{get:{}},[pathPrefix]:{get:{},post:{}},[pathPrefix+'{id}/']:{patch:{}}}};
  const attachments=[{pk:1,model_type:'part',model_id:42,link:null,comment:'Private file',attachment:'/media/private.pdf'}],values=structuredClone(initial),writes=[];let lost=false;
  const request=async(u,i)=>{
   const url=new URL(u),method=i.method??'GET',path=url.pathname;assert.equal(url.origin,'http://127.0.0.1:8123');assert.equal(i.redirect,'error');assert.equal(i.headers.Authorization,'Token fixture');
-  if(path==='/api/')return Response.json({server:'InvenTree',version:'1.7.4',apiVersion:570});
+  if(path==='/api/')return Response.json({server:'InvenTree',version:legacy?'0.16.7':'1.7.4',apiVersion:legacy?232:570});
   if(path==='/api/user/me/')return Response.json({pk:1});
   if(path==='/api/schema/')return Response.json(schema);
   if(path==='/api/part/42/')return Response.json(part);
-  if(path==='/api/parameter/template/5/')return Response.json(template);
+  if(path===pathPrefix+'template/5/')return Response.json(template);
   if(method==='GET'){
-   assert.equal(url.searchParams.get('model_id'),'42');
-   if(path==='/api/attachment/'){assert.equal(url.searchParams.get('model_type'),'part');return Response.json(attachments)}
-   assert.equal(path,'/api/parameter/');assert.equal(url.searchParams.get('model_type'),'part.part');assert.equal(url.searchParams.get('template'),'5');return Response.json(values);
+   if(path==='/api/attachment/'){assert.equal(url.searchParams.get('model_id'),'42');assert.equal(url.searchParams.get('model_type'),'part');return Response.json(attachments)}
+   assert.equal(path,pathPrefix);if(legacy){assert.equal(url.searchParams.get('part'),'42');assert.equal(url.searchParams.has('model_id'),false)}else{assert.equal(url.searchParams.get('model_id'),'42');assert.equal(url.searchParams.get('model_type'),'part.part')}assert.equal(url.searchParams.get('template'),'5');return Response.json(values);
   }
   const body=JSON.parse(i.body);writes.push([path,method,body]);let created;
   if(path==='/api/attachment/'){assert.equal(method,'POST');created={pk:2,...body,attachment:null};attachments.push(created)}
-  else if(method==='POST'){assert.equal(path,'/api/parameter/');created={pk:9,...body,note:''};values.push(created)}
-  else{assert.equal(method,'PATCH');assert.equal(path,'/api/parameter/9/');values[0]={...values[0],...body};created=values[0]}
+  else if(method==='POST'){assert.equal(path,pathPrefix);created={pk:9,...body,...(legacy?{}:{note:''})};values.push(created)}
+  else{assert.equal(method,'PATCH');assert.equal(path,pathPrefix+'9/');values[0]={...values[0],...body};created=values[0]}
   if(lost)throw Error('lost');return Response.json(created,{status:method==='POST'?201:200});
  };
  return {runner:NativeEnrichmentAcceptance.open(base,'fixture',request),part,template,attachments,values,writes,lose(){lost=true}};
@@ -62,4 +62,21 @@ test('response loss on either native operation remains unknown after reopen and 
   const f=fixture(),e=journal(t),p=await f.runner.prepare('fixture',input),a=await approve(p);f.lose();
   assert.equal((await f.runner.execute(p,a,e())).status,'unknown');assert.equal((await f.runner.observe(p,a,e())).status,'unknown');await assert.rejects(f.runner.execute(p,a,e()));assert.equal(f.writes.length,1);
  }
+});
+
+test('232 parameter writes use part, never model_id or invented note; create and empty update remain correlated',async t=>{
+ for(const initial of [[],[{pk:9,part:42,template:5,data:''}]]){
+  const f=fixture(initial,true),e=journal(t),p=await f.runner.prepare('fixture',param),a=await approve(p);
+  assert.equal(p.apiVersion,232);assert.equal(f.writes.length,0);
+  assert.equal((await f.runner.execute(p,a,e())).status,'verified');
+  assert.deepEqual(f.writes,[initial.length?['/api/part/parameter/9/','PATCH',{data:'10kΩ'}]:['/api/part/parameter/','POST',{part:42,template:5,data:'10kΩ'}]]);
+  assert.equal(Object.hasOwn(f.values[0],'note'),false);assert.equal((await f.runner.observe(p,a,e())).status,'verified');
+  await assert.rejects(f.runner.prepare('fixture',param));
+ }
+});
+test('232 legacy link writes use the unchanged attachment contract and no replay after loss',async t=>{
+ const f=fixture([],true),e=journal(t),p=await f.runner.prepare('fixture',source),a=await approve(p);f.lose();
+ assert.equal((await f.runner.execute(p,a,e())).status,'unknown');
+ assert.equal((await f.runner.observe(p,a,e())).status,'unknown');
+ await assert.rejects(f.runner.execute(p,a,e()));assert.equal(f.writes.length,1);
 });
