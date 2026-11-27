@@ -1,3 +1,5 @@
+import {nativeApiVersion,parameterPath,type NativeApiVersion} from './native-api-version.js';
+import {readNativeStockByLocation} from './native-legacy-stock.js';
 import {authorizeProductionNativeTarget,authorizedNativeBase,assertNativeTarget,nativeCatalogHash,type ProductionNativeTarget} from './native-production-authorization.js';
 // Browser workflows use the same native runners as the CLI; production requires the separate verified-target gate.
 import {NativeReceiptAcceptance,nativeReceiptPreparationHash,type NativeReceiptEvidence} from './native-receipt-acceptance.js';
@@ -30,7 +32,7 @@ export async function resolveNativeQueueItem(item:NativeQueueItem,scope:string,s
  return {id:item.id,kind:'receive-existing-part',payload:{partId:validId(obj(row.ack).stockId),locationId:item.locationId,quantity:item.quantity,expectedIpn:item.ipn}};
 }
 type NativePrepared={kind:'receive-existing-part';value:Receipt}|{kind:'create-part';value:Part}|{kind:'enrichment';value:Enrichment}|{kind:'operation';value:Operations};
-type Target={actorId:string;schemaSha256:string};
+type Target={actorId:string;schemaSha256:string;apiVersion?:232};
 export type BrowserPreparation={id:string;scope:string;target:Target;catalogHash:string;productionEvidenceSha256?:string;input:NativeWorkInput;prepared:NativePrepared;executionAllowed:false};
 export type BrowserApproval={preparationSha256:string;disposableConfirmed?:true;productionConfirmed?:true;productionEvidenceSha256?:string;visibilityConfirmed:true;exclusiveConfirmed:true;identityAndPhysicalConfirmed:true;sourceAndMappingConfirmed:true;writeAuthorized:true};
 export type NativeWorkResult={status:'verified'|'unknown'|'blocked';reason:string;serverAuditRequired:true;productionWriteAllowed:false};
@@ -51,7 +53,7 @@ export const browserPreparationHash=(p:BrowserPreparation)=>sha(snapshotKey(p));
 const validId=(x:unknown):string=>{const s=String(x);if(!/^[1-9][0-9]{0,15}$/.test(s)||!Number.isSafeInteger(Number(s)))throw Error('invalid native identity');return s};
 const result=(status:NativeWorkResult['status'],reason:string):NativeWorkResult=>({status,reason,serverAuditRequired:true,productionWriteAllowed:false});
 export class BrowserNativeWorkflow{
- readonly scope:string;readonly mode:'disposable'|'production';readonly productionEvidenceSha256?:string;private catalog:Catalog;
+ readonly scope:string;readonly mode:'disposable'|'production';readonly productionEvidenceSha256?:string;private catalog:Catalog;private api?:NativeApiVersion;
  private constructor(private base:URL,private token:string,catalog:Catalog,private catalogHash:string,private request:typeof fetch,private production?:ProductionNativeTarget){this.mode=production?'production':'disposable';this.scope=this.mode+':'+base.href;this.productionEvidenceSha256=production?.evidenceSha256;this.catalog=catalog}
  static async open(base:string,token:string,catalog:unknown,request:typeof fetch=fetch){
   const u=localOperationBase(base);if(!token.trim()||/[\r\n]/.test(token))throw Error('isolated token required');
@@ -74,19 +76,19 @@ export class BrowserNativeWorkflow{
  }
  async probe(){
   const v=obj((await this.get('api/',1024*1024)).data);
-  if(v.server!=='InvenTree'||v.version!=='1.7.4'||v.apiVersion!==570)throw Error('requires InvenTree 1.7.4 / API 570');
+  const api=nativeApiVersion(v,!!this.production);if(this.api!==undefined&&this.api!==api)throw Error('API version changed; reconnect and review');
   const a=obj((await this.get('api/user/me/',1024*1024)).data),actorId=validId(a.pk??a.id),s=await this.get('api/schema/?format=json');
-  const contract=inspectInvenTreeContract(s.data);
+  const contract=inspectInvenTreeContract(s.data,api);
   const schemaSha256=await sha(s.bytes);assertNativeTarget(this.production,actorId,schemaSha256);
-  return {target:{actorId,schemaSha256},version:'1.7.4',apiVersion:570,contract,writeEnabled:false as const};
+  this.api=api;return {target:{actorId,schemaSha256,...(api===232?{apiVersion:232 as const}:{})},version:api===232?'0.16.7':'1.7.4',apiVersion:api,contract,writeEnabled:false as const};
  }
  async listChoices(kind:'categories'|'templates'|'locations'|'stock',locationId?:string){
   const read=new InvenTreeReadProvider(this.base.href,this.token,this.request);
-  switch(kind){case 'categories':return read.list('api/part/category/');case 'templates':return read.list('api/parameter/template/',{for_model:'part.part'});case 'locations':return read.getLocations();case 'stock':return read.list('api/stock/',{location:validId(locationId),cascade:'false'})}
+  switch(kind){case 'categories':return read.list('api/part/category/');case 'templates':{const rows=await read.list(parameterPath(this.api??570)+'template/',this.api===232?{}:{for_model:'part.part'});return this.api===232?rows.map(raw=>{const r=obj(raw);if(typeof r.checkbox!=='boolean'||typeof r.choices!=='string')throw Error('invalid legacy template');return {...r,model_type:'part.part',enabled:true,selectionlist:null}}):rows}case 'locations':return read.getLocations();case 'stock':return readNativeStockByLocation(read,validId(locationId),this.api===232)}
  }
  async resolveQueueItem(item:NativeQueueItem,store:Pick<BrowserWorkStore,'get'>){if(item.kind==='cabinet-transfer'||item.kind==='cabinet-finalize')return resolveNativeLayoutItem(item,this.scope,store,item.kind==='cabinet-finalize'?nativeLocationTree(await this.listChoices('locations')):undefined);return resolveNativeQueueItem(item,this.scope,store)}
  async photoFields(draft:PhotoDraft,categoryId:string){const s=await (await InvenTreeAssociationReader.open(this.base.href,this.token,this.request)).readCandidate(this.scope);return photoInheritanceFields(this.catalog,draft,categoryId,s)}
- async readMetadata(locationId:string){const r=obj((await this.get('api/metadata/stocklocation/'+validId(locationId)+'/')).data);return obj(r.metadata)}
+ async readMetadata(locationId:string){const r=obj((await this.get(this.api===232?'api/stock/location/'+validId(locationId)+'/metadata/':'api/metadata/stocklocation/'+validId(locationId)+'/')).data);return obj(r.metadata)}
  async searchParts(query:string){if(!query.trim())return [];return new InvenTreeReadProvider(this.base.href,this.token,this.request).searchParts(query.trim())}
  private async verifyPhotoMapping(input:Extract<NativeWorkInput,{kind:'enrichment'}>){
   const m=input.photoMapping;if(!m)return;
@@ -112,11 +114,11 @@ export class BrowserNativeWorkflow{
    case 'operation':if(input.payload.id!==input.id)throw Error('operation ID mismatch');prepared={kind:input.kind,value:await this.operations().prepare(this.scope,input.payload)};break;
    default:throw Error('unsupported native workflow');
   }
-  if(prepared.value.schemaSha256!==target.schemaSha256||snapshotKey((await this.probe()).target)!==snapshotKey(target))throw Error('target changed during preparation');
+  if(prepared.value.apiVersion!==target.apiVersion||prepared.value.schemaSha256!==target.schemaSha256||snapshotKey((await this.probe()).target)!==snapshotKey(target))throw Error('target changed during preparation');
   return {id:input.id,scope:this.scope,target,catalogHash:this.catalogHash,...(this.production?{productionEvidenceSha256:this.production.evidenceSha256}:{}),input,prepared,executionAllowed:false};
  }
  private async validate(p:BrowserPreparation,a:BrowserApproval){
-  if(p.scope!==this.scope||p.id!==p.input.id||p.prepared.kind!==p.input.kind||p.catalogHash!==this.catalogHash||p.productionEvidenceSha256!==this.production?.evidenceSha256||p.executionAllowed!==false||p.prepared.value.schemaSha256!==p.target.schemaSha256)throw Error('preparation scope mismatch');
+  if(p.scope!==this.scope||p.id!==p.input.id||p.prepared.kind!==p.input.kind||p.catalogHash!==this.catalogHash||p.productionEvidenceSha256!==this.production?.evidenceSha256||p.executionAllowed!==false||p.prepared.value.schemaSha256!==p.target.schemaSha256||p.prepared.value.apiVersion!==p.target.apiVersion)throw Error('preparation scope mismatch');
   if(!a||(this.production?(a.productionConfirmed!==true||a.productionEvidenceSha256!==this.production.evidenceSha256):a.disposableConfirmed!==true)||[a.visibilityConfirmed,a.exclusiveConfirmed,a.identityAndPhysicalConfirmed,a.sourceAndMappingConfirmed,a.writeAuthorized].some(v=>v!==true)||a.preparationSha256!==await browserPreparationHash(p))throw Error('exact preparation approval required');
   if(snapshotKey((await this.probe()).target)!==snapshotKey(p.target))throw Error('target identity or schema changed');
  }
