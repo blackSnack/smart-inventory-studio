@@ -1,3 +1,4 @@
+import {authorizeProductionNativeTarget,authorizedNativeBase,assertNativeTarget,nativeCatalogHash,type ProductionNativeTarget} from './native-production-authorization.js';
 // Browser acceptance uses the same native runners as the local CLI. Production write capability is NOT granted.
 import {NativeReceiptAcceptance,nativeReceiptPreparationHash,type NativeReceiptEvidence} from './native-receipt-acceptance.js';
 import {NativePartCreateAcceptance,nativePartPreparationHash} from './native-part-create-acceptance.js';
@@ -18,7 +19,7 @@ export type NativeWorkInput={id:string;kind:'receive-existing-part';payload:{par
 type NativePrepared={kind:'receive-existing-part';value:Receipt}|{kind:'create-part';value:Part}|{kind:'enrichment';value:Enrichment}|{kind:'operation';value:Operations};
 type Target={actorId:string;schemaSha256:string};
 export type BrowserPreparation={id:string;scope:string;target:Target;catalogHash:string;input:NativeWorkInput;prepared:NativePrepared;executionAllowed:false};
-export type BrowserApproval={preparationSha256:string;disposableConfirmed:true;visibilityConfirmed:true;exclusiveConfirmed:true;identityAndPhysicalConfirmed:true;sourceAndMappingConfirmed:true;writeAuthorized:true};
+export type BrowserApproval={preparationSha256:string;disposableConfirmed?:true;productionConfirmed?:true;productionEvidenceSha256?:string;visibilityConfirmed:true;exclusiveConfirmed:true;identityAndPhysicalConfirmed:true;sourceAndMappingConfirmed:true;writeAuthorized:true};
 export type NativeWorkResult={status:'verified'|'unknown'|'blocked';reason:string;serverAuditRequired:true;productionWriteAllowed:false};
 export type BrowserWorkState='reviewed'|'sent'|'verified'|'unknown'|'blocked';
 export interface BrowserWorkRecord {preparation:BrowserPreparation;approval:BrowserApproval;state:BrowserWorkState;ack?:unknown;ackBinding?:string;result?:NativeWorkResult}
@@ -37,11 +38,17 @@ export const browserPreparationHash=(p:BrowserPreparation)=>sha(snapshotKey(p));
 const validId=(x:unknown):string=>{const s=String(x);if(!/^[1-9][0-9]{0,15}$/.test(s)||!Number.isSafeInteger(Number(s)))throw Error('invalid native identity');return s};
 const result=(status:NativeWorkResult['status'],reason:string):NativeWorkResult=>({status,reason,serverAuditRequired:true,productionWriteAllowed:false});
 export class BrowserNativeWorkflow{
- readonly scope:string;private catalog:Catalog;
- private constructor(private base:URL,private token:string,catalog:Catalog,private catalogHash:string,private request:typeof fetch){this.scope='disposable:'+base.href;this.catalog=catalog}
+ readonly scope:string;readonly mode:'disposable'|'production';readonly productionEvidenceSha256?:string;private catalog:Catalog;
+ private constructor(private base:URL,private token:string,catalog:Catalog,private catalogHash:string,private request:typeof fetch,private production?:ProductionNativeTarget){this.mode=production?'production':'disposable';this.scope=this.mode+':'+base.href;this.productionEvidenceSha256=production?.evidenceSha256;this.catalog=catalog}
  static async open(base:string,token:string,catalog:unknown,request:typeof fetch=fetch){
   const u=localOperationBase(base);if(!token.trim()||/[\r\n]/.test(token))throw Error('isolated token required');
   const c=validateCatalog(structuredClone(catalog));const runner=new BrowserNativeWorkflow(u,token,c,await sha(snapshotKey(c)),request);
+  await runner.probe();return runner;
+ }
+ static async openProduction(base:string,token:string,catalog:unknown,evidence:unknown,explicitApproval:boolean,request:typeof fetch=fetch){
+  if(typeof token!=='string'||!token.trim()||/[\r\n]/.test(token))throw Error('explicit token required');
+  const production=await authorizeProductionNativeTarget(base,catalog,evidence,explicitApproval),u=authorizedNativeBase(base,production),c=validateCatalog(structuredClone(catalog));
+  const runner=new BrowserNativeWorkflow(u,token,c,await nativeCatalogHash(c),request,production);
   await runner.probe();return runner;
  }
  private async get(path:string,limit=16*1024*1024){
@@ -57,7 +64,8 @@ export class BrowserNativeWorkflow{
   if(v.server!=='InvenTree'||v.version!=='1.7.4'||v.apiVersion!==570)throw Error('requires InvenTree 1.7.4 / API 570');
   const a=obj((await this.get('api/user/me/',1024*1024)).data),actorId=validId(a.pk??a.id),s=await this.get('api/schema/?format=json');
   const contract=inspectInvenTreeContract(s.data);
-  return {target:{actorId,schemaSha256:await sha(s.bytes)},version:'1.7.4',apiVersion:570,contract,writeEnabled:false as const};
+  const schemaSha256=await sha(s.bytes);assertNativeTarget(this.production,actorId,schemaSha256);
+  return {target:{actorId,schemaSha256},version:'1.7.4',apiVersion:570,contract,writeEnabled:false as const};
  }
  async listChoices(kind:'categories'|'templates'|'locations'|'stock',locationId?:string){
   const read=new InvenTreeReadProvider(this.base.href,this.token,this.request);
@@ -65,10 +73,10 @@ export class BrowserNativeWorkflow{
  }
  async readMetadata(locationId:string){const r=obj((await this.get('api/metadata/stocklocation/'+validId(locationId)+'/')).data);return obj(r.metadata)}
  async searchParts(query:string){if(!query.trim())return [];return new InvenTreeReadProvider(this.base.href,this.token,this.request).searchParts(query.trim())}
- private receipt(){return NativeReceiptAcceptance.open(this.base.href,this.token,this.request)}
- private part(){return NativePartCreateAcceptance.open(this.base.href,this.token,this.request)}
- private enrichment(){return NativeEnrichmentAcceptance.open(this.base.href,this.token,this.request)}
- private operations(){return NativeOperationsAcceptance.open(this.base.href,this.token,this.catalog,this.catalogHash,this.request)}
+ private receipt(){return NativeReceiptAcceptance.open(this.base.href,this.token,this.request,this.production)}
+ private part(){return NativePartCreateAcceptance.open(this.base.href,this.token,this.request,this.production)}
+ private enrichment(){return NativeEnrichmentAcceptance.open(this.base.href,this.token,this.request,this.production)}
+ private operations(){return NativeOperationsAcceptance.open(this.base.href,this.token,this.catalog,this.catalogHash,this.request,this.production)}
  async prepare(raw:NativeWorkInput):Promise<BrowserPreparation>{
   const input=structuredClone(raw);if(typeof input.id!=='string'||!input.id.trim()||input.id.length>128)throw Error('invalid stable operation ID');
   const {target}=await this.probe();let prepared:NativePrepared;
@@ -84,7 +92,7 @@ export class BrowserNativeWorkflow{
  }
  private async validate(p:BrowserPreparation,a:BrowserApproval){
   if(p.scope!==this.scope||p.id!==p.input.id||p.prepared.kind!==p.input.kind||p.catalogHash!==this.catalogHash||p.executionAllowed!==false||p.prepared.value.schemaSha256!==p.target.schemaSha256)throw Error('preparation scope mismatch');
-  if(!a||[a.disposableConfirmed,a.visibilityConfirmed,a.exclusiveConfirmed,a.identityAndPhysicalConfirmed,a.sourceAndMappingConfirmed,a.writeAuthorized].some(v=>v!==true)||a.preparationSha256!==await browserPreparationHash(p))throw Error('exact preparation approval required');
+  if(!a||(this.production?(a.productionConfirmed!==true||a.productionEvidenceSha256!==this.production.evidenceSha256):a.disposableConfirmed!==true)||[a.visibilityConfirmed,a.exclusiveConfirmed,a.identityAndPhysicalConfirmed,a.sourceAndMappingConfirmed,a.writeAuthorized].some(v=>v!==true)||a.preparationSha256!==await browserPreparationHash(p))throw Error('exact preparation approval required');
   if(snapshotKey((await this.probe()).target)!==snapshotKey(p.target))throw Error('target identity or schema changed');
  }
  private async dispatch(p:BrowserPreparation,store:BrowserWorkStore,observe:boolean):Promise<NativeWorkResult>{
@@ -93,7 +101,7 @@ export class BrowserNativeWorkflow{
   const read=async(binding:string)=>{const row=await store.get(scope,id);if(!row||row.ackBinding!==binding)return undefined;return row.ack};
   const receiptEvidence:NativeReceiptEvidence={claim,acknowledge:(b,stockId)=>acknowledge(b,{stockId}),read:async b=>await read(b) as {stockId?:string}|undefined};
   const operationEvidence:NativeOperationEvidence={claim:(_key,b)=>claim(b),record:(_key,b,ack)=>acknowledge(b,ack),read:async(_key,b)=>{const ack=await read(b);return ack===undefined?undefined:{ack}}};
-  const common={disposableInstanceConfirmed:true,writeAuthorized:true,visibilityConfirmed:true,exclusiveAccessConfirmed:true,identityConfirmed:true,physicalSpaceConfirmed:true,newPartConfirmed:true,sourceReviewed:true,fieldMappingConfirmed:true,operationReviewed:true,physicalAndReferenceReviewConfirmed:true} as const;
+  const common={...(this.production?{productionOperationConfirmed:true,productionEvidenceSha256:this.production.evidenceSha256}:{disposableInstanceConfirmed:true}),writeAuthorized:true,visibilityConfirmed:true,exclusiveAccessConfirmed:true,identityConfirmed:true,physicalSpaceConfirmed:true,newPartConfirmed:true,sourceReviewed:true,fieldMappingConfirmed:true,operationReviewed:true,physicalAndReferenceReviewConfirmed:true} as const;
   const q=p.prepared;
   switch(q.kind){
   case 'receive-existing-part':{const runner=this.receipt(),a={...common,approvedPreparationSha256:await nativeReceiptPreparationHash(q.value)};return observe?runner.observe(q.value,a,receiptEvidence):runner.execute(q.value,a,receiptEvidence)}

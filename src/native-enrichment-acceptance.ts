@@ -1,3 +1,4 @@
+import {authorizedNativeBase,assertNativeTarget,assertNativeMode,type ProductionNativeTarget} from './native-production-authorization.js';
 // Explicit local disposable-instance acceptance only. Never used by the PWA.
 import {InvenTreeReadProvider} from './domain.js';
 import {inspectSchema,type RequiredOperation} from './provider-schema.js';
@@ -35,10 +36,10 @@ function parameter(raw:unknown,p:Extract<Input,{kind:'parameter'}>):Value{
 function sameUrl(r:Attachment,u:string){try{return r.link!==null&&url(r.link)===u}catch{return false}}
 export class NativeEnrichmentAcceptance{
  private read:InvenTreeReadProvider;
- private constructor(private base:URL,private token:string,private request:typeof fetch){this.read=new InvenTreeReadProvider(base.href,token,request)}
- static open(base:string,token:string,request:typeof fetch=fetch){
-  const u=new URL(base);if(!['http:','https:'].includes(u.protocol)||!['127.0.0.1','[::1]'].includes(u.hostname)||!u.port||u.username||u.password||u.search||u.hash||u.pathname!=='/'||typeof token!=='string'||!token.trim()||/[\r\n]/.test(token))throw Error('explicit loopback disposable instance required');
-  return new NativeEnrichmentAcceptance(u,token,request);
+ private constructor(private base:URL,private token:string,private request:typeof fetch,private production?:ProductionNativeTarget){this.read=new InvenTreeReadProvider(base.href,token,request)}
+ static open(base:string,token:string,request:typeof fetch=fetch,production?:ProductionNativeTarget){
+  const u=authorizedNativeBase(base,production);if(typeof token!=='string'||!token.trim()||/[\r\n]/.test(token))throw Error('explicit native token required');
+  return new NativeEnrichmentAcceptance(u,token,request,production);
  }
  private async call(path:string,method:'GET'|'POST'|'PATCH'='GET',body?:unknown,limit=2*1024*1024){
   const r=await this.request(new URL(path,this.base),{method,headers:{Authorization:'Token '+this.token,Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},redirect:'error',cache:'no-store',signal:AbortSignal.timeout(20000),...(body?{body:JSON.stringify(body)}:{})});
@@ -50,12 +51,12 @@ export class NativeEnrichmentAcceptance{
  }
  private async target(kind:Input['kind'],write:boolean){
   const v=obj((await this.call('api/')).data);if(v.server!=='InvenTree'||v.version!=='1.7.4'||v.apiVersion!==570)throw Error('isolated version mismatch');
-  const auth=obj((await this.call('api/user/me/')).data);id(auth.pk??auth.id);
+  const auth=obj((await this.call('api/user/me/')).data);const actorId=id(auth.pk??auth.id);
   const schema=await this.call('api/schema/?format=json','GET',undefined,16*1024*1024);
   const required:RequiredOperation[]=[{key:'part',path:'/api/part/{id}/',method:'get'}];
   if(kind==='source'){required.push({key:'attachments',path:'/api/attachment/',method:'get'});if(write)required.push({key:'create',path:'/api/attachment/',method:'post'})}
   else {required.push({key:'template',path:'/api/parameter/template/{id}/',method:'get'},{key:'parameters',path:'/api/parameter/',method:'get'});if(write)required.push({key:'create',path:'/api/parameter/',method:'post'},{key:'patch',path:'/api/parameter/{id}/',method:'patch'})}
-  if(inspectSchema(schema.data,required).some(x=>!x.declared))throw Error('native enrichment API missing');return sha(schema.bytes);
+  if(inspectSchema(schema.data,required).some(x=>!x.declared))throw Error('native enrichment API missing');const digest=await sha(schema.bytes);assertNativeTarget(this.production,actorId,digest);return digest;
  }
  private async current(p:Input):Promise<Baseline>{
   const part=obj((await this.call('api/part/'+p.partId+'/')).data);
@@ -81,7 +82,7 @@ export class NativeEnrichmentAcceptance{
   return {kind:'native-enrichment',base:this.base.href,instanceId,schemaSha256,input,baseline,executionAllowed:false};
  }
  private async validate(prepared:Prepared,approval:unknown){
-  const a=obj(approval);if(['disposableInstanceConfirmed','writeAuthorized','visibilityConfirmed','exclusiveAccessConfirmed','identityConfirmed','sourceReviewed','fieldMappingConfirmed'].some(k=>a[k]!==true))throw Error('all local confirmations required');
+  const a=obj(approval);assertNativeMode(this.production,a);if(['writeAuthorized','visibilityConfirmed','exclusiveAccessConfirmed','identityConfirmed','sourceReviewed','fieldMappingConfirmed'].some(k=>a[k]!==true))throw Error('all local confirmations required');
   if(!prepared||prepared.kind!=='native-enrichment'||prepared.base!==this.base.href||prepared.executionAllowed!==false||!(/^[a-f0-9]{64}$/.test(prepared.schemaSha256)))throw Error('invalid prepared enrichment');
   str(prepared.instanceId,256);const input=parse(prepared.input),binding=await nativeEnrichmentPreparationHash(prepared);
   if(a.approvedPreparationSha256!==binding)throw Error('approval does not bind preparation');
