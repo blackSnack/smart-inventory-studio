@@ -81,7 +81,7 @@ try:
   assert float(action.evaluate('e=>getComputedStyle(e).opacity'))==1
   page.get_by_role('button',name='取消录入').click();page.get_by_role('dialog').get_by_role('button',name='放弃录入',exact=True).click()
   page.get_by_role('button',name='元件',exact=True).click();capture(page,'33-desktop-parts');page.get_by_role('button',name='查看 RES-001').click();capture(page,'34-desktop-detail');page.get_by_role('button',name='查看 RES-002').click();page.get_by_role('dialog').get_by_text('RES-002',exact=False).first.wait_for();page.get_by_role('dialog').get_by_role('button',name='关闭').click()
-  page.get_by_role('button',name='仓储',exact=True).click();page.get_by_role('button',name='编辑布局').click();capture(page,'35-desktop-workbench');page.get_by_role('dialog').get_by_role('button',name='关闭').click()
+  page.get_by_role('button',name='仓储',exact=True).click();page.get_by_role('button',name='编辑布局').click();capture(page,'35-desktop-workbench');dialog=page.get_by_role('dialog');dialog.get_by_role('button',name='A-L1-R1-C4 已绑定空闲',exact=True).click();dialog.get_by_role('button',name='拆分',exact=True).click();capture(page,'49-desktop-split-options');dialog.get_by_role('button',name='关闭').click()
   page.get_by_role('button',name='批量建库').click();page.get_by_role('button',name='生成批量预览').click();capture(page,'44-desktop-batch-review');page.get_by_role('dialog').get_by_role('button',name='关闭').click()
   desktop.close()
   tablet=b.new_context(viewport={'width':820,'height':1180},is_mobile=True,has_touch=True,device_scale_factor=1)

@@ -3,7 +3,7 @@ import {Button,Modal} from './ui';
 import type {GatewayConfig} from './receiving-page';
 const endpoint=(v:GatewayConfig)=>{try{const u=new URL(v.url.trim().replace(/\/$/,'')+'/chat/completions');return ['https:','http:'].includes(u.protocol)&&!u.username&&!u.password&&!u.search&&!u.hash&&!!v.key.trim()&&!!v.model.trim()?u:null}catch{return null}};
 const empty=(v:GatewayConfig)=>!v.url.trim()&&!v.key.trim()&&!v.model.trim();
-const status=(v:GatewayConfig)=>empty(v)?'未配置':v.tested==='ok'?'文本连接正常':v.tested==='failed'?'连接失败':'已配置 · 未验证';
+const status=(v:GatewayConfig)=>empty(v)?'未配置':!endpoint(v)?'配置未完成':v.tested==='ok'?'文本连接正常':v.tested==='failed'?'连接失败':'已配置 · 未验证';
 export function GatewaySettings({value,onChange}:{value:GatewayConfig;onChange:(v:GatewayConfig)=>void}){
  const [open,setOpen]=useState(false),[draft,setDraft]=useState(value),[visible,setVisible]=useState(false),[busy,setBusy]=useState(false);
  const active=useRef<AbortController|null>(null);
