@@ -3,7 +3,7 @@ import {Button,Panel,Modal,SearchField} from './ui';
 import {BrowserNativeWorkflow,browserPreparationHash,type NativeWorkInput,type BrowserPreparation,type BrowserWorkRecord,type BrowserApproval} from '../../src/browser-native-workflow';
 import {IndexedDbNativeWorkStore} from '../../src/indexeddb-native-workflow';
 import type {Catalog} from '../../src/catalog';
-import type {Operation,ApprovedPlan} from '../../src/operation-journal';
+import type {ApprovedPlan} from '../../src/operation-journal';
 import {newCabinet,expandCabinet,type CabinetLayout} from '../../src/cabinet-layout';
 import {readCabinetMetadata,planCabinetMetadata,type LeafBinding} from '../../src/cabinet-metadata';
 import type {PhotoDraft} from '../../src/ai-provider';
@@ -36,7 +36,7 @@ export function NativeAcceptanceWorkspace({runner,catalog,entry,initialQueue,onC
  const mounted=useRef(true),running=useRef(false);
  const pending=history.filter(x=>x.state==='reviewed'||x.state==='sent'||x.state==='unknown'||x.state==='blocked'&&x.ackBinding!==undefined);
  const f=(k:string)=>fields[k]??'';
- const set=(k:string,v:string)=>{setFields(p=>({...p,[k]:v}));setPrepared(null);setChecks([false,false,false,false]);setMessage('')};
+ const set=(k:string,v:string)=>{setFields(p=>({...p,[k]:v,...(k==='locationId'?{stockId:''}:{})}));if(k==='locationId')setStocks([]);if(k==='rootId'){setOldMeta(null);setLayout(null);setBindings({})}setPrepared(null);setChecks([false,false,false,false]);setMessage('')};
  async function refresh(s=store){if(!s)return;const rows=await s.list(runner.scope);if(mounted.current)setHistory(rows)}
  async function choices(){const a=await Promise.all([runner.listChoices('categories'),runner.listChoices('templates'),runner.listChoices('locations')]);if(mounted.current){setCategories(records(a[0]));setTemplates(records(a[1]));setLocations(records(a[2]))}}
  useEffect(()=>{mounted.current=true;let opened:IndexedDbNativeWorkStore|undefined;void IndexedDbNativeWorkStore.open().then(async s=>{opened=s;if(!mounted.current){s.close();return}setStore(s);await refresh(s);await choices()}).catch(()=>{if(mounted.current)setError('读取真实分类、模板、库位或本地操作日志失败。请检查权限和浏览器存储。')});return()=>{mounted.current=false;opened?.close()}},[runner]);
