@@ -19,8 +19,10 @@ class Gateway(BaseHTTPRequestHandler):
    body=json.loads(self.rfile.read(int(self.headers['Content-Length'])))
    assert self.path=='/v1/chat/completions' and self.headers.get('Authorization')=='Bearer fixture-key'
    if isinstance(body['messages'][1]['content'],str):
-    ctx=json.loads(body['messages'][1]['content']);assert body['model']=='fixture-model' and 'partId' not in ctx and 'stock' not in ctx and ctx['mpn']=='R-47K'
+    ctx=json.loads(body['messages'][1]['content']);assert body['model']=='fixture-model' and 'partId' not in ctx and 'stock' not in ctx and ctx['mpn'] in ('R-47K','R-56K','R-68K')
     enrichment_requests.append(ctx['name'])
+    if ctx['mpn']=='R-68K' and enrichment_requests.count(ctx['name'])==1:
+     self.send_response(429);self.cors();self.end_headers();return
     evidence=[{'url':'https://example.test/r.pdf','locator':'page 3'}]
     suggestions=[{'key':'rated_power','value':'0.1W','evidence':evidence},{'key':'resistance','value':'20kΩ','evidence':evidence},{'key':'datasheetUrl','value':'https://example.test/r.pdf','evidence':evidence}]
     response=json.dumps({'choices':[{'message':{'content':json.dumps({'suggestions':suggestions})}}]}).encode()
@@ -109,7 +111,18 @@ try:
   page.get_by_role('button',name='仓储',exact=True).click();page.get_by_role('button',name='批量建库').click();batch=page.get_by_role('dialog');batch.get_by_label('CSV 内容').fill('name,category,manufacturer,mpn,source_url,param:resistance\nExact 47k,resistor.smd,Example,R-47K,https://example.test/r,47kΩ');batch.get_by_role('button',name='生成批量预览').click();batch.get_by_label('已核对草稿资料',exact=False).check();batch.get_by_role('button',name='确认建档（1）').click();batch.wait_for(state='hidden')
   page.get_by_role('button',name='元件',exact=True).click();page.get_by_role('textbox',name='全局搜索').fill('Exact 47k');page.get_by_text('0 件',exact=True).wait_for();page.locator('button.studio-result').filter(has_text='Exact 47k').click();page.get_by_role('dialog').get_by_role('button',name='补全资料',exact=True).click()
   page.get_by_role('button',name='获取资料',exact=True).click();page.get_by_label('采用 Exact 47k 额定功率').wait_for();assert page.get_by_label('采用 Exact 47k 阻值').is_disabled();page.get_by_label('采用 Exact 47k 额定功率').check();page.get_by_label('采用 Exact 47k 数据手册').check();page.get_by_role('button',name='确认补全（2）').click();page.get_by_role('heading',name='元件',exact=True).wait_for();assert enrichment_requests==['Exact 47k']
-  page.locator('button.studio-result').filter(has_text='Exact 47k').click();dialog=page.get_by_role('dialog');dialog.get_by_text('rated_power：0.1W',exact=True).wait_for();dialog.get_by_text('resistance：47kΩ',exact=True).wait_for();dialog.get_by_text('0 件',exact=True).wait_for();dialog.get_by_text('逐字段资料来源',exact=True).click();dialog.get_by_text('page 3 · https://example.test/r.pdf',exact=True).first.wait_for();dialog.get_by_role('button',name='关闭').click()
+  page.locator('button.studio-result').filter(has_text='Exact 47k').click();dialog=page.get_by_role('dialog');dialog.get_by_test_id('detail-rated_power').get_by_text('0.1W',exact=True).wait_for();dialog.get_by_test_id('detail-resistance').get_by_text('47kΩ',exact=True).wait_for();dialog.get_by_text('0 件',exact=True).wait_for();dialog.get_by_text('逐字段资料来源',exact=True).click();dialog.get_by_text('page 3 · https://example.test/r.pdf',exact=True).first.wait_for();dialog.get_by_role('button',name='关闭').click()
+  page.get_by_role('button',name='首页',exact=True).click()
+  # Two exact records, isolated 429 failure, retry only failed row, review then persist both.
+  page.get_by_role('button',name='仓储',exact=True).click();page.get_by_role('button',name='批量建库').click();batch=page.get_by_role('dialog');batch.get_by_label('CSV 内容').fill('name,category,manufacturer,mpn,source_url,param:resistance\nBatch 56k,resistor.smd,Example,R-56K,https://example.test/a,56kΩ\nBatch 68k,resistor.smd,Example,R-68K,https://example.test/b,68kΩ');batch.get_by_role('button',name='生成批量预览').click()
+  batch.get_by_label('已核对草稿资料',exact=False).first.wait_for()
+  for box in batch.get_by_label('已核对草稿资料',exact=False).all():box.check()
+  batch.get_by_role('button',name='确认建档（2）').click();batch.wait_for(state='hidden')
+  page.get_by_role('button',name='元件',exact=True).click();page.get_by_label('全局搜索',exact=True).fill('Batch');page.get_by_role('button',name='批量选择',exact=True).click();page.get_by_label('选择 Batch 56k',exact=False).check();page.get_by_label('选择 Batch 68k',exact=False).check();page.get_by_role('button',name='补全资料（2）',exact=True).click()
+  page.get_by_role('button',name='获取资料',exact=True).click();page.get_by_text('AI HTTP 429',exact=True).wait_for();page.get_by_role('button',name='重试失败项',exact=True).click();page.get_by_label('采用 Batch 56k 额定功率').check();page.get_by_label('采用 Batch 68k 额定功率').check();assert enrichment_requests.count('Batch 56k')==1 and enrichment_requests.count('Batch 68k')==2
+  page.get_by_role('button',name='确认补全（2）',exact=True).click();page.get_by_role('heading',name='元件',exact=True).wait_for()
+  for name in ('Batch 56k','Batch 68k'):
+   page.get_by_label('全局搜索',exact=True).fill(name);page.locator('button.studio-result').filter(has_text=name).click();dialog=page.get_by_role('dialog');dialog.get_by_test_id('detail-rated_power').get_by_text('0.1W',exact=True).wait_for();dialog.get_by_text('0 件',exact=True).wait_for();dialog.get_by_role('button',name='关闭').click()
   page.get_by_role('button',name='首页',exact=True).click()
   # Occupied split: explicit 100+140 allocation; verify full part stock and persisted layout.
   page.get_by_role('button',name='仓储',exact=True).click();page.get_by_role('button',name='编辑布局').click();dialog=page.get_by_role('dialog');dialog.get_by_role('button',name='A-L1-R1-C1 有库存',exact=True).click();dialog.get_by_role('button',name='子格 1').click();dialog.get_by_role('button',name='拆分所选格').click()
