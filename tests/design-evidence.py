@@ -84,7 +84,7 @@ try:
    from urllib.parse import urlparse
    path=urlparse(req.url).path
    data={
-    '/api/schema/':{'openapi':'3.0.3','paths':{k:{'get':{}} for k in ['/api/part/{id}/','/api/part/category/','/api/part/category/parameters/','/api/parameter/','/api/parameter/template/','/api/company/part/manufacturer/','/api/company/part/','/api/attachment/','/api/stock/location/','/api/metadata/{model}/{id}/']}},
+    '/api/schema/':{'openapi':'3.0.3','paths':{k:{'get':{}} for k in ['/api/part/{id}/','/api/part/category/','/api/part/category/parameters/','/api/parameter/','/api/parameter/template/','/api/company/part/manufacturer/','/api/company/part/','/api/attachment/','/api/stock/location/','/api/metadata/{model}/{id}/','/api/stock/']}},
     '/api/stock/location/':[{'pk':1,'name':'Cabinet A','parent':None,'structural':True},{'pk':2,'name':'A-01','parent':1,'structural':False}],
     '/api/metadata/stocklocation/1/':cabinet_response(),
     '/api/part/':[{'pk':42,'name':'10k resistor','IPN':'R-01','description':'±1%','category':1}],
@@ -107,6 +107,7 @@ try:
    page.get_by_role('button',name='查看 R-01 详情').click();dialog=page.get_by_role('dialog',name='元件详情');dialog.get_by_text('FIX-10K',exact=True).wait_for();dialog.get_by_text('Resistance · Ω',exact=True).wait_for();capture(page,label)
    dialog.get_by_role('button',name='关闭').click();page.get_by_role('button',name='仓储',exact=True).click();page.get_by_text('读取柜体布局',exact=True).click();page.get_by_label('Metadata 模型标识').fill('stocklocation');page.get_by_label('柜体根库位').select_option('1');page.get_by_role('button',name='读取布局',exact=True).click()
    matrix=page.get_by_role('region',name='仓储矩阵');matrix.get_by_text('库存未知',exact=True).wait_for();matrix.get_by_text('未绑定',exact=True).wait_for();matrix.get_by_text('未定义',exact=True).wait_for();capture(page,'23-mobile-live-layout' if width<768 else '24-desktop-live-layout')
+   page.get_by_role('button',name='读取库存记录').click();matrix.get_by_text('有正量',exact=True).wait_for();capture(page,'25-mobile-live-stock' if width<768 else '26-desktop-live-stock')
    live.close()
   b.close()
 finally:server.shutdown()
