@@ -4,17 +4,22 @@ export interface CategoryMapping {categoryKey:string;remoteCategoryId:string;tem
 export type MappingEntry={key:string;status:'reuse'|'create'|'review';remoteId?:string;reason?:string};
 export function planParameterMapping(catalog:Catalog,mapping:CategoryMapping,remote:RemoteTemplate[]):MappingEntry[]{
  const c=catalog.categories.find(x=>x.key===mapping.categoryKey);if(!c||!mapping.remoteCategoryId.trim())throw Error('invalid category mapping');
- if(new Set(remote.map(x=>x.id)).size!==remote.length)throw Error('duplicate remote template ID');
+ if(remote.some(r=>typeof r.id!=='string'||!r.id.trim()||typeof r.name!=='string'||!r.name.trim())||new Set(remote.map(x=>x.id)).size!==remote.length)throw Error('invalid or duplicate remote template ID');
  if(Object.keys(mapping.templates).some(k=>!c.parameters.includes(k)))throw Error('unmapped template key');
- const used=new Set<string>();
+ const bindings=Object.values(mapping.templates);
+ if(bindings.some(id=>typeof id!=='string'||!id.trim()))throw Error('invalid explicit binding');
+ if(new Set(bindings).size!==bindings.length)throw Error('duplicate explicit template binding');
+ // Reserve all approved IDs before considering any name/alias suggestion, independent of field order.
+ const reserved=new Set(bindings);
+ const candidates=new Map(c.parameters.map(key=>{const d=catalog.fieldDefinitions[key];const labels=new Set([d.labelZh,d.labelEn,...(d.aliases??[])]);return [key,remote.filter(r=>labels.has(r.name))] as const}));
  return c.parameters.map(key=>{
- const d=catalog.fieldDefinitions[key],explicit=mapping.templates[key];
+ const d=catalog.fieldDefinitions[key],explicit=Object.hasOwn(mapping.templates,key)?mapping.templates[key]:undefined;
  const compatible=(r:RemoteTemplate)=>r.unit===d.unit&&r.type===d.type;
- if(explicit){const r=remote.find(x=>x.id===explicit);if(!r||!compatible(r)||used.has(explicit))return {key,status:'review',reason:'invalid explicit binding'};used.add(explicit);return {key,status:'reuse',remoteId:explicit}}
- const names=remote.filter(r=>r.name===d.labelZh||r.name===d.labelEn);
+ if(explicit!==undefined){const r=remote.find(x=>x.id===explicit);if(!r||!compatible(r))return {key,status:'review',reason:'invalid explicit binding'};return {key,status:'reuse',remoteId:explicit}}
+ const names=candidates.get(key)!;
  if(names.length===0)return {key,status:'create'};
- if(names.length!==1||!compatible(names[0])||used.has(names[0].id))return {key,status:'review',reason:'name or unit conflict'};
- // Name equality alone is a suggestion, not a confirmed binding.
+ if(names.length!==1||!compatible(names[0])||reserved.has(names[0].id)||c.parameters.some(other=>other!==key&&candidates.get(other)!.some(r=>r.id===names[0].id)))return {key,status:'review',reason:'name, alias or unit conflict'};
+ // Name or alias equality alone is a suggestion, not a confirmed semantic binding.
  return {key,status:'review',remoteId:names[0].id,reason:'confirm semantic binding'};
  });
 }
