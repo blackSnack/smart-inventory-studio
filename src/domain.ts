@@ -70,7 +70,7 @@ export class InvenTreeReadProvider implements InventoryProvider {
   return out;
  }
  searchParts(query:string){return this.list('api/part/',query?{search:query}:{});}
- getStockByPart(id:string){return this.list('api/stock/',{part:id});}
+ getStockByPart(id:string){return this.list('api/stock/',{part:id,include_variants:'false'});}
  getLocations(){return this.list('api/stock/location/');}
  async getCapabilities(){return {read:true,write:false};}
 }

@@ -28,7 +28,7 @@ export class InvenTreeReadAdapter implements InventoryReadPort,ParameterSearchPo
  async searchParts(query:string):Promise<PartSummary[]>{const seen=new Set<string>();return (await this.transport.searchParts(query)).map(x=>{const r=row(x),pid=id(r.pk);if(seen.has(pid))throw Error('duplicate part');seen.add(pid);return {id:pid,name:str(r.name),ipn:r.IPN==null?null:str(r.IPN),description:str(r.description??''),categoryId:optionalId(r.category)}})}
  async getStockByPart(partId:string):Promise<StockDistribution[]>{
   const result=new Map<string|null,StockDistribution>();const seen=new Set<string>();
-  for(const x of await this.transport.getStockByPart(partId)){const r=row(x),sid=id(r.pk),pid=id(r.part),loc=optionalId(r.location);if(pid!==partId||seen.has(sid))throw Error('unexpected or duplicate stock row');seen.add(sid);
+  for(const x of await this.transport.getStockByPart(partId)){const r=row(x),sid=id(r.pk),pid=id(r.part);if(!Object.hasOwn(r,'location'))throw Error('missing stock location evidence');const loc=optionalId(r.location);if(pid!==partId||seen.has(sid))throw Error('unexpected or duplicate stock row');seen.add(sid);
    const item=result.get(loc)??{partId,locationId:loc,quantity:'0',stockItemIds:[]};item.quantity=add(item.quantity,quantity(r.quantity));item.stockItemIds.push(sid);result.set(loc,item);
   }return [...result.values()];
  }
