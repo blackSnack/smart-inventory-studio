@@ -9,6 +9,7 @@ server=ThreadingHTTPServer(('127.0.0.1',0),partial(SimpleHTTPRequestHandler,dire
 Thread(target=server.serve_forever,daemon=True).start()
 requests=[]
 enrichment_requests=[]
+connection_requests=[]
 class Gateway(BaseHTTPRequestHandler):
  def cors(self):
   self.send_header('Access-Control-Allow-Origin','*');self.send_header('Access-Control-Allow-Methods','POST, OPTIONS');self.send_header('Access-Control-Allow-Headers','authorization,content-type')
@@ -18,6 +19,14 @@ class Gateway(BaseHTTPRequestHandler):
   try:
    body=json.loads(self.rfile.read(int(self.headers['Content-Length'])))
    assert self.path=='/v1/chat/completions' and self.headers.get('Authorization')=='Bearer fixture-key'
+   if len(body['messages'])==1:
+    assert body['model']=='fixture-model' and body['messages'][0]['role']=='user' and isinstance(body['messages'][0]['content'],str)
+    assert 'connection test' in body['messages'][0]['content'] and 'stock' not in body['messages'][0]['content'] and 'image_url' not in body['messages'][0]['content']
+    connection_requests.append('text-only')
+    if len(connection_requests)==1:
+     self.send_response(503);self.cors();self.end_headers();return
+    response=json.dumps({'choices':[{'message':{'content':'OK'},'finish_reason':'stop'}]}).encode()
+    self.send_response(200);self.cors();self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(response)));self.end_headers();self.wfile.write(response);return
    if isinstance(body['messages'][1]['content'],str):
     ctx=json.loads(body['messages'][1]['content']);assert body['model']=='fixture-model' and 'partId' not in ctx and 'stock' not in ctx and ctx['mpn'] in ('R-47K','R-56K','R-68K')
     enrichment_requests.append(ctx['name'])
@@ -109,7 +118,7 @@ try:
   page.get_by_test_id('receipt-file').set_input_files({'name':'local.png','mimeType':'image/png','buffer':png});page.get_by_text('local.png',exact=True).wait_for();page.get_by_role('button',name='取消录入').click();page.get_by_role('dialog').get_by_role('button',name='继续录入',exact=True).click();page.get_by_text('local.png',exact=True).wait_for();page.get_by_role('button',name='取消录入').click();page.get_by_role('dialog').get_by_role('button',name='放弃录入',exact=True).click()
   # Explicit mock gateway test; no user credentials or external network.
   page.get_by_role('button',name='设置',exact=True).click();page.get_by_text('AI Gateway · 未配置',exact=True).click()
-  page.get_by_label('Agent API Base URL').fill(f'http://127.0.0.1:{gateway_server.server_port}/v1');page.get_by_label('API Key',exact=True).fill('fixture-key');page.get_by_label('模型或 Agent ID').fill('fixture-model');page.get_by_role('button',name='保存配置').click()
+  page.get_by_label('Agent API Base URL').fill(f'http://127.0.0.1:{gateway_server.server_port}/v1');page.get_by_label('API Key',exact=True).fill('fixture-key');page.get_by_label('模型或 Agent ID').fill('fixture-model');page.get_by_role('button',name='测试连接',exact=True).click();page.get_by_role('dialog').get_by_text('连接失败',exact=True).wait_for();page.get_by_role('button',name='测试连接',exact=True).click();page.get_by_role('dialog').get_by_text('文本连接正常',exact=True).wait_for();assert connection_requests==['text-only','text-only'] and requests==[] and enrichment_requests==[];page.get_by_role('button',name='保存配置').click();page.get_by_text('AI Gateway · 文本连接正常',exact=True).wait_for()
   page.get_by_role('button',name='首页',exact=True).click();page.get_by_role('button',name='拍照录入').click();page.get_by_test_id('receipt-camera').set_input_files({'name':'photo.png','mimeType':'image/png','buffer':png});page.get_by_alt_text('待识别元件照片').wait_for();page.wait_for_function("document.querySelector('img[alt=\"待识别元件照片\"]').naturalWidth===1");assert requests==[];page.get_by_role('button',name='识别元件',exact=True).click();page.get_by_text('识别失败，可重试或手动录入。',exact=True).wait_for();assert requests==['valid-photo-post'], requests;page.get_by_role('button',name='识别元件',exact=True).click()
   page.get_by_role('heading',name='核对元件资料').wait_for();page.get_by_alt_text('原始元件照片',exact=True).wait_for();assert page.get_by_label('元件名称').input_value()=='AI 33k resistor';assert requests==['valid-photo-post','valid-photo-post'], requests
   page.get_by_role('link',name='resistance table · example.test').wait_for();page.get_by_role('link',name='tolerance table · example.test').wait_for();page.get_by_label('容差',exact=True).fill('±5%');assert page.get_by_role('link',name='tolerance table · example.test').count()==0;page.get_by_role('link',name='resistance table · example.test').wait_for();page.get_by_label('容差',exact=True).fill('±1%')
