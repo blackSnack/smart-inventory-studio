@@ -6,6 +6,7 @@ from threading import Thread
 from base64 import b64encode
 from playwright.sync_api import sync_playwright
 from live_metadata_fixture import cabinet_response
+from live_enrichment_fixture import exercise_live_enrichment
 root=Path(__file__).resolve().parents[1]
 out=root/'design-evidence';out.mkdir(exist_ok=True)
 server=ThreadingHTTPServer(('127.0.0.1',0),partial(SimpleHTTPRequestHandler,directory=str(root/'web'/'dist')))
@@ -109,6 +110,10 @@ try:
    matrix=page.get_by_role('region',name='仓储矩阵');matrix.get_by_text('库存未知',exact=True).wait_for();matrix.get_by_text('未绑定',exact=True).wait_for();matrix.get_by_text('未定义',exact=True).wait_for();capture(page,'23-mobile-live-layout' if width<768 else '24-desktop-live-layout')
    page.get_by_role('button',name='读取库存记录').click();matrix.get_by_text('有正量',exact=True).wait_for();capture(page,'25-mobile-live-stock' if width<768 else '26-desktop-live-stock')
    live.close()
+  for width,height in [(390,844),(1100,760)]:
+   ctx=b.new_context(viewport={'width':width,'height':height},is_mobile=width<768,has_touch=width<768,device_scale_factor=1)
+   exercise_live_enrichment(ctx.new_page(),f'http://127.0.0.1:{server.server_port}/',capture)
+   ctx.close()
   b.close()
 finally:server.shutdown()
 print('PASS: actual browser captures, local font load, icon dimensions and desktop focus visibility. Visual inspection is separate.')
