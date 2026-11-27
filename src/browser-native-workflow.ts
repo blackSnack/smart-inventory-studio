@@ -4,6 +4,7 @@ import {NativeReceiptAcceptance,nativeReceiptPreparationHash,type NativeReceiptE
 import {NativePartCreateAcceptance,nativePartPreparationHash} from './native-part-create-acceptance.js';
 import {NativeEnrichmentAcceptance,nativeEnrichmentPreparationHash} from './native-enrichment-acceptance.js';
 import {NativeOperationsAcceptance,nativeOperationsPreparationHash,type NativeOperationEvidence} from './native-operations-acceptance.js';
+import {nativeLocationTree,resolveNativeLayoutItem,type NativeLayoutQueueItem} from './native-layout-migration.js';
 import {InvenTreeAssociationReader} from './inventree-association-read.js';
 import {photoInheritanceFields} from './photo-create-inheritance.js';
 import type {PhotoDraft} from './ai-provider.js';
@@ -19,8 +20,9 @@ type Part=Awaited<ReturnType<NativePartCreateAcceptance['prepare']>>;
 type Enrichment=Awaited<ReturnType<NativeEnrichmentAcceptance['prepare']>>;
 type Operations=Awaited<ReturnType<NativeOperationsAcceptance['prepare']>>;
 export type NativeWorkInput={id:string;kind:'receive-existing-part';payload:{partId:string;locationId:string;quantity:number;expectedIpn?:string}}|{id:string;kind:'create-part';payload:unknown}|{id:string;kind:'enrichment';payload:unknown;expectedBefore?:unknown;photoMapping?:{categoryId:string;categoryKey:string;fieldKey?:string}}|{id:string;kind:'operation';payload:Operation};
-export type NativeQueueItem=NativeWorkInput|{id:string;kind:'after-part-create';createId:string;ipn:string;locationId:string;quantity:number}|{id:string;kind:'after-part-enrichment';createId:string;ipn:string;categoryId:string;categoryKey:string;fieldKey?:string;payload:Record<string,unknown>};
+export type NativeQueueItem=NativeWorkInput|NativeLayoutQueueItem|{id:string;kind:'after-part-create';createId:string;ipn:string;locationId:string;quantity:number}|{id:string;kind:'after-part-enrichment';createId:string;ipn:string;categoryId:string;categoryKey:string;fieldKey?:string;payload:Record<string,unknown>};
 export async function resolveNativeQueueItem(item:NativeQueueItem,scope:string,store:Pick<BrowserWorkStore,'get'>):Promise<NativeWorkInput>{
+ if(item.kind==='cabinet-transfer'||item.kind==='cabinet-finalize')throw Error('native layout resolver required');
  if(item.kind!=='after-part-create'&&item.kind!=='after-part-enrichment')return structuredClone(item);
  const row=await store.get(scope,item.createId);
  if(!row||row.state!=='verified'||row.preparation.scope!==scope||row.preparation.input.kind!=='create-part'||obj(row.preparation.input.payload).ipn!==item.ipn||!row.ackBinding)throw Error('new Part has not been verified');
@@ -82,6 +84,7 @@ export class BrowserNativeWorkflow{
   const read=new InvenTreeReadProvider(this.base.href,this.token,this.request);
   switch(kind){case 'categories':return read.list('api/part/category/');case 'templates':return read.list('api/parameter/template/',{for_model:'part.part'});case 'locations':return read.getLocations();case 'stock':return read.list('api/stock/',{location:validId(locationId),cascade:'false'})}
  }
+ async resolveQueueItem(item:NativeQueueItem,store:Pick<BrowserWorkStore,'get'>){if(item.kind==='cabinet-transfer'||item.kind==='cabinet-finalize')return resolveNativeLayoutItem(item,this.scope,store,item.kind==='cabinet-finalize'?nativeLocationTree(await this.listChoices('locations')):undefined);return resolveNativeQueueItem(item,this.scope,store)}
  async photoFields(draft:PhotoDraft,categoryId:string){const s=await (await InvenTreeAssociationReader.open(this.base.href,this.token,this.request)).readCandidate(this.scope);return photoInheritanceFields(this.catalog,draft,categoryId,s)}
  async readMetadata(locationId:string){const r=obj((await this.get('api/metadata/stocklocation/'+validId(locationId)+'/')).data);return obj(r.metadata)}
  async searchParts(query:string){if(!query.trim())return [];return new InvenTreeReadProvider(this.base.href,this.token,this.request).searchParts(query.trim())}
