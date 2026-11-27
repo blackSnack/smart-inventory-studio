@@ -8,6 +8,7 @@ root=Path(__file__).resolve().parents[1]/'web'/'dist'
 server=ThreadingHTTPServer(('127.0.0.1',0),partial(SimpleHTTPRequestHandler,directory=str(root)))
 Thread(target=server.serve_forever,daemon=True).start()
 requests=[]
+enrichment_requests=[]
 class Gateway(BaseHTTPRequestHandler):
  def cors(self):
   self.send_header('Access-Control-Allow-Origin','*');self.send_header('Access-Control-Allow-Methods','POST, OPTIONS');self.send_header('Access-Control-Allow-Headers','authorization,content-type')
@@ -17,6 +18,13 @@ class Gateway(BaseHTTPRequestHandler):
   try:
    body=json.loads(self.rfile.read(int(self.headers['Content-Length'])))
    assert self.path=='/v1/chat/completions' and self.headers.get('Authorization')=='Bearer fixture-key'
+   if isinstance(body['messages'][1]['content'],str):
+    ctx=json.loads(body['messages'][1]['content']);assert body['model']=='fixture-model' and 'partId' not in ctx and 'stock' not in ctx and ctx['mpn']=='R-47K'
+    enrichment_requests.append(ctx['name'])
+    evidence=[{'url':'https://example.test/r.pdf','locator':'page 3'}]
+    suggestions=[{'key':'rated_power','value':'0.1W','evidence':evidence},{'key':'resistance','value':'20kΩ','evidence':evidence},{'key':'datasheetUrl','value':'https://example.test/r.pdf','evidence':evidence}]
+    response=json.dumps({'choices':[{'message':{'content':json.dumps({'suggestions':suggestions})}}]}).encode()
+    self.send_response(200);self.cors();self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(response)));self.end_headers();self.wfile.write(response);return
    assert body['model']=='fixture-model' and body['messages'][1]['content'][1]['image_url']['url'].startswith('data:image/jpeg;base64,')
    requests.append('valid-photo-post')
    if len(requests)==1:
@@ -51,6 +59,7 @@ try:
   page.get_by_role('button',name='编辑布局').click();dialog=page.get_by_role('dialog');dialog.get_by_role('button',name='A-L1-R10-C10 已绑定空闲',exact=True).click();dialog.get_by_role('button',name='子格 1').click();dialog.get_by_role('button',name='拆分所选格').click();dialog.get_by_label('已确认实际柜体',exact=False).check();dialog.get_by_role('button',name='保存布局',exact=True).click();dialog.wait_for(state='hidden')
   page.get_by_role('button',name='A-L1-R10-C10 空闲',exact=True).click();page.get_by_role('dialog').get_by_role('button',name='A-L1-R10-C10-S1 空闲',exact=True).wait_for();page.get_by_role('dialog').get_by_role('button',name='关闭').click()
   page.get_by_role('button',name='首页',exact=True).click();page.get_by_role('button',name='手动录入').click();page.get_by_label('搜索已有元件').fill('RES-002');page.get_by_role('button',name='选择 RES-002').click();page.get_by_label('本次入库数量').fill('1');page.get_by_role('button',name='添加存放位置').click();page.get_by_label('搜索空闲或同元件库位').fill('A-L1-R10-C10-S1');page.get_by_role('button',name='选择库位 A-L1-R10-C10-S1').click();page.get_by_label('已核对元件身份',exact=False).check();page.get_by_role('button',name='确认入库',exact=True).click()
+  page.get_by_role('main',name='入库工作流').wait_for(state='hidden')
   # Wait for the actual receipt completion and inventory readback before reloading.
   page.get_by_role('heading',name='数量与存放位置').wait_for(state='hidden');page.get_by_role('button',name='仓储',exact=True).click();page.get_by_role('button',name='A-L1-R10-C10 有库存',exact=True).wait_for()
   page.reload();page.get_by_role('button',name='仓储',exact=True).click();page.get_by_role('button',name='A-L1-R10-C10 有库存',exact=True).click();page.get_by_role('dialog').get_by_role('button',name='A-L1-R10-C10-S1 有库存',exact=True).click();page.get_by_role('dialog').get_by_text('RES-002',exact=False).wait_for();page.get_by_role('dialog').get_by_role('button',name='关闭').click()
@@ -62,7 +71,10 @@ try:
   page.get_by_label('本次入库数量').fill('100');page.get_by_role('button',name='添加存放位置').click();assert page.get_by_role('button',name='选择库位 A-02').count()==0
   page.get_by_role('button',name='选择库位 A-01').click();assert page.get_by_label('A-01 数量').input_value()=='100';page.get_by_label('A-01 数量').fill('40');page.get_by_text('还需分配 60 件',exact=True).wait_for()
   page.get_by_role('button',name='添加存放位置').click();page.get_by_role('button',name='选择库位 A-04').click();assert page.get_by_label('A-04 数量').input_value()=='60';page.get_by_role('button',name='上一步').click();page.get_by_role('button',name='选择 RES-001').click();assert page.get_by_label('A-04 数量').input_value()=='60'
-  assert page.get_by_role('button',name='确认入库',exact=True).is_disabled();page.get_by_label('已核对元件身份',exact=False).check();page.get_by_role('button',name='确认入库',exact=True).click()
+  assert page.get_by_role('button',name='确认入库',exact=True).is_disabled();page.get_by_label('已核对元件身份',exact=False).check()
+  try: page.get_by_role('button',name='确认入库',exact=True).click(timeout=8000)
+  except Exception:
+   print('RECEIPT_DIAGNOSTIC:',page.get_by_role('main',name='入库工作流').inner_text(),flush=True);raise
   page.get_by_role('button',name='元件',exact=True).click();page.get_by_role('textbox',name='全局搜索').fill('RES-001');page.get_by_text('300 件',exact=True).wait_for();page.get_by_role('button',name='首页',exact=True).click()
   page.get_by_role('button',name='手动录入').click();page.get_by_role('button',name='新建元件',exact=True).click()
   page.get_by_label('元件分类').select_option('resistor.smd');page.get_by_label('元件名称').fill('Historical 22k resistor');page.get_by_label('阻值 · Ω').fill('22kΩ')
@@ -93,6 +105,12 @@ try:
   page.get_by_label('已核对草稿和来源',exact=False).check();page.get_by_role('button',name='核对已有库存').click();page.get_by_role('button',name='确认独立建档').click()
   page.get_by_label('本次入库数量').fill('7');page.get_by_role('button',name='添加存放位置').click();page.get_by_label('搜索空闲或同元件库位').fill('B-02');page.get_by_role('button',name='选择库位 B-02').click();page.get_by_label('已确认独立档案及实际存放空间',exact=False).check();page.get_by_role('button',name='确认入库',exact=True).click()
   page.get_by_role('button',name='元件',exact=True).click();page.get_by_role('textbox',name='全局搜索').fill('AI 33k');page.get_by_text('7 件',exact=True).wait_for();page.get_by_role('button',name='首页',exact=True).click()
+  # Create an exact source-reviewed record, then enrich only missing fields.
+  page.get_by_role('button',name='仓储',exact=True).click();page.get_by_role('button',name='批量建库').click();batch=page.get_by_role('dialog');batch.get_by_label('CSV 内容').fill('name,category,manufacturer,mpn,source_url,param:resistance\nExact 47k,resistor.smd,Example,R-47K,https://example.test/r,47kΩ');batch.get_by_role('button',name='生成批量预览').click();batch.get_by_label('已核对草稿资料',exact=False).check();batch.get_by_role('button',name='确认建档（1）').click();batch.wait_for(state='hidden')
+  page.get_by_role('button',name='元件',exact=True).click();page.get_by_role('textbox',name='全局搜索').fill('Exact 47k');page.get_by_text('0 件',exact=True).wait_for();page.locator('button.studio-result').filter(has_text='Exact 47k').click();page.get_by_role('dialog').get_by_role('button',name='补全资料',exact=True).click()
+  page.get_by_role('button',name='获取资料',exact=True).click();page.get_by_label('采用 Exact 47k 额定功率').wait_for();assert page.get_by_label('采用 Exact 47k 阻值').is_disabled();page.get_by_label('采用 Exact 47k 额定功率').check();page.get_by_label('采用 Exact 47k 数据手册').check();page.get_by_role('button',name='确认补全（2）').click();page.get_by_role('heading',name='元件',exact=True).wait_for();assert enrichment_requests==['Exact 47k']
+  page.locator('button.studio-result').filter(has_text='Exact 47k').click();dialog=page.get_by_role('dialog');dialog.get_by_text('rated_power：0.1W',exact=True).wait_for();dialog.get_by_text('resistance：47kΩ',exact=True).wait_for();dialog.get_by_text('0 件',exact=True).wait_for();dialog.get_by_text('逐字段资料来源',exact=True).click();dialog.get_by_text('page 3 · https://example.test/r.pdf',exact=True).first.wait_for();dialog.get_by_role('button',name='关闭').click()
+  page.get_by_role('button',name='首页',exact=True).click()
   assert page.evaluate("!Object.values(localStorage).some(v=>v.includes('fixture-key'))")
   page.evaluate('navigator.serviceWorker.ready');page.wait_for_function('!!navigator.serviceWorker.controller');context.set_offline(True);page.reload();page.get_by_role('heading',name='Studio Workspace').wait_for();page.get_by_role('button',name='元件',exact=True).click();page.get_by_role('textbox',name='全局搜索').fill('Historical 22k');page.get_by_text('20 件',exact=True).wait_for();page.get_by_label('全局搜索',exact=True).fill('10k resistor');page.get_by_text('0 件',exact=True).wait_for();page.get_by_role('button',name='首页',exact=True).click();assert not errors,errors
   b.close()

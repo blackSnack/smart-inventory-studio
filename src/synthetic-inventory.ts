@@ -1,3 +1,4 @@
+import {applyPartEnrichment,type EnrichmentApproval} from './part-enrichment.js';import {validateCatalog} from './catalog.js';
 import {applyCabinetLayout,validateWarehouse,warehouseIds,type WarehouseState} from './warehouse-state.js';import type {CabinetLayout} from './cabinet-layout.js';
 import {demoIdentity,strongIdentity,type DemoPartDetails} from './demo-part-draft.js';
 import {validateAllocation,type Location} from './domain.js';
@@ -23,9 +24,10 @@ export class SyntheticInventoryStore implements OperationTransport{
  }
  async snapshot(){return this.transaction(state=>{if(!state)throw Error('missing synthetic inventory');validate(state,this.ids);return {value:state}})}
  async send(operation:Operation):Promise<void>{
-  return this.transaction(state=>{if(!state)throw Error('missing synthetic inventory');validate(state,this.ids);if(!['receive-existing-part','create-demo-part-and-receive','create-demo-catalog-part','save-demo-cabinet'].includes(operation.kind)||!operation.id)throw Error('unsupported synthetic operation');
+  return this.transaction(state=>{if(!state)throw Error('missing synthetic inventory');validate(state,this.ids);if(!['receive-existing-part','create-demo-part-and-receive','create-demo-catalog-part','save-demo-cabinet','enrich-demo-part'].includes(operation.kind)||!operation.id)throw Error('unsupported synthetic operation');
    const previous=state.receipts.find(r=>r.operation.id===operation.id);if(previous){if(!equal(previous.operation,operation))throw Error('operation identity conflict');return {value:undefined}}
    if(state.receipts.length>=20000)throw Error('synthetic receipt log limit');
+   if(operation.kind==='enrich-demo-part'){const {approval,catalog,expectedRevision}=operation.payload;if(expectedRevision!==state.revision||!approval||typeof approval!=='object')throw Error('stale enrichment approval');const a=approval as EnrichmentApproval,idx=state.parts.findIndex(p=>p.id===a.partId);if(idx<0)throw Error('part missing');state.parts[idx]=applyPartEnrichment(state.parts[idx],validateCatalog(catalog),a,state.parts);state.revision++;state.receipts.push({operation:structuredClone(operation),receiptId:'demo-receipt:'+operation.id});return {next:state,value:undefined}}
    if(operation.kind==='save-demo-cabinet'){const {draft,expectedRevision}=operation.payload;if(!state.warehouse||expectedRevision!==state.revision||!draft||typeof draft!=='object')throw Error('stale layout approval');state.warehouse=applyCabinetLayout(state.warehouse,draft as CabinetLayout,state.parts);const allowed=new Set(warehouseIds(state.warehouse));for(const p of state.parts)for(const id of Object.keys(p.stock))if(!allowed.has(id)&&p.stock[id]===0)delete p.stock[id];state.revision++;state.receipts.push({operation:structuredClone(operation),receiptId:'demo-receipt:'+operation.id});return {next:state,value:undefined}}
    if(operation.kind==='create-demo-part-and-receive'||operation.kind==='create-demo-catalog-part'){
     const {part,quantity,allocations,expectedRevision}=operation.payload;
