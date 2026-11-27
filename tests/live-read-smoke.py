@@ -40,7 +40,9 @@ try:
     assert 'cascade=false' in req.url
     if stock_mode=='denied':route.fulfill(status=403,headers=headers);return
     data=[{'pk':9,'part':42,'location':2,'quantity':'100'}] if stock_mode=='positive' else []
-   elif 'part=42' in req.url:data=[{'pk':9,'part':42,'location':2,'quantity':'100'}]
+   elif 'part=42' in req.url:
+    assert 'include_variants=false' in req.url
+    data=[{'pk':9,'part':42,'location':2,'quantity':'100'}]
    else:data=[]
    route.fulfill(json=data,headers=headers)
   page.route('https://inventory.example.test/**',api)
