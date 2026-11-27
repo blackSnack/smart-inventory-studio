@@ -1,3 +1,4 @@
+import {verifyNativeLayoutStock} from './native-layout-migration.js';
 import {retiredLocationName} from './native-retired-location.js';
 import {authorizedNativeBase,assertNativeTarget,assertNativeMode,nativeCatalogHash,type ProductionNativeTarget} from './native-production-authorization.js';
 // Explicit local disposable-instance execution; no PWA capability is enabled.
@@ -110,6 +111,7 @@ async function extraState(ctx:LocalOperationContext,op:Operation):Promise<Extra>
     if(retiring.includes(leaf)&&!rows.some(r=>r.id===leaf&&r.name===retiredLocationName(leaf)))throw Error('retired marker not verified');
     stock.push(...items);
    }
+   if(op.kind==='update-location-metadata'){if(retiring.length&&op.payload.migrationExpected===undefined)throw Error('complete migration stock expectation required');if(op.payload.migrationExpected!==undefined)verifyNativeLayoutStock(op.payload.migrationExpected,stock)}
    return {rows,stock:sortRows(stock)};
   }
   return {rows};

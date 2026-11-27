@@ -151,6 +151,7 @@ test('native cabinet split creates missing leaves, redistributes one exact Stock
  const retire={id:'unsafe-retire',kind:'rename-location',payload:{locationId:'2',expectedParentId:'1',expectedName:'A',name:retiredLocationName('2'),retireConfirmed:true}};await assert.rejects(f.runner.prepare('fixture',retire));assert.equal(f.writes.length,0);
  for(const item of q){
   const work=item.kind==='operation'?item:await resolveNativeLayoutItem(item,'fixture',store,nativeLocationTree(f.locations));
+  if(item.kind==='cabinet-finalize'){const x=f.stocks[0],old=x.supplier_part;x.supplier_part=99;await assert.rejects(f.runner.prepare('fixture',work.payload));x.supplier_part=old}
   if(item.kind==='cabinet-transfer'&&item.prior.length){
    const child=f.stocks.find(x=>x.parent===9),old=child.batch;child.batch='changed';await assert.rejects(f.runner.prepare('fixture',work.payload));child.batch=old;
   }

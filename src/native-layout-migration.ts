@@ -2,13 +2,17 @@ import {validateCabinet, type CabinetLayout,type ExistingLocation} from './cabin
 import {readCabinetMetadata,planCabinetMetadata,type LeafBinding} from './cabinet-metadata.js';
 import {receiptId,receiptDecimal} from './receipt-stock-baseline.js';
 import {retiredLocationName,isRetiredLocationName} from './native-retired-location.js';
+import {normalizeNativeTransferStock} from './isolated-stock-transfer.js';
+import {snapshotKey} from './approved-snapshot.js';
 import type {BrowserWorkStore,NativeQueueItem,NativeWorkInput} from './browser-native-workflow.js';
 type Row=Record<string,unknown>;
 export type LocationRef={locationId:string}|{createId:string;name:string;parentId:string};
 export type LayoutMove={stockItemId:string;targetCompartmentId:string;quantity:string};
 type Prior={operationId:string;target:LocationRef;quantity:string};
 type LinkedRow={stock:Row;location:LocationRef;priorMove?:string};
-export type NativeLayoutQueueItem={id:string;kind:'cabinet-transfer';sourceId:string;stock:Row;target:LocationRef;quantity:string;prior:Prior[];linked?:LinkedRow[]}|{id:string;kind:'cabinet-finalize';rootId:string;expectedMetadata:Row;layout:CabinetLayout;bindings:{compartmentId:string;ref:LocationRef}[];retiring:string[]};
+type FinalMove={operationId:string;stockItemId:string;sourceId:string;target:LocationRef;quantity:string};
+export type LayoutStockExpectation={original:Row[];children:Row[]};
+export type NativeLayoutQueueItem={id:string;kind:'cabinet-transfer';sourceId:string;stock:Row;target:LocationRef;quantity:string;prior:Prior[];linked?:LinkedRow[]}|{id:string;kind:'cabinet-finalize';rootId:string;expectedMetadata:Row;layout:CabinetLayout;bindings:{compartmentId:string;ref:LocationRef}[];retiring:string[];stockBaseline:Row[];moves:FinalMove[]};
 const obj=(x:unknown):Row=>{if(!x||typeof x!=='object'||Array.isArray(x))throw Error('invalid migration record');return x as Row};
 export function nativeLocationTree(rows:unknown[]):ExistingLocation[]{return rows.map(x=>{const r=obj(x);if(typeof r.name!=='string'||typeof r.structural!=='boolean')throw Error('invalid native location');return {id:receiptId(r.pk),name:r.name,parentId:r.parent===null?null:receiptId(r.parent),structural:r.structural}})}
 function under(tree:ExistingLocation[],id:string,root:string){
@@ -37,7 +41,7 @@ export function nativeLayoutMigration(input:{rootId:string;expectedMetadata:Row;
  const oldIds=new Set(old?.leafBindings.map(x=>x.locationId)??[]),retiring=[...oldIds].filter(id=>!used.has(id)),required=new Set([...oldIds,...used]),rows:Row[]=[],seen=new Set<string>();
  for(const id of required){if(!Object.hasOwn(stocks,id)||!Array.isArray(stocks[id]))throw Error('complete visible stock snapshot required');for(const raw of stocks[id]){const x=obj(raw),key=receiptId(x.pk);if(seen.has(key)||receiptId(x.location)!==id)throw Error('invalid stock snapshot');receiptId(x.part);decimal(x.quantity);seen.add(key);rows.push(x)}}
  const occupancy=new Map<string,Set<string>>();for(const id of used)occupancy.set(id,new Set(rows.filter(x=>String(x.location)===id).map(x=>String(x.part))));
- const remaining=new Map<string,string>(),priors=new Map<string,Prior[]>(),edges=new Set<string>(),projected=new Map<string,LinkedRow>(rows.map(x=>[String(x.pk),{stock:x,location:{locationId:String(x.location)}}]));
+ const remaining=new Map<string,string>(),priors=new Map<string,Prior[]>(),edges=new Set<string>(),finalMoves:FinalMove[]=[],projected=new Map<string,LinkedRow>(rows.map(x=>[String(x.pk),{stock:x,location:{locationId:String(x.location)}}]));
  const family=(stock:Row)=>{const index=new Map(rows.map(x=>[String(x.pk),x]));let root=stock;const seen=new Set<string>();while(root.parent!==null){if(seen.has(String(root.pk)))throw Error('cyclic stock lineage');seen.add(String(root.pk));const p=index.get(receiptId(root.parent));if(!p)throw Error('linked parent outside reviewed cabinet');root=p}const group:Row[]=[],visit=(x:Row)=>{if(group.some(y=>y.pk===x.pk))throw Error('cyclic linked stock');group.push(x);const children=rows.filter(y=>y.parent!==null&&String(y.parent)===String(x.pk));if(String(children.length)!==decimal(x.child_items))throw Error('linked child outside reviewed cabinet');for(const c of children)visit(c)};visit(root);if(group.some(x=>String(x.part)!==String(stock.part)))throw Error('mixed linked stock identity');return group.map(x=>structuredClone(projected.get(String(x.pk))!))};
  for(const x of rows)remaining.set(String(x.pk),decimal(x.quantity));
  for(const m of moves){
@@ -49,12 +53,13 @@ export function nativeLayoutMigration(input:{rootId:string;expectedMetadata:Row;
   const linked=stock.parent!==null||decimal(stock.child_items)!=='0'?family(stock):undefined;
   if(linked&&(after!=='0'||prior.length)||decimal(stock.allocated)!=='0'||String(stock.status)!=='10'||stock.in_stock!==true||stock.is_building!==false||stock.customer!==null||stock.belongs_to!==null||stock.consumed_by!==null||stock.sales_order!==null||decimal(stock.installed_items)!=='0'||after!=='0'&&stock.serial!==null&&String(stock.serial).trim())throw Error('stock lifecycle or serial restriction');
   remaining.set(m.stockItemId,after);const id=uid();ops.push({id,kind:'cabinet-transfer',sourceId:String(stock.location),stock,target:ref,quantity:q,prior:structuredClone(prior),...(linked?{linked}:{})});
+  finalMoves.push({operationId:id,stockItemId:m.stockItemId,sourceId:String(stock.location),target:ref,quantity:q});
   if(after==='0')projected.set(m.stockItemId,{stock,location:ref,priorMove:id});
   if(after!=='0')priors.set(m.stockItemId,[...prior,{operationId:id,target:ref,quantity:q}]);
  }
  for(const x of rows.filter(x=>retiring.includes(String(x.location))))if(decimal(x.quantity)==='0'||remaining.get(String(x.pk))!=='0')throw Error('retiring leaf must have every stock record moved');
  for(const id of retiring){const loc=tree.find(x=>x.id===id);if(!loc||!loc.parentId||isRetiredLocationName(loc.name))throw Error('invalid retiring leaf');ops.push(nativeOp(uid(),'rename-location',{locationId:id,expectedParentId:loc.parentId,expectedName:loc.name,name:retiredLocationName(id),retireConfirmed:true}))}
- const revision=old?old.revision+1:0;ops.push({id:uid(),kind:'cabinet-finalize',rootId,expectedMetadata,layout:{...layout,revision},bindings:refs,retiring});
+ const revision=old?old.revision+1:0;ops.push({id:uid(),kind:'cabinet-finalize',rootId,expectedMetadata,layout:{...layout,revision},bindings:refs,retiring,stockBaseline:rows,moves:finalMoves});
  if(ops.length>1000)throw Error('migration exceeds queue capacity');return ops;
 }
 async function resolveRef(ref:LocationRef,scope:string,store:Pick<BrowserWorkStore,'get'>){
@@ -66,8 +71,26 @@ async function resolveRef(ref:LocationRef,scope:string,store:Pick<BrowserWorkSto
 export function layoutDependencies(item:NativeQueueItem):string[]{
  const refs=(r:LocationRef)=>'createId'in r?[r.createId]:[];
  if(item.kind==='cabinet-transfer')return [...refs(item.target),...item.prior.flatMap(p=>[p.operationId,...refs(p.target)]),...(item.linked??[]).flatMap(x=>[...refs(x.location),...(x.priorMove?[x.priorMove]:[])])];
- if(item.kind==='cabinet-finalize')return item.bindings.flatMap(b=>refs(b.ref));
+ if(item.kind==='cabinet-finalize')return [...item.bindings.flatMap(b=>refs(b.ref)),...item.moves.flatMap(m=>[m.operationId,...refs(m.target)])];
  return [];
+}
+// A final metadata write must match the complete projected StockItem set, not just totals.
+export function verifyNativeLayoutStock(raw:unknown,actualRaw:unknown[]){
+ const p=obj(raw);if(!Array.isArray(p.original)||!Array.isArray(p.children)||p.original.length+p.children.length>100000)throw Error('invalid migration stock expectation');
+ const expected=p.original.map(normalizeNativeTransferStock),actual=actualRaw.map(normalizeNativeTransferStock),byId=new Map(actual.map(x=>[x.id,x])),oldIds=new Set(expected.map(x=>x.id));
+ if(oldIds.size!==expected.length||byId.size!==actual.length||actual.length!==expected.length+p.children.length||expected.some(x=>!byId.has(x.id)||snapshotKey(x)!==snapshotKey(byId.get(x.id))))throw Error('migration original stock record drift');
+ const withoutId=(x:ReturnType<typeof normalizeNativeTransferStock>)=>{const {id,...rest}=x;return snapshotKey(rest)};
+ const children=p.children.map(x=>withoutId(normalizeNativeTransferStock(x))).sort(),fresh=actual.filter(x=>!oldIds.has(x.id)).map(withoutId).sort();
+ if(snapshotKey(children)!==snapshotKey(fresh))throw Error('migration child stock record drift');
+}
+async function finalStock(item:Extract<NativeLayoutQueueItem,{kind:'cabinet-finalize'}>,scope:string,store:Pick<BrowserWorkStore,'get'>):Promise<LayoutStockExpectation>{
+ const original=structuredClone(item.stockBaseline),byId=new Map(original.map(x=>[String(x.pk),x])),children:Row[]=[];
+ if(byId.size!==original.length)throw Error('duplicate migration original');
+ for(const m of item.moves){const x=byId.get(m.stockItemId),targetId=await resolveRef(m.target,scope,store),r=await store.get(scope,m.operationId);
+  if(!x||!r||r.state!=='verified'||r.preparation.scope!==scope||r.preparation.input.kind!=='operation'||r.preparation.input.payload.kind!=='transfer-stock'||r.preparation.input.payload.payload.stockItemId!==m.stockItemId||r.preparation.input.payload.payload.sourceId!==m.sourceId||r.preparation.input.payload.payload.targetId!==targetId||r.preparation.input.payload.payload.quantity!==m.quantity||!r.ackBinding||String(x.location)!==m.sourceId)throw Error('migration move not verified');
+  const remaining=sub(decimal(x.quantity),m.quantity);if(remaining==='0'){x.location=Number(targetId)}else{children.push({...x,location:Number(targetId),quantity:m.quantity,parent:Number(x.pk),child_items:0});x.quantity=remaining;x.child_items=(BigInt(decimal(x.child_items))+1n).toString()}
+ }
+ return {original,children};
 }
 export async function resolveNativeLayoutItem(item:NativeLayoutQueueItem,scope:string,store:Pick<BrowserWorkStore,'get'>,tree?:ExistingLocation[]):Promise<NativeWorkInput>{
  if(item.kind==='cabinet-transfer'){
@@ -82,5 +105,5 @@ export async function resolveNativeLayoutItem(item:NativeLayoutQueueItem,scope:s
  const next={...item.layout,cells:item.layout.cells.map(c=>({...c,locationId:c.drawer.compartments.length===1?leafBindings.find(b=>b.compartmentId===c.drawer.compartments[0].id)!.locationId:null}))},previous=readCabinetMetadata(item.expectedMetadata,tree,item.rootId);
  if(item.retiring.some(id=>!tree.some(x=>x.id===id&&x.name===retiredLocationName(id))))throw Error('retired leaf is not archived');
  const metadata=planCabinetMetadata(item.expectedMetadata,{schemaVersion:1,revision:next.revision,layout:next,leafBindings},previous?.revision??null,tree,item.rootId);
- return nativeOp(item.id,'update-location-metadata',{locationId:item.rootId,expectedMetadata:item.expectedMetadata,metadata,expectedLeaves:leafBindings.map(b=>{const x=tree.find(r=>r.id===b.locationId)!;return {locationId:x.id,parentId:x.parentId,name:x.name}}),retiringLocationIds:item.retiring});
+ return nativeOp(item.id,'update-location-metadata',{locationId:item.rootId,expectedMetadata:item.expectedMetadata,metadata,expectedLeaves:leafBindings.map(b=>{const x=tree.find(r=>r.id===b.locationId)!;return {locationId:x.id,parentId:x.parentId,name:x.name}}),retiringLocationIds:item.retiring,migrationExpected:await finalStock(item,scope,store)});
 }
