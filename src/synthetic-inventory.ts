@@ -1,7 +1,7 @@
 import {applyPartEnrichment,type EnrichmentApproval} from './part-enrichment.js';import {validateCatalog} from './catalog.js';
 import {applyCabinetRelocation,applyCabinetNames,validateWarehouse,warehouseIds,type WarehouseState,type RelocationMove,type LocationRename} from './warehouse-state.js';import type {CabinetLayout} from './cabinet-layout.js';
 import {demoIdentity,strongIdentity,type DemoPartDetails} from './demo-part-draft.js';
-import {validateAllocation,type Location} from './domain.js';
+import {validateAllocation,type Location} from './domain.js';import {assertSyntheticReceiptRevision} from './receiving-plan.js';
 import type {Operation,OperationTransport,Observation} from './operation-journal.js';
 export interface DemoPart {id:string;name:string;spec:string;partial:boolean;stock:Record<string,number>;details?:DemoPartDetails}
 interface Receipt {operation:Operation;receiptId:string}
@@ -38,6 +38,7 @@ export class SyntheticInventoryStore implements OperationTransport{
     p.stock={};if(operation.kind==='create-demo-part-and-receive'){if(typeof quantity!=='number'||!Array.isArray(allocations))throw Error('invalid receipt');validateAllocation(p.id,quantity,allocations,demoLocations(state.parts,state.warehouse?warehouseIds(state.warehouse):this.ids));for(const a of allocations)p.stock[a.locationId]=a.quantity;}
     state.parts.push(p);state.revision++;state.receipts.push({operation:structuredClone(operation),receiptId:'demo-receipt:'+operation.id});return {next:state,value:undefined};
    }
+   assertSyntheticReceiptRevision(operation,state.revision);
    const {partId,locationId,quantity,expectedOccupants}=operation.payload;if(typeof partId!=='string'||typeof locationId!=='string'||typeof quantity!=='number'||!Array.isArray(expectedOccupants)||expectedOccupants.some(x=>typeof x!=='string'))throw Error('invalid receipt operation');
    const part=state.parts.find(p=>p.id===partId),locations=demoLocations(state.parts,state.warehouse?warehouseIds(state.warehouse):this.ids),location=locations.find(l=>l.id===locationId);if(!part||!location||!equal(location.occupants,[...expectedOccupants].sort()))throw Error('stale occupancy');
    validateAllocation(partId,quantity,[{locationId,quantity}],locations);
