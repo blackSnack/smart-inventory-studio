@@ -17,7 +17,7 @@ function fixture(){
  const request=async(u,i)=>{const url=new URL(u),method=i.method??'GET',path=url.pathname,query=url.searchParams;assert.equal(url.origin,'https://inventory.test');assert.equal(i.redirect,'error');assert.equal(i.headers.Authorization,'Token fixture');
   if(method==='GET'){
    if(path==='/api/schema/')return Response.json(schema);if(path==='/api/part/category/')return Response.json(categories);if(path==='/api/part/category/parameters/')return Response.json(relations);
-   if(path==='/api/parameter/template/'){assert.equal(query.get('model_type'),'part.part');return Response.json(templates)}
+   if(path==='/api/parameter/template/'){assert.equal(query.get('for_model'),'part.part');return Response.json(templates)}
    if(path.startsWith('/api/parameter/template/'))return Response.json(templates.find(t=>path==='/api/parameter/template/'+t.pk+'/'));
    if(path.startsWith('/api/part/')&&/^\/api\/part\/\d+\/$/.test(path))return Response.json(parts.find(p=>path==='/api/part/'+p.pk+'/'));
    if(path==='/api/parameter/'){assert.equal(query.get('model_type'),'part.part');assert.ok(query.get('model_id'));return Response.json(parameters.filter(p=>String(p.model_id)===query.get('model_id')&&(!query.has('template')||String(p.template)===query.get('template'))))}
