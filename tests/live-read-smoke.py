@@ -15,7 +15,10 @@ try:
    headers={'access-control-allow-origin':'*','access-control-allow-headers':'authorization,content-type','access-control-allow-methods':'GET, OPTIONS'}
    if req.method=='OPTIONS':route.fulfill(status=204,headers=headers);return
    assert req.method=='GET';assert req.headers.get('authorization')=='Token synthetic-test'
-   if '/api/stock/location/' in req.url: data=[{'pk':1,'name':'Cabinet A','parent':None,'structural':True},{'pk':2,'name':'A-01','parent':1,'structural':False}]
+   if '/api/schema/' in req.url: data={'openapi':'3.0.3','paths':{'/api/parameter/':{'get':{}},'/api/parameter/template/':{'get':{}}}}
+   elif '/api/parameter/template/' in req.url: data=[{'pk':5,'name':'Resistance','units':'Ω','model_type':'part.part','enabled':True}]
+   elif '/api/parameter/' in req.url: data=[{'pk':20,'model_id':42,'model_type':'part.part','template':5,'data':'10kΩ'}]
+   elif '/api/stock/location/' in req.url: data=[{'pk':1,'name':'Cabinet A','parent':None,'structural':True},{'pk':2,'name':'A-01','parent':1,'structural':False}]
    elif '/api/part/' in req.url:data=[{'pk':42,'name':'10k resistor','IPN':'R-01','description':'±1%','category':1},{'pk':43,'name':'10k unknown','IPN':'R-02','description':'Partial','category':1}]
    elif 'part=42' in req.url:data=[{'pk':9,'part':42,'location':2,'quantity':'100'}]
    else:data=[]
@@ -25,6 +28,7 @@ try:
   page.get_by_label('服务地址').fill('https://inventory.example.test');page.get_by_label('只读 API Token').fill('synthetic-test');page.get_by_role('button',name='测试并连接').click()
   page.get_by_text('已连接 · 只读',exact=True).wait_for();page.get_by_label('全局库存搜索').fill('10k');page.get_by_role('button',name='搜索',exact=True).click()
   page.get_by_text('找到 2 种元件').wait_for();page.get_by_text('Cabinet A / A-01',exact=True).wait_for();page.get_by_text('100 件',exact=True).wait_for();page.get_by_text('已建档，暂无库存记录').wait_for()
+  page.get_by_text('技术参数筛选',exact=True).click();page.get_by_role('button',name='读取参数模板').click();page.get_by_label('参数模板').select_option('5');page.get_by_label('数值比较').check();page.get_by_label('参数值').fill('10000');page.get_by_role('button',name='应用参数筛选').click();page.get_by_text('找到 1 种元件').wait_for();page.get_by_text('另有 1 种参数未知，未计入严格匹配。').wait_for();assert page.get_by_text('10k unknown',exact=True).count()==0
   page.get_by_role('button',name='首页',exact=True).click();page.get_by_role('button',name='手动录入草稿').click()
   page.get_by_label('元件分类').select_option('resistor.smd');page.get_by_label('元件名称').fill('10k test resistor');page.get_by_label('阻值 · Ω').fill('10kΩ')
   page.get_by_label('已核对草稿和来源',exact=False).check();assert page.get_by_role('button',name='导出审核草稿').is_enabled()
