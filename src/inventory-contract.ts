@@ -34,13 +34,14 @@ export class InventorySession{
  async getParameterTemplates(id:string){await this.require('parameterTemplates');if(!this.ports.catalog)throw new UnsupportedInventoryCapability('parameterTemplates');return this.ports.catalog.getParameterTemplates(id)}
  async getLocationMetadata(id:string){await this.require('metadata');if(!this.ports.metadata)throw new UnsupportedInventoryCapability('metadata');return this.ports.metadata.getLocationMetadata(id)}
  async operationTransport(plan:ApprovedPlan):Promise<OperationTransport>{
+  plan=structuredClone(plan);
   if(plan.instanceId!==this.instanceId)throw Error('wrong inventory instance');
   if(![plan.id,plan.catalogHash,plan.snapshotHash,plan.approvalId].every(v=>typeof v==='string'&&v.trim())||!Array.isArray(plan.operations)||!plan.operations.length||new Set(plan.operations.map(o=>o.id)).size!==plan.operations.length||plan.operations.some(o=>!o.id||!o.kind))throw Error('invalid approved plan');
   const approved=new Map(plan.operations.map(o=>[o.id,canonical(o)]));
   const checked=async(operation:Operation,write:boolean)=>{if(approved.get(operation.id)!==canonical(operation))throw Error('operation outside approved plan');const caps=await this.ports.capabilities();if(!supportedKinds.has(operation.kind)||!caps.operationKinds?.includes(operation.kind))throw new UnsupportedInventoryOperation(operation.kind);if(write&&caps.write!==true)throw new UnsupportedInventoryCapability('write');if(operation.kind==='transfer-stock'&&caps.stockTransfer!==true)throw new UnsupportedInventoryCapability('stockTransfer');if(operation.kind==='update-location-metadata'&&caps.metadata!==true)throw new UnsupportedInventoryCapability('metadata');if(operation.kind==='create-parameter-template'&&caps.parameterTemplates!==true)throw new UnsupportedInventoryCapability('parameterTemplates');};
   if(!this.ports.operations)throw new UnsupportedInventoryCapability('write');const transport=this.ports.operations;
   for(const operation of plan.operations)await checked(operation,true);
-  return {send:async operation=>{await checked(operation,true);await transport.send(structuredClone(operation))},observe:async operation=>{await checked(operation,false);return transport.observe(structuredClone(operation))}};
+  return {send:async operation=>{const snapshot=structuredClone(operation);await checked(snapshot,true);await transport.send(snapshot)},observe:async operation=>{const snapshot=structuredClone(operation);await checked(snapshot,false);return transport.observe(snapshot)}};
  }
  // Recovery is readback-only: revocation of write permission must not cause a blind replay.
  async observationTransport(plan:ApprovedPlan):Promise<OperationTransport>{
