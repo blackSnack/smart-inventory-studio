@@ -18,6 +18,23 @@ try:
    const {reconcile}=await import('/operation-journal.js');await reconcile(a,t,'p','a');const revision=(await a.read('p')).revision;await reconcile(a,t,'p','a');if((await a.read('p')).revision!==revision)throw Error('repeated unchanged observation');if((await a.read('p')).steps[0].state!=='unknown'||(await a.pending()).length!==1||(await other.pending()).length!==0)throw Error('bad scope/state');
    a.close();b.close();other.close();
   }""")
+  page.evaluate("""async()=>{const {IndexedDbJournalStore:S}=await import('/indexeddb-journal.js');const {createJournal,executeNext,stopRemaining}=await import('/operation-journal.js');
+   const db='admission-fixture',a=await S.open('a',db),b=await S.open('a',db),other=await S.open('b',db);
+   const make=(id,instanceId='a')=>createJournal({id,instanceId,catalogHash:'c',snapshotHash:'s',approvalId:'approval',operations:[{id:id+':0',kind:'receipt',payload:{quantity:2}}]});
+   const rejected=async(fn,label)=>{let failed=false;try{await fn()}catch{failed=true}if(!failed)throw Error(label)};
+   const forged=make('forged');forged.steps[0].operation.payload.quantity=99;await rejected(()=>a.create(forged),'changed approved payload accepted');
+   const wrongKind=make('wrong-kind');wrongKind.steps[0].operation.kind='different';await rejected(()=>a.create(wrongKind),'changed operation kind accepted');
+   const plans=[make('left'),make('right')],result=await Promise.allSettled([a.create(plans[0]),b.create(plans[1])]);
+   if(result.filter(x=>x.status==='fulfilled').length!==1||(await a.pending()).length!==1)throw Error('different plan admission race');
+   const winner=result[0].status==='fulfilled'?0:1,loser=1-winner;
+   await other.create(make('other','b'));if((await other.pending()).length!==1)throw Error('unrelated instance blocked');
+   await rejected(()=>a.create(plans[loser]),'pending plan did not block new admission');
+   await stopRemaining(a,plans[winner].plan.id,'a',0,true);
+   await b.create(plans[loser]);const t={send:async()=>{},observe:async()=>({status:'verified',evidence:'fixture readback'})};await executeNext(b,t,plans[loser].plan.id,'a');
+   const next=make('next'),pending=a.create(next);next.plan.operations[0].payload.quantity=77;next.steps[0].operation.payload.quantity=77;await pending;
+   if((await a.read('next')).steps[0].operation.payload.quantity!==2)throw Error('caller mutated queued approval');
+   await rejected(()=>a.create(make('after-next')),'new pending plan not enforced');a.close();b.close();other.close();
+  }""")
   page.reload()
   page.evaluate("""async()=>{const {IndexedDbJournalStore:S}=await import('/indexeddb-journal.js');const {executeNext,reconcile}=await import('/operation-journal.js');const s=await S.open('a');let sends=0;const t={send:async()=>{sends++},observe:async()=>({status:'verified',evidence:'synthetic readback'})};let blocked=false;try{await executeNext(s,t,'p','a')}catch{blocked=true}if(!blocked||sends!==0)throw Error('replay after reload');await reconcile(s,t,'p','a');if((await s.pending()).length!==0||sends!==0)throw Error('bad recovery');s.close()}""")
   page.evaluate("""async()=>{const {SyntheticInventoryStore:S,DEMO_INSTANCE,demoLocations}=await import('/synthetic-inventory.js');const {IndexedDbJournalStore:J}=await import('/indexeddb-journal.js');const {createJournal,executeNext}=await import('/operation-journal.js');const {planExistingPartReceipt}=await import('/receiving-plan.js');
