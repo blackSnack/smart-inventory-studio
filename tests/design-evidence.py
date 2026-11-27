@@ -1,4 +1,5 @@
 """Capture the real built React application; no external services or real stock."""
+from photo_intake_fixture import label_png,response_label,gateway_route
 from pathlib import Path
 from http.server import ThreadingHTTPServer,SimpleHTTPRequestHandler
 from functools import partial
@@ -124,6 +125,11 @@ try:
    ctx=b.new_context(viewport={'width':width,'height':height},is_mobile=width<768,has_touch=width<768,device_scale_factor=1)
    exercise_live_enrichment(ctx.new_page(),f'http://127.0.0.1:{server.server_port}/',capture)
    ctx.close()
+  for width,height,label in [(390,844,'mobile'),(820,1180,'tablet'),(1440,1000,'desktop')]:
+   context=b.new_context(viewport={'width':width,'height':height});context.add_init_script("Object.defineProperty(window,'BarcodeDetector',{value:undefined,configurable:true})");page=context.new_page();page.route('https://gateway.example.test/**',lambda route:gateway_route(route,response_label('YAGEO','RC0603FR-0710KL','LCSC','C123456')))
+   page.goto(f'http://127.0.0.1:{server.server_port}/');page.get_by_role('button',name='设置',exact=True).click();page.get_by_text('AI Gateway · 未配置',exact=True).click();page.get_by_label('Agent API Base URL').fill('https://gateway.example.test/v1');page.get_by_label('API Key',exact=True).fill('synthetic-key');page.get_by_label('模型或 Agent ID').fill('fixture');page.get_by_role('button',name='保存配置').click()
+   page.get_by_role('button',name='首页',exact=True).click();page.get_by_role('button',name='拍照录入').click();page.get_by_test_id('receipt-album').set_input_files({'name':'synthetic-label.png','mimeType':'image/png','buffer':label_png()});page.get_by_role('button',name='识别元件',exact=True).click();page.get_by_text('包装标记数量：15 件 · 待确认',exact=True).wait_for();capture(page,'54-'+label+'-label-evidence',page.get_by_role('heading',name='标签识别证据'))
+   capture(page,'55-'+label+'-field-confirm',page.get_by_role('heading',name='基本信息'));page.get_by_role('button',name='全部确认',exact=True).click();capture(page,'56-'+label+'-reviewed',page.get_by_text('已核对草稿和来源，不代表确认库存身份',exact=True));context.close()
   b.close()
 finally:server.shutdown()
 print('PASS: actual browser captures, local font load, icon dimensions and desktop focus visibility. Visual inspection is separate.')

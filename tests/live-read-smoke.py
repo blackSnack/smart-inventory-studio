@@ -1,3 +1,4 @@
+from photo_intake_fixture import label_png,response_label,gateway_route
 from pathlib import Path
 from http.server import ThreadingHTTPServer,SimpleHTTPRequestHandler
 from functools import partial
@@ -12,7 +13,7 @@ Thread(target=server.serve_forever,daemon=True).start()
 try:
  with sync_playwright() as p:
   b=p.chromium.launch();page=b.new_page(viewport={'width':390,'height':844});errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-  seen=[];detail_enabled=False;detail_fail=False;label_fail=False;metadata_enabled=False;metadata_mode='valid';stock_mode='positive';connect_status=200
+  seen=[];detail_enabled=False;detail_fail=False;label_fail=False;metadata_enabled=False;metadata_mode='valid';stock_mode='positive';connect_status=200;identity_fail=False
   def api(route):
    req=route.request;seen.append((req.method,req.url))
    headers={'access-control-allow-origin':'*','access-control-allow-headers':'authorization,content-type','access-control-allow-methods':'GET, OPTIONS'}
@@ -29,6 +30,7 @@ try:
    elif '/api/part/42/' in req.url:
     if detail_fail:route.fulfill(status=403,headers=headers);return
     data={'pk':42,'name':'10k resistor','IPN':'R-01','description':'±1%','category':1}
+   elif '/api/company/part/manufacturer/' in req.url and identity_fail:route.fulfill(status=403,headers=headers);return
    elif '/api/company/part/manufacturer/' in req.url:data=[{'pk':21,'part':42,'manufacturer':3,'manufacturer_detail':{'pk':3,'name':'Fixture Maker'},'MPN':'FIX-10K'}]
    elif '/api/company/part/' in req.url:data=[{'pk':22,'part':42,'supplier':9,'supplier_detail':{'pk':9,'name':'Fixture Supplier'},'SKU':'SKU-10K'}]
    elif '/api/attachment/' in req.url:data=[{'pk':31,'model_type':'part','model_id':42,'link':'https://example.test/manual','comment':'Fixture manual'}]
@@ -76,7 +78,12 @@ try:
   stock_mode='denied';page.get_by_role('button',name='读取库存记录').click();page.get_by_text('部分库位读取失败，库存状态保持未知。').wait_for();matrix.get_by_text('库存未知',exact=True).wait_for()
   page.get_by_label('Metadata 模型标识').fill('changed');assert matrix.count()==0
   # Switch sources without leaving settings or losing the shared Gateway configuration.
-  page.get_by_role('button',name='设置',exact=True).click();page.get_by_text('AI Gateway · 未配置',exact=True).click();page.get_by_label('Agent API Base URL').fill('https://gateway.example.test/v1');page.get_by_label('API Key',exact=True).fill('session-only-key');page.get_by_label('模型或 Agent ID').fill('fixture');page.get_by_role('button',name='保存配置').click();page.get_by_role('button',name='使用演示库存',exact=True).click();assert page.evaluate("window.__studioShell===document.querySelector('[data-workspace-shell]')");assert page.locator('[data-workspace-source]').inner_text()=='当前库存：演示库存';assert page.get_by_role('heading',name='设置',exact=True).is_visible();page.get_by_text('AI Gateway · 已配置 · 未验证',exact=True).click();assert page.get_by_label('模型或 Agent ID').input_value()=='fixture';assert page.get_by_label('API Key',exact=True).input_value()=='session-only-key';page.get_by_role('button',name='取消',exact=True).click();assert page.evaluate("!Object.values(localStorage).some(v=>v.includes('session-only-key'))")
+  page.get_by_role('button',name='设置',exact=True).click();page.get_by_text('AI Gateway · 未配置',exact=True).click();page.get_by_label('Agent API Base URL').fill('https://gateway.example.test/v1');page.get_by_label('API Key',exact=True).fill('session-only-key');page.get_by_label('模型或 Agent ID').fill('fixture');page.get_by_role('button',name='保存配置').click()
+  page.route('https://gateway.example.test/**',lambda route:gateway_route(route,response_label()))
+  page.get_by_role('button',name='首页',exact=True).click();page.get_by_test_id('receipt-album').set_input_files({'name':'synthetic-label.png','mimeType':'image/png','buffer':label_png()});page.get_by_role('button',name='发送照片并获取草稿').click();page.get_by_text('包装标记数量：15 件 · 待确认',exact=True).wait_for();page.get_by_role('button',name='全部确认',exact=True).click();page.get_by_role('button',name='核对已有库存',exact=True).click();match=page.get_by_role('region',name='库存匹配结果');match.get_by_role('heading',name='已找到相同身份').wait_for();match.get_by_text('10k resistor',exact=True).wait_for();assert match.get_by_role('button',name='使用该元件入库').count()==0
+  page.get_by_label('SKU',exact=True).fill('OTHER-SKU');assert match.count()==0;page.get_by_role('button',name='全部确认',exact=True).click();page.get_by_role('button',name='核对已有库存',exact=True).click();match.get_by_role('heading',name='发现可能匹配的元件').wait_for()
+  page.get_by_label('MPN',exact=True).fill('OTHER-MPN');identity_fail=True;page.get_by_role('button',name='全部确认',exact=True).click();page.get_by_role('button',name='核对已有库存',exact=True).click();page.get_by_text('库存身份查询失败或接口不完整，不能判定为新元件。请重试。',exact=True).wait_for();assert match.count()==0;identity_fail=False;page.get_by_role('button',name='核对已有库存',exact=True).click();match.get_by_role('heading',name='未找到关联身份 · 建议新建').wait_for();match.get_by_text('当前库存只读，不能创建元件或写入库存。',exact=True).wait_for();assert match.get_by_role('button',name='新建元件并入库').count()==0
+  page.get_by_role('button',name='设置',exact=True).click();page.get_by_role('button',name='使用演示库存',exact=True).click();assert page.evaluate("window.__studioShell===document.querySelector('[data-workspace-shell]')");assert page.locator('[data-workspace-source]').inner_text()=='当前库存：演示库存';assert page.get_by_role('heading',name='设置',exact=True).is_visible();page.get_by_text('AI Gateway · 已配置 · 未验证',exact=True).click();assert page.get_by_label('模型或 Agent ID').input_value()=='fixture';assert page.get_by_label('API Key',exact=True).input_value()=='session-only-key';page.get_by_role('button',name='取消',exact=True).click();assert page.evaluate("!Object.values(localStorage).some(v=>v.includes('session-only-key'))")
   # A default session-only key is not restored; address/model preferences are.
   request_count=len(seen);page.reload();page.get_by_role('button',name='设置',exact=True).click();page.get_by_text('AI Gateway · 配置未完成',exact=True).click();assert page.get_by_label('Agent API Base URL').input_value()=='https://gateway.example.test/v1';assert page.get_by_label('模型或 Agent ID').input_value()=='fixture';assert page.get_by_label('API Key',exact=True).input_value()=='';page.get_by_role('button',name='取消',exact=True).click();page.get_by_role('button',name='配置 InvenTree').click();page.get_by_text('已保存地址 · 需填写 Token',exact=True).wait_for();assert page.get_by_label('服务地址').input_value()=='https://inventory.example.test';assert page.get_by_label('只读 API Token').input_value()=='';assert len(seen)==request_count
   page.get_by_label('只读 API Token').fill('synthetic-test');page.get_by_label('记住本设备 Token').check();page.get_by_role('button',name='保存库存配置').click();page.get_by_text('已保存本机配置',exact=True).wait_for();page.reload();page.get_by_role('button',name='设置',exact=True).click();page.get_by_role('button',name='配置 InvenTree').click();page.get_by_text('已配置 · 未连接',exact=True).wait_for();assert page.get_by_label('只读 API Token').input_value()=='synthetic-test';assert page.get_by_label('记住本设备 Token').is_checked();assert len(seen)==request_count
