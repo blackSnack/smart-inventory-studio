@@ -45,7 +45,30 @@ export interface InventoryProvider { searchParts(query:string):Promise<unknown[]
 // Read-only transport foundation. Production writes require verified schema and operation journal.
 export class InvenTreeReadProvider implements InventoryProvider {
  constructor(private base:string,private token:string,private request:typeof fetch=fetch){}
- async list(path:string,params:Record<string,string>={}):Promise<unknown[]> {const base=new URL(this.base.endsWith('/')?this.base:this.base+'/'); if(!['http:','https:'].includes(base.protocol)||base.username||base.password||base.search||base.hash)throw Error('invalid base');if(!/^api\/[a-z]+(?:\/[a-z]+)*\/$/.test(path))throw Error('invalid read path');let url:URL|null=new URL(path,base);const expectedPath=url.pathname;Object.entries(params).forEach(([k,v])=>url!.searchParams.set(k,v));let out:unknown[]=[];let expectedCount:number|null=null;const visited=new Set<string>();while(url){if(url.origin!==base.origin||url.pathname!==expectedPath||!!url.username||!!url.password||!!url.hash||Object.entries(params).some(([k,v])=>url!.searchParams.get(k)!==v)||visited.has(url.href)||visited.size>=1000)throw Error('unsafe pagination');visited.add(url.href);const res=await this.request(url,{headers:{Authorization:`Token ${this.token}`,Accept:'application/json'},redirect:'error',cache:'no-store'});if(!res.ok)throw Error(`HTTP ${res.status}`);const data=await res.json();if(Array.isArray(data)){if(out.length||data.length>100000)throw Error('invalid unpaginated response');return data}if(!Array.isArray(data.results)||data.next!=null&&typeof data.next!=='string')throw Error('invalid response');if(data.count!==undefined){if(!Number.isSafeInteger(data.count)||data.count<0||data.count>100000||expectedCount!==null&&expectedCount!==data.count)throw Error('inconsistent page count');expectedCount=data.count}out.push(...data.results);if(out.length>100000)throw Error('too many rows');url=data.next?new URL(data.next,url):null;if(!url&&expectedCount!==null&&out.length!==expectedCount)throw Error('incomplete pagination');}return out;}
+ async list(path:string,params:Record<string,string>={}):Promise<unknown[]> {
+  const base=new URL(this.base.endsWith('/')?this.base:this.base+'/');if(!['http:','https:'].includes(base.protocol)||base.username||base.password||base.search||base.hash||!this.token.trim())throw Error('invalid base or token');
+  if(!/^api\/[a-z]+(?:\/[a-z]+)*\/$/.test(path))throw Error('invalid read path');
+  let url:URL|null=new URL(path,base);const expectedPath=url.pathname,scope=Object.entries(params),paging=new Set(['limit','offset','page']);scope.forEach(([k,v])=>url!.searchParams.set(k,v));
+  const out:unknown[]=[],visited=new Set<string>();let expectedCount:number|undefined;
+  while(url){
+   const queryKeys=new Set<string>();let unsafe=false;
+   url.searchParams.forEach((_,k)=>{if(queryKeys.has(k)||!Object.hasOwn(params,k)&&!paging.has(k))unsafe=true;queryKeys.add(k)});
+   const canonical=new URL(url);canonical.searchParams.sort();
+   if(unsafe||url.origin!==base.origin||url.pathname!==expectedPath||!!url.username||!!url.password||!!url.hash||scope.some(([k,v])=>url!.searchParams.get(k)!==v)||visited.has(canonical.href)||visited.size>=1000)throw Error('unsafe pagination');
+   visited.add(canonical.href);
+   const res=await this.request(url,{headers:{Authorization:`Token ${this.token}`,Accept:'application/json'},redirect:'error',cache:'no-store',signal:AbortSignal.timeout(20000)});
+   if(!res.ok)throw Error(`HTTP ${res.status}`);const data=await res.json();
+   if(Array.isArray(data)){if(visited.size!==1||data.length>100000)throw Error('invalid unpaginated response');return data}
+   if(!data||!Array.isArray(data.results)||data.next!=null&&typeof data.next!=='string')throw Error('invalid response');
+   if(data.count!==undefined&&(!Number.isSafeInteger(data.count)||data.count<0||data.count>100000))throw Error('invalid page count');
+   if(visited.size===1)expectedCount=data.count;else if(expectedCount!==data.count)throw Error('inconsistent page count');
+   if(data.next&&!data.results.length)throw Error('empty intermediate page');
+   out.push(...data.results);if(out.length>100000||expectedCount!==undefined&&out.length>expectedCount)throw Error('too many rows');
+   url=data.next?new URL(data.next,url):null;
+   if(expectedCount!==undefined&&(!url&&out.length!==expectedCount||url&&out.length===expectedCount))throw Error('incomplete pagination');
+  }
+  return out;
+ }
  searchParts(query:string){return this.list('api/part/',query?{search:query}:{});}
  getStockByPart(id:string){return this.list('api/stock/',{part:id});}
  getLocations(){return this.list('api/stock/location/');}

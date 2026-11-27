@@ -32,6 +32,12 @@ export class InvenTreeReadAdapter implements InventoryReadPort,ParameterSearchPo
    const item=result.get(loc)??{partId,locationId:loc,quantity:'0',stockItemIds:[]};item.quantity=add(item.quantity,quantity(r.quantity));item.stockItemIds.push(sid);result.set(loc,item);
   }return [...result.values()];
  }
- async getLocations():Promise<LocationSummary[]>{return (await this.transport.getLocations()).map(x=>{const r=row(x);if(typeof r.structural!=='boolean')throw Error('unverified structural flag');return {id:id(r.pk),name:str(r.name),parentId:optionalId(r.parent),structural:r.structural}})}
+ async getLocations():Promise<LocationSummary[]>{
+  const locations=(await this.transport.getLocations()).map(x=>{const r=row(x);if(typeof r.structural!=='boolean'||!Object.hasOwn(r,'parent'))throw Error('unverified location structure');return {id:id(r.pk),name:str(r.name),parentId:optionalId(r.parent),structural:r.structural}});
+  const byId=new Map(locations.map(l=>[l.id,l]));if(byId.size!==locations.length)throw Error('duplicate location ID');
+  const checked=new Set<string>();
+  for(const l of locations){let current:LocationSummary|undefined=l;const chain=new Set<string>();while(current&&!checked.has(current.id)){if(chain.has(current.id))throw Error('cyclic location tree');chain.add(current.id);if(current.parentId===null)break;current=byId.get(current.parentId);if(!current)throw Error('missing parent location')}for(const k of chain)checked.add(k)}
+  return locations;
+ }
  async getCapabilities():Promise<InventoryCapabilities>{return {read:true,write:false,parameterTemplates:false,metadata:false,stockTransfer:false}}
 }
