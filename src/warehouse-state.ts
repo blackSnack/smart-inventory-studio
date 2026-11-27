@@ -1,9 +1,10 @@
 import {newCabinet,validateCabinet,type CabinetLayout} from './cabinet-layout.js';
 import type {ApprovedPlan} from './operation-journal.js';
 export interface StoredCabinet {layout:CabinetLayout;leaves:Record<string,string>}
-export interface WarehouseState {schemaVersion:1;cabinets:StoredCabinet[];retired:string[]}
+export interface WarehouseState {schemaVersion:1;cabinets:StoredCabinet[];retired:string[];names?:Record<string,string>}
 type StockedPart={stock:Record<string,number>};
 export const warehouseIds=(w:WarehouseState)=>w.cabinets.flatMap(c=>Object.values(c.leaves));
+export const locationName=(w:WarehouseState,id:string)=>w.names&&Object.hasOwn(w.names,id)?w.names[id]:id;
 export function validateWarehouse(w:WarehouseState){
  if(!w||w.schemaVersion!==1||!Array.isArray(w.cabinets)||!w.cabinets.length||!Array.isArray(w.retired))throw Error('invalid warehouse');
  const cabinets=new Set<string>(),refs=new Set<string>(),compartments=new Set<string>();
@@ -13,6 +14,7 @@ export function validateWarehouse(w:WarehouseState){
   }
   if(Object.keys(c.leaves).some(k=>!own.has(k)))throw Error('extra leaf binding');
  }
+ const names=w.names??{};if(!names||typeof names!=='object'||Array.isArray(names)||Object.entries(names).some(([id,name])=>!refs.has(id)||typeof name!=='string'||!name.trim()||name.length>128||refs.has(name)&&name!==id))throw Error('invalid location display name');const labels=[...refs].map(id=>locationName(w,id));if(new Set(labels.map(x=>x.toLowerCase())).size!==labels.length)throw Error('duplicate location display name');
  if(new Set(w.retired).size!==w.retired.length||w.retired.some(id=>!id||refs.has(id)))throw Error('invalid retired ID');
 }
 export function seedWarehouse(cabinets:{id:string;rows:number;cols:number}[]):WarehouseState{
@@ -28,7 +30,7 @@ export function applyCabinetLayout(w:WarehouseState,draft:CabinetLayout,parts:St
   if(draft.revision<old.layout.revision||draft.dimensions.layers<old.layout.dimensions.layers||draft.dimensions.rows<old.layout.dimensions.rows||draft.dimensions.cols<old.layout.dimensions.cols)throw Error('stale or shrinking layout');
   for(const cell of old.layout.cells){const next=draft.cells.find(c=>c.id===cell.id);if(!next||next.layer!==cell.layer||next.row!==cell.row||next.col!==cell.col)throw Error('existing drawer coordinates must be preserved')}
  }
- const used=new Set([...warehouseIds(w),...w.retired]),leaves:Record<string,string>=Object.create(null),kept=new Set<string>();
+ const used=new Set([...warehouseIds(w),...w.retired,...Object.values(w.names??{})]),leaves:Record<string,string>=Object.create(null),kept=new Set<string>();
  const next=structuredClone(draft);
  for(const cell of next.cells){
   const before=old?.layout.cells.find(c=>c.id===cell.id);
@@ -42,7 +44,7 @@ export function applyCabinetLayout(w:WarehouseState,draft:CabinetLayout,parts:St
  const retired=Object.values(old?.leaves??{}).filter(id=>!kept.has(id));
  if(parts.some(p=>retired.some(id=>(p.stock[id]??0)>0)))throw Error('有库存的子格必须先完成库存转移');
  next.revision=(old?.layout.revision??-1)+1;
- const c={layout:next,leaves};const result:WarehouseState={schemaVersion:1,cabinets:old?w.cabinets.map(x=>x.layout.id===draft.id?c:x):[...w.cabinets,c],retired:[...w.retired,...retired]};
+ const c={layout:next,leaves};const result:WarehouseState={schemaVersion:1,cabinets:old?w.cabinets.map(x=>x.layout.id===draft.id?c:x):[...w.cabinets,c],retired:[...w.retired,...retired],...(w.names?{names:Object.fromEntries(Object.entries(w.names).filter(([id])=>!retired.includes(id)))}:{})};
  validateWarehouse(result);return result;
 }
 export interface RelocationPart extends StockedPart {id:string;name:string}
@@ -67,4 +69,18 @@ export function planCabinetSave(id:string,instanceId:string,revision:number,w:Wa
  if(!confirmed||!id||!instanceId||!Number.isSafeInteger(revision)||revision<0)throw Error('布局确认不完整');
  applyCabinetRelocation(w,draft,parts,moves);
  return {id,instanceId,catalogHash:'warehouse-layout-v1',snapshotHash:String(revision),approvalId:id,operations:[{id:id+':0',kind:'save-demo-cabinet',payload:{draft:structuredClone(draft),expectedRevision:revision,moves:structuredClone(moves)}}]};
+}
+
+export interface LocationRename {locationId:string;from:string;to:string}
+const cellName=(prefix:string,c:{layer:number;row:number;col:number})=>prefix+'-L'+(c.layer+1)+'-R'+(c.row+1)+'-C'+(c.col+1);
+export function previewCabinetNames(w:WarehouseState,cabinetId:string,prefix:string):LocationRename[]{
+ validateWarehouse(w);prefix=prefix.trim();if(!prefix||prefix.length>80||/[\u0000-\u001f]/.test(prefix))throw Error('编号前缀无效');const cabinet=w.cabinets.find(c=>c.layout.id===cabinetId);if(!cabinet)throw Error('柜子不存在');const reserved=new Map<string,string>();for(const id of warehouseIds(w)){reserved.set(id.toLowerCase(),id);reserved.set(locationName(w,id).toLowerCase(),id)}const targets=new Set<string>(),changes:LocationRename[]=[];
+ for(const cell of cabinet.layout.cells)for(const [i,r] of cell.drawer.compartments.entries()){const id=cabinet.leaves[r.id],to=cellName(prefix,cell)+(cell.drawer.compartments.length>1?'-S'+(i+1):''),from=locationName(w,id),owner=reserved.get(to.toLowerCase());if(targets.has(to.toLowerCase())||owner&&owner!==id||to.length>128)throw Error('目标编号冲突：'+to);targets.add(to.toLowerCase());if(from!==to)changes.push({locationId:id,from,to})}
+ return changes;
+}
+export function applyCabinetNames(w:WarehouseState,cabinetId:string,prefix:string,changes:LocationRename[]):WarehouseState{
+ const expected=previewCabinetNames(w,cabinetId,prefix);if(!Array.isArray(changes)||JSON.stringify(expected)!==JSON.stringify(changes)||!expected.length)throw Error('命名预览已过期或无变更');const next=structuredClone(w);next.names={...next.names};for(const r of expected){if(r.to===r.locationId)delete next.names[r.locationId];else Object.defineProperty(next.names,r.locationId,{value:r.to,enumerable:true,writable:true,configurable:true})}const c=next.cabinets.find(x=>x.layout.id===cabinetId)!;c.layout.cells=c.layout.cells.map(cell=>({...cell,name:cellName(prefix.trim(),cell)}));c.layout.revision++;validateWarehouse(next);return next;
+}
+export function planCabinetRename(id:string,instanceId:string,revision:number,w:WarehouseState,cabinetId:string,prefix:string,changes:LocationRename[],confirmed:boolean):ApprovedPlan{
+ if(!confirmed||!id||!instanceId||!Number.isSafeInteger(revision)||revision<0)throw Error('命名确认不完整');applyCabinetNames(w,cabinetId,prefix,changes);return {id,instanceId,catalogHash:'warehouse-naming-v1',snapshotHash:String(revision),approvalId:id,operations:[{id:id+':0',kind:'rename-demo-locations',payload:{cabinetId,prefix:prefix.trim(),changes:structuredClone(changes),expectedRevision:revision}}]};
 }
