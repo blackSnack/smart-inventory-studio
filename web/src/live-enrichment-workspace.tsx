@@ -12,7 +12,7 @@ import type {Catalog} from '../../src/catalog';
 import type {PartSummary} from '../../src/inventory-provider';
 import type {ApprovedPlan} from '../../src/operation-journal';
 import {snapshotKey} from '../../src/approved-snapshot';
-type Gateway={url:string;key:string;model:string;tested?:'ok'|'failed'};
+type Gateway={url:string;key:string;model:string;tested?:'ok'|'failed';remember?:boolean};
 type Row={summary:PartSummary;baseline?:LiveBaseline;config:LiveMapping;confirmed:boolean;state:'idle'|'reading'|'read-failed'|'configure'|'pending'|'ready'|'failed';request?:EnrichmentRequest;fields:ReviewField[];suggestions:Suggestion[];accepted:string[]};
 const initial=(summary:PartSummary):Row=>({summary,config:{categoryKey:'',templates:{},missingSources:[]},confirmed:false,state:'idle',fields:[],suggestions:[],accepted:[]});
 const digest=async(x:unknown)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(snapshotKey(x)))),v=>v.toString(16).padStart(2,'0')).join('');
