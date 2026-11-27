@@ -1,0 +1,42 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+import {authorizeProductionNativeTarget,nativeCatalogHash,authorizedNativeBase,assertNativeMode} from '../dist/native-production-authorization.js';
+import {contractWrites} from '../dist/inventree-contract-evidence.js';
+import {BrowserNativeWorkflow,browserPreparationHash} from '../dist/browser-native-workflow.js';
+const seed=JSON.parse(readFileSync(new URL('../catalog/electronic-parts.json',import.meta.url)));
+const catalog={...seed,status:'approved_for_production',catalogVersion:'1.0.0'};
+const base='https://inventory.example.test/';
+const schema={openapi:'3.0.3',paths:{'/api/part/{id}/':{get:{}},'/api/stock/location/':{get:{}},'/api/stock/':{get:{},post:{}}}};
+const digest=createHash('sha256').update(JSON.stringify(schema)).digest('hex');
+async function profile(){return {version:1,targetBase:base,softwareVersion:'1.7.4',apiVersion:570,actorId:'1',schemaSha256:digest,catalogVersion:'1.0.0',catalogSha256:await nativeCatalogHash(catalog),approvalId:'synthetic-approval',productionWriteAuthorized:true,exclusiveWindowConfirmed:true,evidence:Object.fromEntries(['environment','backupRestore','catalogFreeze','isolatedAcceptance','permissionsVisibility','referencesAndAudit'].map(k=>[k,'a'.repeat(64)])),operationPermissions:Object.fromEntries(contractWrites.map(w=>[w.key,true]))}}
+test('production gate refuses draft catalog, missing approval, incomplete evidence, forged authority and different origin',async()=>{
+ const e=await profile();
+ for(const [c,x,approve] of [[seed,e,true],[catalog,e,false],[catalog,{...e,operationPermissions:{}},true],[catalog,{...e,evidence:{}},true],[catalog,{...e,targetBase:'https://other.example.test/'},true]])await assert.rejects(authorizeProductionNativeTarget(base,c,x,approve));
+ const a=await authorizeProductionNativeTarget(base,catalog,e,true);
+ assert.equal(authorizedNativeBase(base,a).href,base);assert.throws(()=>authorizedNativeBase(base,{...a}));assert.throws(()=>authorizedNativeBase('https://other.example.test/',a));
+ assert.throws(()=>assertNativeMode(a,{disposableInstanceConfirmed:true}));assert.throws(()=>assertNativeMode(a,{productionOperationConfirmed:true,productionEvidenceSha256:'bad'}));
+ assert.doesNotThrow(()=>assertNativeMode(a,{productionOperationConfirmed:true,productionEvidenceSha256:a.evidenceSha256}));
+});
+test('synthetic approved production scope can execute one native receipt only after exact approval and fresh target check',async()=>{
+ const e=await profile(),stocks=[],writes=[];let actor=1;
+ const request=async(u,i={})=>{const url=new URL(u),method=i.method??'GET';assert.equal(url.origin,'https://inventory.example.test');assert.equal(new Headers(i.headers).get('Authorization'),'Token fixture');
+  if(url.pathname==='/api/')return Response.json({server:'InvenTree',version:'1.7.4',apiVersion:570});
+  if(url.pathname==='/api/user/me/')return Response.json({pk:actor});
+  if(url.pathname==='/api/schema/')return Response.json(schema);
+  if(url.pathname==='/api/part/42/')return Response.json({pk:42,name:'Part',IPN:'P42',category:11,active:true,trackable:false,virtual:false});
+  if(url.pathname==='/api/stock/location/')return Response.json([{pk:1,name:'root',parent:null,structural:true},{pk:2,name:'leaf',parent:1,structural:false}]);
+  assert.equal(url.pathname,'/api/stock/');if(method==='GET')return Response.json(stocks);
+  const body=JSON.parse(i.body);writes.push(body);const row={pk:10,...body,batch:null,serial:null,status:10};stocks.push(row);return Response.json([row],{status:201});
+ };
+ const runner=await BrowserNativeWorkflow.openProduction(base,'fixture',catalog,e,true,request);assert.equal(runner.mode,'production');
+ const p=await runner.prepare({id:'r',kind:'receive-existing-part',payload:{partId:'42',locationId:'2',quantity:3}});assert.equal(writes.length,0);
+ const a={preparationSha256:await browserPreparationHash(p),productionConfirmed:true,productionEvidenceSha256:runner.productionEvidenceSha256,visibilityConfirmed:true,exclusiveConfirmed:true,identityAndPhysicalConfirmed:true,sourceAndMappingConfirmed:true,writeAuthorized:true};
+ let record;
+ const store={async admit(r){assert.equal(record,undefined);record=structuredClone(r)},async get(){return structuredClone(record)},async claim(s,id,b){if(record.state!=='reviewed')return false;record.state='sent';record.ackBinding=b;return true},async acknowledge(s,id,b,ack){assert.equal(record.ackBinding,b);record.ack=ack},async finish(s,id,result){record.state=result.status;record.result=result}};
+ await assert.rejects(runner.execute(p,{...a,productionConfirmed:false,disposableConfirmed:true},store));
+ actor=2;await assert.rejects(runner.execute(p,a,store));actor=1;assert.equal(writes.length,0);
+ assert.equal((await runner.execute(p,a,store)).status,'verified');assert.deepEqual(writes,[{part:42,location:2,quantity:3}]);
+ await assert.rejects(runner.execute(p,a,store));assert.equal(writes.length,1);
+});

@@ -1,3 +1,4 @@
+import {authorizedNativeBase,assertNativeTarget,assertNativeMode,type ProductionNativeTarget} from './native-production-authorization.js';
 // Explicit local disposable-instance acceptance. Not imported by PWA.
 import {InvenTreeReadProvider} from './domain.js';
 import {inspectSchema,type RequiredOperation} from './provider-schema.js';
@@ -11,9 +12,6 @@ const obj=(x:unknown):Record<string,unknown>=>{if(!x||typeof x!=='object'||Array
 const sha=async(s:string|Uint8Array)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',typeof s==='string'?new TextEncoder().encode(s):new Uint8Array(s))),b=>b.toString(16).padStart(2,'0')).join('');
 export const nativePartPreparationHash=(p:Prepared)=>sha(snapshotKey(p));
 const result=(status:'verified'|'unknown'|'blocked',reason:string)=>({status,reason,serverAuditRequired:true as const,productionWriteAllowed:false as const});
-function localBase(base:string){
- const u=new URL(base);if(!['http:','https:'].includes(u.protocol)||!['127.0.0.1','[::1]'].includes(u.hostname)||!u.port||u.username||u.password||u.search||u.hash||u.pathname!=='/')throw Error('explicit loopback disposable instance with port required');return u;
-}
 function parsed(raw:unknown):ParsedPartCreate{
  const r=obj(raw),keys=['ipn','categoryId','categoryName','name','description','units'];
  if(Object.keys(r).length!==keys.length||keys.some(k=>!Object.hasOwn(r,k)))throw Error('invalid new Part input');
@@ -23,9 +21,9 @@ function parsed(raw:unknown):ParsedPartCreate{
 const reads:RequiredOperation[]=[{key:'category',path:'/api/part/category/{id}/',method:'get'},{key:'parts',path:'/api/part/',method:'get'},{key:'part-detail',path:'/api/part/{id}/',method:'get'},{key:'stock',path:'/api/stock/',method:'get'},{key:'parameters',path:'/api/parameter/',method:'get'}];
 export class NativePartCreateAcceptance{
  private read:InvenTreeReadProvider;
- private constructor(private base:URL,private token:string,private request:typeof fetch){this.read=new InvenTreeReadProvider(base.href,token,request)}
- static open(base:string,token:string,request:typeof fetch=fetch){
-  if(typeof token!=='string'||!token.trim()||/[\r\n]/.test(token))throw Error('explicit isolated token required');return new NativePartCreateAcceptance(localBase(base),token,request);
+ private constructor(private base:URL,private token:string,private request:typeof fetch,private production?:ProductionNativeTarget){this.read=new InvenTreeReadProvider(base.href,token,request)}
+ static open(base:string,token:string,request:typeof fetch=fetch,production?:ProductionNativeTarget){
+  if(typeof token!=='string'||!token.trim()||/[\r\n]/.test(token))throw Error('explicit isolated token required');return new NativePartCreateAcceptance(authorizedNativeBase(base,production),token,request,production);
  }
  private async call(path:string,method:'GET'|'POST'='GET',body?:unknown,limit=2*1024*1024){
   const res=await this.request(new URL(path,this.base),{method,headers:{Authorization:'Token '+this.token,Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},redirect:'error',cache:'no-store',signal:AbortSignal.timeout(20000),...(body?{body:JSON.stringify(body)}:{})});
@@ -37,11 +35,11 @@ export class NativePartCreateAcceptance{
  }
  private async target(write:boolean){
   const version=obj((await this.call('api/')).data);if(version.server!=='InvenTree'||version.version!=='1.7.4'||version.apiVersion!==570)throw Error('isolated version mismatch');
-  const auth=obj((await this.call('api/user/me/')).data);partCreateId(auth.pk??auth.id);
+  const auth=obj((await this.call('api/user/me/')).data);const actorId=partCreateId(auth.pk??auth.id);
   const schema=await this.call('api/schema/?format=json','GET',undefined,16*1024*1024);
   const required:RequiredOperation[]=[...reads,...(write?[{key:'create',path:'/api/part/',method:'post'} as const]:[])];
   if(inspectSchema(schema.data,required).some(x=>!x.declared))throw Error('native Part API missing');
-  return sha(schema.bytes);
+  const digest=await sha(schema.bytes);assertNativeTarget(this.production,actorId,digest);return digest;
  }
  private async category(p:ParsedPartCreate){
   const c=obj((await this.call('api/part/category/'+p.categoryId+'/')).data);
@@ -60,8 +58,8 @@ export class NativePartCreateAcceptance{
   return {kind:'native-part-create',base:this.base.href,instanceId,schemaSha256,input,executionAllowed:false};
  }
  private async validate(prepared:Prepared,approval:unknown){
-  const r=obj(approval);
-  if(['disposableInstanceConfirmed','writeAuthorized','visibilityConfirmed','exclusiveAccessConfirmed','identityConfirmed','newPartConfirmed'].some(k=>r[k]!==true))throw Error('all local confirmations required');
+  const r=obj(approval);assertNativeMode(this.production,r);
+  if(['writeAuthorized','visibilityConfirmed','exclusiveAccessConfirmed','identityConfirmed','newPartConfirmed'].some(k=>r[k]!==true))throw Error('all local confirmations required');
   if(!prepared||prepared.kind!=='native-part-create'||prepared.base!==this.base.href||prepared.executionAllowed!==false||!(/^[a-f0-9]{64}$/).test(prepared.schemaSha256)||typeof prepared.instanceId!=='string'||!prepared.instanceId.trim())throw Error('invalid prepared Part');
   const input=parsed(prepared.input),binding=await nativePartPreparationHash(prepared);
   if(r.approvedPreparationSha256!==binding)throw Error('approval does not bind exact preparation');

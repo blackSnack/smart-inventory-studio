@@ -1,5 +1,6 @@
+import {authorizedNativeBase,assertNativeTarget,assertNativeMode,nativeCatalogHash,type ProductionNativeTarget} from './native-production-authorization.js';
 // Explicit local disposable-instance execution; no PWA capability is enabled.
-import {createLocalOperationContext,localOperationBase,type LocalOperationContext} from './local-operation-context.js';
+import {createLocalOperationContext,type LocalOperationContext} from './local-operation-context.js';
 import {IsolatedTemplateSyncTransport} from './isolated-template-sync.js';
 import {IsolatedCategoryAssociationTransport,planIsolatedAssociation} from './isolated-category-association.js';
 import {IsolatedLocationCreateTransport} from './isolated-location-create.js';
@@ -123,10 +124,10 @@ function extraVerified(op:Operation,before:Extra,after:Extra,ack:unknown){
  return eq(before,after);
 }
 export class NativeOperationsAcceptance{
- private constructor(private base:URL,private token:string,private catalog:Catalog,private catalogSha256:string,private request:typeof fetch){}
- static open(base:string,token:string,rawCatalog:unknown,catalogSha256:string,request:typeof fetch=fetch){
-  const u=localOperationBase(base);if(typeof token!=='string'||!token.trim()||/[\r\n]/.test(token)||!(/^[a-f0-9]{64}$/).test(catalogSha256))throw Error('explicit isolated token/catalog hash required');
-  return new NativeOperationsAcceptance(u,token,validateCatalog(structuredClone(rawCatalog)),catalogSha256,request);
+ private constructor(private base:URL,private token:string,private catalog:Catalog,private catalogSha256:string,private request:typeof fetch,private production?:ProductionNativeTarget){}
+ static open(base:string,token:string,rawCatalog:unknown,catalogSha256:string,request:typeof fetch=fetch,production?:ProductionNativeTarget){
+  const u=authorizedNativeBase(base,production);if(typeof token!=='string'||!token.trim()||/[\r\n]/.test(token)||!(/^[a-f0-9]{64}$/).test(catalogSha256))throw Error('explicit isolated token/catalog hash required');
+  if(production&&production.catalogSha256!==catalogSha256)throw Error('production catalog mismatch');return new NativeOperationsAcceptance(u,token,validateCatalog(structuredClone(rawCatalog)),catalogSha256,request,production);
  }
  private session(instanceId:string,op:Operation,mode:'prepare'|'execute'|'observe',prepared?:Prepared,binding?:string,operationKey?:string,store?:NativeOperationEvidence){
   let wire:Wire|undefined,sent=false,trace:ReadTrace[]=[],count=0,bytesTotal=0;
@@ -156,14 +157,14 @@ export class NativeOperationsAcceptance{
    }
    return new Response([204,205,304].includes(response.status)?null:new Uint8Array(bytes).buffer,{status:response.status,headers:response.headers});
   };
-  return {ctx:createLocalOperationContext(this.base.href,this.token,instanceId,dispatcher),stop,reads:()=>traceSort(trace),wire:()=>wire,sent:()=>sent};
+  return {ctx:createLocalOperationContext(this.base.href,this.token,instanceId,dispatcher,this.production),stop,reads:()=>traceSort(trace),wire:()=>wire,sent:()=>sent};
  }
  private async target(ctx:LocalOperationContext){
   const get=async(path:string)=>{const r=await ctx.request(new URL(path,ctx.base));if(!r.ok)throw Error('native target probe failed');return r};
   const version=obj(await (await get('api/')).json());if(version.server!=='InvenTree'||version.version!=='1.7.4'||version.apiVersion!==570)throw Error('isolated version mismatch');
   const auth=obj(await (await get('api/user/me/')).json()),actorId=id(auth.pk??auth.id);
   const schema=await get('api/schema/?format=json'),schemaSha256=await hash(new Uint8Array(await schema.arrayBuffer()));
-  return {actorId,schemaSha256};
+  assertNativeTarget(this.production,actorId,schemaSha256);return {actorId,schemaSha256};
  }
  private async hydrate(ctx:LocalOperationContext,op:Operation):Promise<Operation>{
   if(op.kind==='transfer-stock'){
@@ -185,6 +186,7 @@ export class NativeOperationsAcceptance{
   return op;
  }
  async prepare(instanceId:string,raw:unknown):Promise<Prepared>{
+  if(this.production&&await nativeCatalogHash(this.catalog)!==this.production.catalogSha256)throw Error('production catalog contents changed');
   str(instanceId);const input=rawOperation(raw);
   const hydration=this.session(instanceId,input,'observe');
   await this.target(hydration.ctx);
@@ -196,8 +198,9 @@ export class NativeOperationsAcceptance{
   return {kind:'native-operations',base:this.base.href,instanceId,catalogSha256:this.catalogSha256,...target,operation,wire,reads:s.reads(),extra,executionAllowed:false};
  }
  private async validate(prepared:Prepared,approval:unknown){
-  const a=obj(approval);
-  if(['disposableInstanceConfirmed','writeAuthorized','visibilityConfirmed','exclusiveAccessConfirmed','operationReviewed','physicalAndReferenceReviewConfirmed'].some(k=>a[k]!==true))throw Error('all local confirmations required');
+  if(this.production&&await nativeCatalogHash(this.catalog)!==this.production.catalogSha256)throw Error('production catalog contents changed');
+  const a=obj(approval);assertNativeMode(this.production,a);
+  if(['writeAuthorized','visibilityConfirmed','exclusiveAccessConfirmed','operationReviewed','physicalAndReferenceReviewConfirmed'].some(k=>a[k]!==true))throw Error('all local confirmations required');
   if(!prepared||prepared.kind!=='native-operations'||prepared.base!==this.base.href||prepared.executionAllowed!==false||prepared.catalogSha256!==this.catalogSha256||!(/^[a-f0-9]{64}$/).test(prepared.schemaSha256))throw Error('invalid prepared operation');
   str(prepared.instanceId);id(prepared.actorId);rawOperation(prepared.operation);
   const binding=await nativeOperationsPreparationHash(prepared);
