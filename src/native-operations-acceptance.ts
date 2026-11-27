@@ -1,4 +1,4 @@
-import {authorizedNativeBase,assertNativeTarget,assertNativeMode,type ProductionNativeTarget} from './native-production-authorization.js';
+import {authorizedNativeBase,assertNativeTarget,assertNativeMode,nativeCatalogHash,type ProductionNativeTarget} from './native-production-authorization.js';
 // Explicit local disposable-instance execution; no PWA capability is enabled.
 import {createLocalOperationContext,type LocalOperationContext} from './local-operation-context.js';
 import {IsolatedTemplateSyncTransport} from './isolated-template-sync.js';
@@ -186,6 +186,7 @@ export class NativeOperationsAcceptance{
   return op;
  }
  async prepare(instanceId:string,raw:unknown):Promise<Prepared>{
+  if(this.production&&await nativeCatalogHash(this.catalog)!==this.production.catalogSha256)throw Error('production catalog contents changed');
   str(instanceId);const input=rawOperation(raw);
   const hydration=this.session(instanceId,input,'observe');
   await this.target(hydration.ctx);
@@ -197,6 +198,7 @@ export class NativeOperationsAcceptance{
   return {kind:'native-operations',base:this.base.href,instanceId,catalogSha256:this.catalogSha256,...target,operation,wire,reads:s.reads(),extra,executionAllowed:false};
  }
  private async validate(prepared:Prepared,approval:unknown){
+  if(this.production&&await nativeCatalogHash(this.catalog)!==this.production.catalogSha256)throw Error('production catalog contents changed');
   const a=obj(approval);assertNativeMode(this.production,a);
   if(['writeAuthorized','visibilityConfirmed','exclusiveAccessConfirmed','operationReviewed','physicalAndReferenceReviewConfirmed'].some(k=>a[k]!==true))throw Error('all local confirmations required');
   if(!prepared||prepared.kind!=='native-operations'||prepared.base!==this.base.href||prepared.executionAllowed!==false||prepared.catalogSha256!==this.catalogSha256||!(/^[a-f0-9]{64}$/).test(prepared.schemaSha256))throw Error('invalid prepared operation');

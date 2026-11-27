@@ -1,5 +1,5 @@
 import {authorizeProductionNativeTarget,authorizedNativeBase,assertNativeTarget,nativeCatalogHash,type ProductionNativeTarget} from './native-production-authorization.js';
-// Browser acceptance uses the same native runners as the local CLI. Production write capability is NOT granted.
+// Browser workflows use the same native runners as the CLI; production requires the separate verified-target gate.
 import {NativeReceiptAcceptance,nativeReceiptPreparationHash,type NativeReceiptEvidence} from './native-receipt-acceptance.js';
 import {NativePartCreateAcceptance,nativePartPreparationHash} from './native-part-create-acceptance.js';
 import {NativeEnrichmentAcceptance,nativeEnrichmentPreparationHash} from './native-enrichment-acceptance.js';
@@ -18,7 +18,7 @@ type Operations=Awaited<ReturnType<NativeOperationsAcceptance['prepare']>>;
 export type NativeWorkInput={id:string;kind:'receive-existing-part';payload:{partId:string;locationId:string;quantity:number}}|{id:string;kind:'create-part';payload:unknown}|{id:string;kind:'enrichment';payload:unknown;expectedBefore?:unknown}|{id:string;kind:'operation';payload:Operation};
 type NativePrepared={kind:'receive-existing-part';value:Receipt}|{kind:'create-part';value:Part}|{kind:'enrichment';value:Enrichment}|{kind:'operation';value:Operations};
 type Target={actorId:string;schemaSha256:string};
-export type BrowserPreparation={id:string;scope:string;target:Target;catalogHash:string;input:NativeWorkInput;prepared:NativePrepared;executionAllowed:false};
+export type BrowserPreparation={id:string;scope:string;target:Target;catalogHash:string;productionEvidenceSha256?:string;input:NativeWorkInput;prepared:NativePrepared;executionAllowed:false};
 export type BrowserApproval={preparationSha256:string;disposableConfirmed?:true;productionConfirmed?:true;productionEvidenceSha256?:string;visibilityConfirmed:true;exclusiveConfirmed:true;identityAndPhysicalConfirmed:true;sourceAndMappingConfirmed:true;writeAuthorized:true};
 export type NativeWorkResult={status:'verified'|'unknown'|'blocked';reason:string;serverAuditRequired:true;productionWriteAllowed:false};
 export type BrowserWorkState='reviewed'|'sent'|'verified'|'unknown'|'blocked';
@@ -88,10 +88,10 @@ export class BrowserNativeWorkflow{
    default:throw Error('unsupported native workflow');
   }
   if(prepared.value.schemaSha256!==target.schemaSha256||snapshotKey((await this.probe()).target)!==snapshotKey(target))throw Error('target changed during preparation');
-  return {id:input.id,scope:this.scope,target,catalogHash:this.catalogHash,input,prepared,executionAllowed:false};
+  return {id:input.id,scope:this.scope,target,catalogHash:this.catalogHash,...(this.production?{productionEvidenceSha256:this.production.evidenceSha256}:{}),input,prepared,executionAllowed:false};
  }
  private async validate(p:BrowserPreparation,a:BrowserApproval){
-  if(p.scope!==this.scope||p.id!==p.input.id||p.prepared.kind!==p.input.kind||p.catalogHash!==this.catalogHash||p.executionAllowed!==false||p.prepared.value.schemaSha256!==p.target.schemaSha256)throw Error('preparation scope mismatch');
+  if(p.scope!==this.scope||p.id!==p.input.id||p.prepared.kind!==p.input.kind||p.catalogHash!==this.catalogHash||p.productionEvidenceSha256!==this.production?.evidenceSha256||p.executionAllowed!==false||p.prepared.value.schemaSha256!==p.target.schemaSha256)throw Error('preparation scope mismatch');
   if(!a||(this.production?(a.productionConfirmed!==true||a.productionEvidenceSha256!==this.production.evidenceSha256):a.disposableConfirmed!==true)||[a.visibilityConfirmed,a.exclusiveConfirmed,a.identityAndPhysicalConfirmed,a.sourceAndMappingConfirmed,a.writeAuthorized].some(v=>v!==true)||a.preparationSha256!==await browserPreparationHash(p))throw Error('exact preparation approval required');
   if(snapshotKey((await this.probe()).target)!==snapshotKey(p.target))throw Error('target identity or schema changed');
  }
