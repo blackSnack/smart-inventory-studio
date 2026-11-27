@@ -36,7 +36,7 @@ test('incomplete schema fails closed without probing data endpoints',async()=>{
 
 import {InvenTreeCatalogReadAdapter} from '../dist/inventree-catalog-read.js';
 import {InvenTreeMetadataReadAdapter} from '../dist/inventree-metadata-read.js';
-test('legacy part detail and category template labels preserve raw values; write baseline stays blocked',async()=>{
+test('legacy part detail and category template labels preserve raw values; absent note is explicit',async()=>{
  const extra=['/api/part/{id}/','/api/company/part/manufacturer/','/api/company/part/','/api/attachment/'];
  const schema={openapi:'3.0.3',paths:{...paths,...Object.fromEntries(extra.map(p=>[p,{get:{}}]))}};
  const req=async(input,init)=>{
@@ -53,7 +53,7 @@ test('legacy part detail and category template labels preserve raw values; write
  const a=await InvenTreeCatalogReadAdapter.open('https://fixture.invalid/','synthetic',req);
  assert.deepEqual((await a.getPart('9')).parameters,[{templateId:'1',value:'100',template:{name:'Resistance',unit:'Ohm'}}]);
  assert.deepEqual(await a.getParameterTemplates('2'),[{id:'1',name:'Resistance',unit:'Ohm',type:'unknown'}]);
- await assert.rejects(a.getParameterRecords('9'),/write baseline not yet supported/);
+ assert.deepEqual(await a.getParameterRecords('9'),[{id:'3',templateId:'1',value:'100',note:null}]);
 });
 test('legacy location metadata requires declared location-specific route and known location',async()=>{
  const req=async input=>{
