@@ -36,7 +36,7 @@ export class NativePartCreateAcceptance{
   return {data:JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes)) as unknown,bytes};
  }
  private async target(write:boolean){
-  const version=obj((await this.call('api/')).data);const api=nativeApiVersion(version,!!this.production);
+  const version=obj((await this.call('api/')).data);const api=nativeApiVersion(version,this.production);
   const auth=obj((await this.call('api/user/me/')).data);const actorId=partCreateId(auth.pk??auth.id);
   const schema=await this.call('api/schema/?format=json','GET',undefined,16*1024*1024);
   const required:RequiredOperation[]=[...reads.map(r=>r.key==='parameters'?{...r,path:'/'+parameterPath(api)}:r),...(write?[{key:'create',path:'/api/part/',method:'post'} as const]:[])];
