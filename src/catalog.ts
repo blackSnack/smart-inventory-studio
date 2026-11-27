@@ -1,4 +1,4 @@
-export interface CatalogField { key:string; labelZh:string; labelEn:string; type:string; unit:string|null; nullable:boolean }
+export interface CatalogField { key:string; labelZh:string; labelEn:string; type:string; unit:string|null; nullable:boolean;semantics?:'rating'|'nominal'|'classification'|'conditioned';aliases?:string[] }
 export interface CatalogCategory {key:string;labelZh?:string; parameters:string[]; identityPolicy:{version:number;fields:string[];genericPooling:boolean;supportedModes:string[];unknownNeverMatches:boolean};source:{provider:string;url:string}}
 export interface Catalog {schemaVersion:number;catalogVersion:string;status:string;fieldDefinitions:Record<string,CatalogField>;categories:CatalogCategory[]}
 const record=(x:unknown):x is Record<string,unknown>=>!!x&&typeof x==='object'&&!Array.isArray(x);
@@ -8,6 +8,8 @@ export function validateCatalog(input:unknown):Catalog {
  const defs=input.fieldDefinitions;const keys=new Set<string>();
  for(const [key,f] of Object.entries(defs)){
   if(!record(f)||f.key!==key||!key.match(/^[a-z][a-z0-9_]*$/)||typeof f.labelZh!=='string'||typeof f.labelEn!=='string'||!['string','number','enum','boolean'].includes(String(f.type))||!(f.unit===null||typeof f.unit==='string')||typeof f.nullable!=='boolean')throw Error('invalid field '+key);
+  if(f.semantics!==undefined&&(!['rating','nominal','classification','conditioned'].includes(String(f.semantics))||f.semantics==='conditioned'&&f.type!=='string'))throw Error('invalid field semantics '+key);
+  if(f.aliases!==undefined&&(!strings(f.aliases)||new Set(f.aliases).size!==f.aliases.length))throw Error('invalid field aliases '+key);
  }
  for(const c of input.categories){
   if(!record(c)||typeof c.key!=='string'||!c.key.trim()||keys.has(c.key)||!strings(c.parameters)||new Set(c.parameters).size!==c.parameters.length||!record(c.identityPolicy)||!record(c.source))throw Error('invalid category');
