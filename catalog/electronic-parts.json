@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "0.2.0-draft",
+  "catalogVersion": "0.3.0-draft",
   "status": "seed_not_approved_for_production",
   "referenceProvider": "LCSC",
   "fieldDefinitions": {
@@ -315,6 +315,263 @@
       "type": "string",
       "unit": "V",
       "nullable": true
+    },
+    "diode_type": {
+      "key": "diode_type",
+      "labelZh": "二极管类型",
+      "labelEn": "Diode Type",
+      "type": "enum",
+      "unit": null,
+      "nullable": true,
+      "semantics": "classification",
+      "aliases": [
+        "Diode Type"
+      ]
+    },
+    "reverse_voltage": {
+      "key": "reverse_voltage",
+      "labelZh": "最大反向电压",
+      "labelEn": "Reverse Voltage (Maximum)",
+      "type": "number",
+      "unit": "V",
+      "nullable": true,
+      "semantics": "rating",
+      "aliases": [
+        "VR",
+        "VRRM"
+      ]
+    },
+    "forward_current": {
+      "key": "forward_current",
+      "labelZh": "额定正向平均电流",
+      "labelEn": "Average Forward Current",
+      "type": "number",
+      "unit": "A",
+      "nullable": true,
+      "semantics": "rating",
+      "aliases": [
+        "IF(AV)",
+        "IO"
+      ]
+    },
+    "forward_voltage_at_current": {
+      "key": "forward_voltage_at_current",
+      "labelZh": "正向压降及测试条件",
+      "labelEn": "Forward Voltage at Current",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "conditioned",
+      "aliases": [
+        "Vf@If",
+        "Voltage - Forward(Vf@If)"
+      ]
+    },
+    "reverse_leakage_at_voltage": {
+      "key": "reverse_leakage_at_voltage",
+      "labelZh": "反向漏电流及测试条件",
+      "labelEn": "Reverse Leakage at Voltage",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "conditioned",
+      "aliases": [
+        "IR@VR"
+      ]
+    },
+    "zener_voltage": {
+      "key": "zener_voltage",
+      "labelZh": "标称稳压值",
+      "labelEn": "Zener Voltage (Nominal)",
+      "type": "number",
+      "unit": "V",
+      "nullable": true,
+      "semantics": "nominal",
+      "aliases": [
+        "Zener Voltage(Nom)",
+        "VZ"
+      ]
+    },
+    "zener_voltage_range": {
+      "key": "zener_voltage_range",
+      "labelZh": "稳压范围及测试条件",
+      "labelEn": "Zener Voltage Range",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "conditioned",
+      "aliases": [
+        "Zener Voltage(Range)"
+      ]
+    },
+    "zener_impedance_at_current": {
+      "key": "zener_impedance_at_current",
+      "labelZh": "动态阻抗及测试条件",
+      "labelEn": "Zener Impedance at Current",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "conditioned",
+      "aliases": [
+        "ZZT@IZT"
+      ]
+    },
+    "bjt_polarity": {
+      "key": "bjt_polarity",
+      "labelZh": "三极管极性",
+      "labelEn": "BJT Polarity",
+      "type": "enum",
+      "unit": null,
+      "nullable": true,
+      "semantics": "classification",
+      "aliases": [
+        "Transistor Type"
+      ]
+    },
+    "vceo": {
+      "key": "vceo",
+      "labelZh": "集电极-发射极耐压 VCEO",
+      "labelEn": "Collector-Emitter Voltage VCEO",
+      "type": "number",
+      "unit": "V",
+      "nullable": true,
+      "semantics": "rating",
+      "aliases": [
+        "Collector - Emitter Voltage VCEO",
+        "VCEO"
+      ]
+    },
+    "collector_current": {
+      "key": "collector_current",
+      "labelZh": "连续集电极电流",
+      "labelEn": "Continuous Collector Current",
+      "type": "number",
+      "unit": "A",
+      "nullable": true,
+      "semantics": "rating",
+      "aliases": [
+        "IC"
+      ]
+    },
+    "dc_gain_at_current": {
+      "key": "dc_gain_at_current",
+      "labelZh": "直流增益及测试条件",
+      "labelEn": "DC Current Gain at Current",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "conditioned",
+      "aliases": [
+        "hFE@IC"
+      ]
+    },
+    "vce_sat_at_current": {
+      "key": "vce_sat_at_current",
+      "labelZh": "饱和压降及测试条件",
+      "labelEn": "Collector-Emitter Saturation Voltage",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "conditioned",
+      "aliases": [
+        "VCE(sat)"
+      ]
+    },
+    "regulator_output_type": {
+      "key": "regulator_output_type",
+      "labelZh": "输出类型",
+      "labelEn": "Regulator Output Type",
+      "type": "enum",
+      "unit": null,
+      "nullable": true,
+      "semantics": "classification",
+      "aliases": [
+        "Output Type"
+      ]
+    },
+    "regulator_polarity": {
+      "key": "regulator_polarity",
+      "labelZh": "输出极性",
+      "labelEn": "Regulator Polarity",
+      "type": "enum",
+      "unit": null,
+      "nullable": true,
+      "semantics": "classification",
+      "aliases": [
+        "Output Configuration"
+      ]
+    },
+    "input_voltage_max": {
+      "key": "input_voltage_max",
+      "labelZh": "最大输入电压",
+      "labelEn": "Maximum Input Voltage",
+      "type": "number",
+      "unit": "V",
+      "nullable": true,
+      "semantics": "rating",
+      "aliases": [
+        "Voltage - Input (Max)"
+      ]
+    },
+    "output_voltage_nominal": {
+      "key": "output_voltage_nominal",
+      "labelZh": "标称固定输出电压",
+      "labelEn": "Nominal Fixed Output Voltage",
+      "type": "number",
+      "unit": "V",
+      "nullable": true,
+      "semantics": "nominal",
+      "aliases": [
+        "Output Voltage (Fixed)"
+      ]
+    },
+    "output_voltage_range": {
+      "key": "output_voltage_range",
+      "labelZh": "可调输出范围",
+      "labelEn": "Adjustable Output Voltage Range",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "conditioned",
+      "aliases": [
+        "Output Voltage Range"
+      ]
+    },
+    "output_current": {
+      "key": "output_current",
+      "labelZh": "额定输出电流",
+      "labelEn": "Rated Output Current",
+      "type": "number",
+      "unit": "A",
+      "nullable": true,
+      "semantics": "rating",
+      "aliases": [
+        "Current - Output"
+      ]
+    },
+    "dropout_voltage_at_current": {
+      "key": "dropout_voltage_at_current",
+      "labelZh": "压差及测试条件",
+      "labelEn": "Dropout Voltage at Current",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "conditioned",
+      "aliases": [
+        "Voltage Dropout (Max)"
+      ]
+    },
+    "quiescent_current_conditions": {
+      "key": "quiescent_current_conditions",
+      "labelZh": "静态电流及测试条件",
+      "labelEn": "Quiescent Current Conditions",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "conditioned",
+      "aliases": [
+        "IQ"
+      ]
     }
   },
   "categories": [
@@ -520,6 +777,156 @@
       "identityPolicy": {
         "version": 1,
         "fields": [],
+        "genericPooling": false,
+        "supportedModes": [
+          "exact",
+          "partial"
+        ],
+        "unknownNeverMatches": true,
+        "status": "draft_requires_category_review"
+      }
+    },
+    {
+      "key": "diode.single",
+      "labelZh": "单管二极管",
+      "source": {
+        "provider": "LCSC",
+        "categoryLabel": "Single Diodes",
+        "url": "https://www.lcsc.com/product-detail/Schottky-Barrier-Diodes-SBD_SS14_C2480.html",
+        "observedDate": "2026-11-27",
+        "evidenceScope": "public product example; proposed template, not exhaustive category export"
+      },
+      "parameters": [
+        "package",
+        "diode_type",
+        "reverse_voltage",
+        "forward_current",
+        "forward_voltage_at_current",
+        "reverse_leakage_at_voltage",
+        "operating_temperature"
+      ],
+      "identityPolicy": {
+        "version": 1,
+        "fields": [
+          "package",
+          "diode_type",
+          "reverse_voltage",
+          "forward_current"
+        ],
+        "genericPooling": false,
+        "supportedModes": [
+          "exact",
+          "partial"
+        ],
+        "unknownNeverMatches": true,
+        "status": "draft_requires_category_review"
+      }
+    },
+    {
+      "key": "diode.zener",
+      "labelZh": "稳压二极管",
+      "source": {
+        "provider": "LCSC",
+        "categoryLabel": "Single Zener Diodes",
+        "url": "https://www.lcsc.com/product-detail/Zener-Diodes_DIOTEC-BZX84C5V1_C3735531.html",
+        "observedDate": "2026-11-27",
+        "evidenceScope": "public product example; proposed template, not exhaustive category export"
+      },
+      "parameters": [
+        "package",
+        "zener_voltage",
+        "zener_voltage_range",
+        "power_dissipation",
+        "zener_impedance_at_current",
+        "reverse_leakage_at_voltage",
+        "operating_temperature"
+      ],
+      "identityPolicy": {
+        "version": 1,
+        "fields": [
+          "package",
+          "zener_voltage",
+          "power_dissipation"
+        ],
+        "genericPooling": false,
+        "supportedModes": [
+          "exact",
+          "partial"
+        ],
+        "unknownNeverMatches": true,
+        "status": "draft_requires_category_review"
+      }
+    },
+    {
+      "key": "transistor.bjt.single",
+      "labelZh": "单管双极型三极管",
+      "source": {
+        "provider": "LCSC",
+        "categoryLabel": "Single Bipolar Transistors",
+        "url": "https://www.lcsc.com/product-detail/C2992077.html",
+        "observedDate": "2026-11-27",
+        "evidenceScope": "public product example; proposed template, not exhaustive category export"
+      },
+      "parameters": [
+        "package",
+        "bjt_polarity",
+        "vceo",
+        "collector_current",
+        "power_dissipation",
+        "dc_gain_at_current",
+        "vce_sat_at_current",
+        "operating_temperature"
+      ],
+      "identityPolicy": {
+        "version": 1,
+        "fields": [
+          "package",
+          "bjt_polarity",
+          "vceo",
+          "collector_current"
+        ],
+        "genericPooling": false,
+        "supportedModes": [
+          "exact",
+          "partial"
+        ],
+        "unknownNeverMatches": true,
+        "status": "draft_requires_category_review"
+      }
+    },
+    {
+      "key": "regulator.ldo",
+      "labelZh": "线性低压差稳压器",
+      "source": {
+        "provider": "LCSC",
+        "categoryLabel": "Voltage Regulators - Linear, Low Drop Out (LDO) Regulators",
+        "url": "https://www.lcsc.com/product-detail/Dropout-Regulators-LDO_Advanced-Monolithic-Systems_AMS1117-3-3_Advanced-Monolithic-Systems-AMS-AMS1117-3-3_C6186.html",
+        "observedDate": "2026-11-27",
+        "evidenceScope": "public product example; proposed template, not exhaustive category export"
+      },
+      "parameters": [
+        "package",
+        "regulator_output_type",
+        "regulator_polarity",
+        "input_voltage_max",
+        "output_voltage_nominal",
+        "output_voltage_range",
+        "output_current",
+        "dropout_voltage_at_current",
+        "quiescent_current_conditions",
+        "operating_temperature"
+      ],
+      "identityPolicy": {
+        "version": 1,
+        "fields": [
+          "package",
+          "regulator_output_type",
+          "regulator_polarity",
+          "input_voltage_max",
+          "output_voltage_nominal",
+          "output_voltage_range",
+          "output_current"
+        ],
         "genericPooling": false,
         "supportedModes": [
           "exact",
