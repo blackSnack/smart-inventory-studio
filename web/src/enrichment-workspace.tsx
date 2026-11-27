@@ -22,5 +22,5 @@ export function EnrichmentWorkspace({parts,gateway,revision,ready,busy,error,onC
  {rows.length>limit&&<Button variant="secondary" onClick={()=>setLimit(n=>n+12)}>加载更多</Button>}
  {revision!==initialRevision.current&&<p role="alert">库存已有变化，请重新打开审核。</p>}{error&&<p role="alert">{error}</p>}
  <div className="studio-sticky-actions"><Button className="w-full" disabled={!ready||busy||working||!count||revision!==initialRevision.current} onClick={()=>void save()}>{busy?'正在保存…':'确认补全（'+count+'）'}</Button></div>
- <Modal presentation="alert" open={discard} title="放弃资料审核？" onClose={()=>setDiscard(false)}><p className="mb-4">未保存的审核结果将丢失。</p><div className="grid grid-cols-2 gap-4"><Button variant="secondary" onClick={()=>setDiscard(false)}>继续审核</Button><Button variant="destructive" onClick={()=>{controller.current?.abort();onClose()}}>放弃审核</Button></div></Modal></main>
+ <Modal presentation="alert" open={discard} title="放弃资料审核？" onClose={()=>setDiscard(false)} footer={<div className="grid grid-cols-2 gap-4"><Button variant="secondary" onClick={()=>setDiscard(false)}>继续审核</Button><Button variant="destructive" onClick={()=>{controller.current?.abort();onClose()}}>放弃审核</Button></div>}><p className="mb-4">未保存的审核结果将丢失。</p></Modal></main>
 }

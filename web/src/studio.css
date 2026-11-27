@@ -131,3 +131,23 @@ textarea.studio-csv-editor{min-height:160px;height:160px;font-size:16px;line-hei
  .studio-col-name{grid-area:name}.studio-col-spec{grid-area:spec}.studio-col-location{grid-area:loc}.studio-col-qty{grid-area:qty;align-self:center}
  .studio-table-open{min-height:44px}.studio-table-open:after{content:"";position:absolute;inset:0}.studio-table-open:focus-visible{outline-offset:0}
 }
+
+.studio-dialog[data-presentation="detail"] .studio-dialog-body,.studio-dialog[data-presentation="workspace"] .studio-dialog-body{flex:1}
+.studio-filter-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.studio-filter-chips>span{background:#e5eee7;color:#284b37;padding:4px 8px;border-radius:6px;font-size:12px;overflow-wrap:anywhere;max-width:100%}
+.studio-matrix-legend{display:flex;flex-wrap:wrap;gap:8px 12px;font-size:12px;color:var(--color-muted)}
+.studio-matrix-legend span{display:inline-flex;align-items:center;gap:5px}
+.studio-matrix-legend i{width:12px;height:12px;border:1px solid var(--color-control);border-radius:3px;background:white}
+.studio-matrix-legend i[data-stock="occupied"]{background:#d8e6dc;border-color:#779481}
+.studio-matrix-legend i[data-stock="unknown"]{background:#f0f2f4;border-style:dashed}
+.studio-matrix-legend i[data-stock="unbound"]{background:#fff4df;border-color:#a16207}
+.studio-matrix-legend i[data-stock="assigned"]{background:var(--color-primary);border-color:var(--color-primary)}
+.studio-matrix-legend i[data-stock="blocked"]{background:#e5e7eb}
+.studio-workbench-footer{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px}
+.studio-workbench-footer>label{flex:1;min-width:0}
+.studio-workbench-footer>div{justify-content:flex-end}
+.studio-home-actions .studio-icon{transform:scale(1.3)}
+@media(min-width:768px){.studio-shell{min-height:calc(100dvh - 60px)}.studio-sidebar{align-self:stretch}.studio-home-actions{max-width:900px}}
+@media(max-width:767px){.studio-workbench-footer{display:grid}.studio-workbench-footer>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.studio-list-group .studio-table-open.studio-result{padding:0;border-radius:4px;background:transparent}.studio-list-group .studio-table-open.studio-result:focus-visible{outline-offset:0}
