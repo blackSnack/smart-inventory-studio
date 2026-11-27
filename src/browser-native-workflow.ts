@@ -4,6 +4,10 @@ import {NativeReceiptAcceptance,nativeReceiptPreparationHash,type NativeReceiptE
 import {NativePartCreateAcceptance,nativePartPreparationHash} from './native-part-create-acceptance.js';
 import {NativeEnrichmentAcceptance,nativeEnrichmentPreparationHash} from './native-enrichment-acceptance.js';
 import {NativeOperationsAcceptance,nativeOperationsPreparationHash,type NativeOperationEvidence} from './native-operations-acceptance.js';
+import {nativeLocationTree,resolveNativeLayoutItem,type NativeLayoutQueueItem} from './native-layout-migration.js';
+import {InvenTreeAssociationReader} from './inventree-association-read.js';
+import {photoInheritanceFields} from './photo-create-inheritance.js';
+import type {PhotoDraft} from './ai-provider.js';
 import {localOperationBase} from './local-operation-context.js';
 import {snapshotKey} from './approved-snapshot.js';
 import {validateCatalog,type Catalog} from './catalog.js';
@@ -15,12 +19,14 @@ type Receipt=Awaited<ReturnType<NativeReceiptAcceptance['prepare']>>;
 type Part=Awaited<ReturnType<NativePartCreateAcceptance['prepare']>>;
 type Enrichment=Awaited<ReturnType<NativeEnrichmentAcceptance['prepare']>>;
 type Operations=Awaited<ReturnType<NativeOperationsAcceptance['prepare']>>;
-export type NativeWorkInput={id:string;kind:'receive-existing-part';payload:{partId:string;locationId:string;quantity:number;expectedIpn?:string}}|{id:string;kind:'create-part';payload:unknown}|{id:string;kind:'enrichment';payload:unknown;expectedBefore?:unknown}|{id:string;kind:'operation';payload:Operation};
-export type NativeQueueItem=NativeWorkInput|{id:string;kind:'after-part-create';createId:string;ipn:string;locationId:string;quantity:number};
+export type NativeWorkInput={id:string;kind:'receive-existing-part';payload:{partId:string;locationId:string;quantity:number;expectedIpn?:string}}|{id:string;kind:'create-part';payload:unknown}|{id:string;kind:'enrichment';payload:unknown;expectedBefore?:unknown;photoMapping?:{categoryId:string;categoryKey:string;fieldKey?:string}}|{id:string;kind:'operation';payload:Operation};
+export type NativeQueueItem=NativeWorkInput|NativeLayoutQueueItem|{id:string;kind:'after-part-create';createId:string;ipn:string;locationId:string;quantity:number}|{id:string;kind:'after-part-enrichment';createId:string;ipn:string;categoryId:string;categoryKey:string;fieldKey?:string;payload:Record<string,unknown>};
 export async function resolveNativeQueueItem(item:NativeQueueItem,scope:string,store:Pick<BrowserWorkStore,'get'>):Promise<NativeWorkInput>{
- if(item.kind!=='after-part-create')return structuredClone(item);
+ if(item.kind==='cabinet-transfer'||item.kind==='cabinet-finalize')throw Error('native layout resolver required');
+ if(item.kind!=='after-part-create'&&item.kind!=='after-part-enrichment')return structuredClone(item);
  const row=await store.get(scope,item.createId);
  if(!row||row.state!=='verified'||row.preparation.scope!==scope||row.preparation.input.kind!=='create-part'||obj(row.preparation.input.payload).ipn!==item.ipn||!row.ackBinding)throw Error('new Part has not been verified');
+ if(item.kind==='after-part-enrichment'){if(obj(row.preparation.input.payload).categoryId!==item.categoryId)throw Error('created category mismatch');return {id:item.id,kind:'enrichment',payload:{...item.payload,partId:validId(obj(row.ack).stockId),ipn:item.ipn},photoMapping:{categoryId:item.categoryId,categoryKey:item.categoryKey,...(item.fieldKey?{fieldKey:item.fieldKey}:{})}}}
  return {id:item.id,kind:'receive-existing-part',payload:{partId:validId(obj(row.ack).stockId),locationId:item.locationId,quantity:item.quantity,expectedIpn:item.ipn}};
 }
 type NativePrepared={kind:'receive-existing-part';value:Receipt}|{kind:'create-part';value:Part}|{kind:'enrichment';value:Enrichment}|{kind:'operation';value:Operations};
@@ -78,8 +84,20 @@ export class BrowserNativeWorkflow{
   const read=new InvenTreeReadProvider(this.base.href,this.token,this.request);
   switch(kind){case 'categories':return read.list('api/part/category/');case 'templates':return read.list('api/parameter/template/',{for_model:'part.part'});case 'locations':return read.getLocations();case 'stock':return read.list('api/stock/',{location:validId(locationId),cascade:'false'})}
  }
+ async resolveQueueItem(item:NativeQueueItem,store:Pick<BrowserWorkStore,'get'>){if(item.kind==='cabinet-transfer'||item.kind==='cabinet-finalize')return resolveNativeLayoutItem(item,this.scope,store,item.kind==='cabinet-finalize'?nativeLocationTree(await this.listChoices('locations')):undefined);return resolveNativeQueueItem(item,this.scope,store)}
+ async photoFields(draft:PhotoDraft,categoryId:string){const s=await (await InvenTreeAssociationReader.open(this.base.href,this.token,this.request)).readCandidate(this.scope);return photoInheritanceFields(this.catalog,draft,categoryId,s)}
  async readMetadata(locationId:string){const r=obj((await this.get('api/metadata/stocklocation/'+validId(locationId)+'/')).data);return obj(r.metadata)}
  async searchParts(query:string){if(!query.trim())return [];return new InvenTreeReadProvider(this.base.href,this.token,this.request).searchParts(query.trim())}
+ private async verifyPhotoMapping(input:Extract<NativeWorkInput,{kind:'enrichment'}>){
+  const m=input.photoMapping;if(!m)return;
+  const p=obj(input.payload),part=obj((await this.get('api/part/'+validId(p.partId)+'/')).data);
+  if(validId(part.category)!==m.categoryId||part.IPN!==p.ipn)throw Error('reviewed photo category or identity changed');
+  if(p.kind==='source')return;
+  const f=m.fieldKey?this.catalog.fieldDefinitions[m.fieldKey]:undefined,c=this.catalog.categories.find(x=>x.key===m.categoryKey);
+  if(!f||!c?.parameters.includes(m.fieldKey!)||!['string','number'].includes(f.type))throw Error('invalid photo field');
+  const s=await (await InvenTreeAssociationReader.open(this.base.href,this.token,this.request)).readCandidate(this.scope,[{templateId:validId(p.templateId),name:String(p.templateName),unit:f.unit,type:f.type as 'string'|'number',confirmed:true}]);
+  const t=s.templates.find(x=>x.id===p.templateId);if(!t||t.unit!==f.unit||t.type!==f.type||t.name!==p.templateName||(t.unit??'')!==p.units||!s.relations.some(x=>x.categoryId===m.categoryId&&x.templateId===t.id)||![f.labelZh,f.labelEn,...f.aliases??[]].includes(t.name))throw Error('photo template mapping changed');
+ }
  private receipt(){return NativeReceiptAcceptance.open(this.base.href,this.token,this.request,this.production)}
  private part(){return NativePartCreateAcceptance.open(this.base.href,this.token,this.request,this.production)}
  private enrichment(){return NativeEnrichmentAcceptance.open(this.base.href,this.token,this.request,this.production)}
@@ -90,7 +108,7 @@ export class BrowserNativeWorkflow{
   switch(input.kind){
    case 'receive-existing-part':{const p=input.payload;prepared={kind:input.kind,value:await this.receipt().prepare(this.scope,{partId:p.partId,quantity:p.quantity,allocations:[{locationId:p.locationId,quantity:p.quantity}]})};if(p.expectedIpn!==undefined&&prepared.value.candidate.part.ipn!==p.expectedIpn)throw Error('created Part identity changed');break}
    case 'create-part':prepared={kind:input.kind,value:await this.part().prepare(this.scope,input.payload)};break;
-   case 'enrichment':{const value=await this.enrichment().prepare(this.scope,input.payload);if(Object.hasOwn(input,'expectedBefore')&&(value.baseline.kind!=='parameter'||snapshotKey(value.baseline.before)!==snapshotKey(input.expectedBefore)))throw Error('reviewed parameter baseline changed');prepared={kind:input.kind,value};break}
+   case 'enrichment':{await this.verifyPhotoMapping(input);const value=await this.enrichment().prepare(this.scope,input.payload);if(Object.hasOwn(input,'expectedBefore')&&(value.baseline.kind!=='parameter'||snapshotKey(value.baseline.before)!==snapshotKey(input.expectedBefore)))throw Error('reviewed parameter baseline changed');prepared={kind:input.kind,value};break}
    case 'operation':if(input.payload.id!==input.id)throw Error('operation ID mismatch');prepared={kind:input.kind,value:await this.operations().prepare(this.scope,input.payload)};break;
    default:throw Error('unsupported native workflow');
   }
@@ -119,6 +137,7 @@ export class BrowserNativeWorkflow{
  }
  async execute(raw:BrowserPreparation,approval:BrowserApproval,store:BrowserWorkStore){
   const p=structuredClone(raw),a=structuredClone(approval);await this.validate(p,a);
+  if(p.input.kind==='enrichment')await this.verifyPhotoMapping(p.input);
   await store.admit({preparation:p,approval:a,state:'reviewed'});
   let r:NativeWorkResult;
   try{r=await this.dispatch(p,store,false)}catch{

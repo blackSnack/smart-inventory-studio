@@ -1,3 +1,4 @@
+import {isRetiredLocationName} from './native-retired-location.js';
 import {assertLocalOperationContext,type LocalOperationContext} from './local-operation-context.js';
 import {fixtureEvidenceFor,type FixtureEvidenceConfig,type FixtureEvidenceStore} from './fixture-operation-evidence.js';
 import {probeSchema} from './provider-schema.js';
@@ -12,7 +13,7 @@ function parse(o:Operation){
  if(o.kind!=='create-location'||!o.id.trim())throw Error('unsupported location operation');
  const p=o.payload;if(p.expectedAbsent!==true||p.physicalConfirmed!==true||typeof p.structural!=='boolean')throw Error('explicit physical layout approval required');
  const parentId=p.parentId===null?null:id(p.parentId),parentName=parentId===null?null:text(p.parentName,128),name=text(p.name,128),description=text(p.description,250,true);
- if(name!==name.trim()||parentId===null&&p.parentName!==null)throw Error('invalid location approval');
+ if(isRetiredLocationName(name)||name!==name.trim()||parentId===null&&p.parentName!==null)throw Error('invalid location approval');
  return {parentId,parentName,name,description,structural:p.structural};
 }
 type Parsed=ReturnType<typeof parse>;
