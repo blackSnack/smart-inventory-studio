@@ -1,3 +1,4 @@
+import {isRetiredLocationName} from './native-retired-location.js';
 import {InvenTreeReadProvider,validateAllocation,type Allocation,type Location} from './domain.js';
 import {InvenTreeReadAdapter} from './inventory-provider.js';
 import {probeSchema} from './provider-schema.js';
@@ -38,7 +39,7 @@ export class InvenTreeReceiptCandidateReader{
   const stockIds=new Set<string>();
   for(const a of input.allocations){
    const leaf=tree.find(l=>l.id===a.locationId);
-   if(!leaf||leaf.structural||tree.some(l=>l.parentId===leaf.id))throw Error('not a storage leaf');
+   if(!leaf||leaf.structural||isRetiredLocationName(leaf.name)||tree.some(l=>l.parentId===leaf.id))throw Error('not a storage leaf');
    const path=[];let current:typeof leaf|undefined=leaf;
    while(current){receiptId(current.id);if(!nonblank(current.name))throw Error('invalid location name');path.unshift(current);current=current.parentId===null?undefined:tree.find(l=>l.id===current!.parentId)}
    paths[a.locationId]=path;

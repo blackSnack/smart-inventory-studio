@@ -1,3 +1,4 @@
+import {retiredLocationName} from './native-retired-location.js';
 import {authorizedNativeBase,assertNativeTarget,assertNativeMode,nativeCatalogHash,type ProductionNativeTarget} from './native-production-authorization.js';
 // Explicit local disposable-instance execution; no PWA capability is enabled.
 import {createLocalOperationContext,type LocalOperationContext} from './local-operation-context.js';
@@ -99,11 +100,15 @@ async function extraState(ctx:LocalOperationContext,op:Operation):Promise<Extra>
  if(['create-location','rename-location','update-location-metadata','transfer-stock'].includes(op.kind)){
   const rows=sortRows((await new InvenTreeReadAdapter(ctx.base,ctx.token,ctx.request).getLocations()).map(r=>({...r})));
   if(op.kind==='rename-location'||op.kind==='update-location-metadata'){
-   const leaves=op.kind==='rename-location'?[id(op.payload.locationId)]:Array.isArray(op.payload.expectedLeaves)?op.payload.expectedLeaves.map(x=>id(obj(x).locationId)):[];
+   const retiring=op.kind==='update-location-metadata'&&Array.isArray(op.payload.retiringLocationIds)?op.payload.retiringLocationIds.map(id):[];
+   const leaves=op.kind==='rename-location'?[id(op.payload.locationId)]:Array.isArray(op.payload.expectedLeaves)?[...op.payload.expectedLeaves.map(x=>id(obj(x).locationId)),...retiring]:[];
    if(!leaves.length||leaves.length>10000||new Set(leaves).size!==leaves.length)throw Error('invalid conservation scope');
    const stock:Record<string,unknown>[]=[];
    for(const leaf of leaves){if(!rows.some(r=>r.id===leaf&&r.structural===false)||rows.some(r=>r.parentId===leaf))throw Error('invalid conservation leaf');
-    stock.push(...(await read.list('api/stock/',{location:leaf,cascade:'false'})).map(r=>stockRecord(r,leaf)));
+    const items=(await read.list('api/stock/',{location:leaf,cascade:'false'})).map(r=>stockRecord(r,leaf));
+    if((retiring.includes(leaf)||op.kind==='rename-location'&&op.payload.retireConfirmed===true)&&items.length)throw Error('retiring location retains stock records');
+    if(retiring.includes(leaf)&&!rows.some(r=>r.id===leaf&&r.name===retiredLocationName(leaf)))throw Error('retired marker not verified');
+    stock.push(...items);
    }
    return {rows,stock:sortRows(stock)};
   }
@@ -171,6 +176,7 @@ export class NativeOperationsAcceptance{
    const p=op.payload,source=id(p.sourceId),target=id(p.targetId);if(source===target)throw Error('invalid transfer locations');
    const read=new InvenTreeReadProvider(ctx.base,ctx.token,ctx.request);
    const expectedSource=await read.list('api/stock/',{location:source,cascade:'false'}),expectedTarget=await read.list('api/stock/',{location:target,cascade:'false'});
+   if(p.continuation!==undefined){const c=obj(p.continuation);if(!Array.isArray(c.splits)||!c.splits.length||c.splits.length>999)throw Error('invalid prior split list');const expectedPrior=[];for(const x of c.splits){const locationId=id(obj(x).locationId);expectedPrior.push({locationId,rows:await read.list('api/stock/',{location:locationId,cascade:'false'})})}return {...op,payload:{...p,expectedSource,expectedTarget,expectedPrior}}}
    return {...op,payload:{...p,expectedSource,expectedTarget}};
   }
   if(op.kind==='associate-category-template'){
