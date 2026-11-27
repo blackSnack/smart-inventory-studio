@@ -49,3 +49,5 @@ small,.text-xs{font-size:14px;line-height:20px}.studio-search::placeholder{font-
 summary:not(.studio-summary){display:flex;align-items:center;gap:8px;list-style:none}summary:not(.studio-summary)::-webkit-details-marker{display:none}summary:not(.studio-summary)::after{content:'';margin-inline-start:auto;inline-size:8px;block-size:8px;flex-shrink:0;border-inline-end:1.5px solid currentColor;border-block-end:1.5px solid currentColor;transform:rotate(45deg);margin-inline-end:8px}details[open]>summary:not(.studio-summary)::after{transform:rotate(225deg)}
 
 .studio-matrix-scroll{scrollbar-width:thin;scrollbar-color:#b8b8b8 transparent;padding-bottom:4px}.studio-matrix-scroll:focus-visible{outline:2px solid var(--color-primary);outline-offset:2px}
+
+textarea.studio-csv-editor{min-height:160px;height:160px;font-size:16px;line-height:24px}
