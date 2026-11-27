@@ -69,9 +69,9 @@ def exercise_native_browser(page, app_url):
     assert len(writes)==2
     connect()
     page.get_by_role('heading',name='待恢复操作').wait_for()
-    assert page.get_by_role('button',name='读取基线并生成审核').is_disabled()
+    assert page.get_by_role('button',name='读取并审核下一项').is_disabled()
     page.get_by_role('button',name='仅重新读回').click()
     page.get_by_text('仍未获得可靠的执行证据，请核对服务端审计。').wait_for()
     assert len(writes)==2
-    assert page.get_by_role('button',name='读取基线并生成审核').is_disabled()
+    assert page.get_by_role('button',name='读取并审核下一项').is_disabled()
     print('PASS: browser native receipt prepare/approval/write/readback, durable unresolved recovery and no replay (synthetic only).')

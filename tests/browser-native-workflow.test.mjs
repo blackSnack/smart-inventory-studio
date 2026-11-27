@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {BrowserNativeWorkflow,browserPreparationHash} from '../dist/browser-native-workflow.js';
+import {BrowserNativeWorkflow,browserPreparationHash,resolveNativeQueueItem} from '../dist/browser-native-workflow.js';
 const catalog=JSON.parse(readFileSync(new URL('../catalog/electronic-parts.json',import.meta.url)));
 const base='http://127.0.0.1:8123/';
 const approval=async p=>({preparationSha256:await browserPreparationHash(p),disposableConfirmed:true,visibilityConfirmed:true,exclusiveConfirmed:true,identityAndPhysicalConfirmed:true,sourceAndMappingConfirmed:true,writeAuthorized:true});
@@ -45,3 +45,5 @@ test('loss remains unknown, reconnect observes without replay and unresolved ope
  assert.equal((await reopened.recover(input.id,store)).status,'unknown');const next=await reopened.prepare({...input,id:'other'});
  await assert.rejects(reopened.execute(next,await approval(next),store));assert.equal(f.writes.length,1);
 });
+
+test('dependent receipt accepts only the verified exact creation acknowledgement',async()=>{const store=memory(),scope='disposable:'+base,item={id:'receipt:new',kind:'after-part-create',createId:'part:new',ipn:'NEW',locationId:'2',quantity:4};await assert.rejects(resolveNativeQueueItem(item,scope,store));await store.admit({state:'reviewed',preparation:{scope,id:'part:new',input:{id:'part:new',kind:'create-part',payload:{ipn:'NEW'}}}});await store.claim(scope,'part:new','a'.repeat(64));await store.acknowledge(scope,'part:new','a'.repeat(64),{stockId:'99'});await assert.rejects(resolveNativeQueueItem(item,scope,store));await store.finish(scope,'part:new',{status:'verified'});assert.deepEqual(await resolveNativeQueueItem(item,scope,store),{id:'receipt:new',kind:'receive-existing-part',payload:{partId:'99',locationId:'2',quantity:4,expectedIpn:'NEW'}});await assert.rejects(resolveNativeQueueItem({...item,ipn:'WRONG'},scope,store))});

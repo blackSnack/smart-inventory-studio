@@ -15,7 +15,14 @@ type Receipt=Awaited<ReturnType<NativeReceiptAcceptance['prepare']>>;
 type Part=Awaited<ReturnType<NativePartCreateAcceptance['prepare']>>;
 type Enrichment=Awaited<ReturnType<NativeEnrichmentAcceptance['prepare']>>;
 type Operations=Awaited<ReturnType<NativeOperationsAcceptance['prepare']>>;
-export type NativeWorkInput={id:string;kind:'receive-existing-part';payload:{partId:string;locationId:string;quantity:number}}|{id:string;kind:'create-part';payload:unknown}|{id:string;kind:'enrichment';payload:unknown;expectedBefore?:unknown}|{id:string;kind:'operation';payload:Operation};
+export type NativeWorkInput={id:string;kind:'receive-existing-part';payload:{partId:string;locationId:string;quantity:number;expectedIpn?:string}}|{id:string;kind:'create-part';payload:unknown}|{id:string;kind:'enrichment';payload:unknown;expectedBefore?:unknown}|{id:string;kind:'operation';payload:Operation};
+export type NativeQueueItem=NativeWorkInput|{id:string;kind:'after-part-create';createId:string;ipn:string;locationId:string;quantity:number};
+export async function resolveNativeQueueItem(item:NativeQueueItem,scope:string,store:Pick<BrowserWorkStore,'get'>):Promise<NativeWorkInput>{
+ if(item.kind!=='after-part-create')return structuredClone(item);
+ const row=await store.get(scope,item.createId);
+ if(!row||row.state!=='verified'||row.preparation.scope!==scope||row.preparation.input.kind!=='create-part'||obj(row.preparation.input.payload).ipn!==item.ipn||!row.ackBinding)throw Error('new Part has not been verified');
+ return {id:item.id,kind:'receive-existing-part',payload:{partId:validId(obj(row.ack).stockId),locationId:item.locationId,quantity:item.quantity,expectedIpn:item.ipn}};
+}
 type NativePrepared={kind:'receive-existing-part';value:Receipt}|{kind:'create-part';value:Part}|{kind:'enrichment';value:Enrichment}|{kind:'operation';value:Operations};
 type Target={actorId:string;schemaSha256:string};
 export type BrowserPreparation={id:string;scope:string;target:Target;catalogHash:string;productionEvidenceSha256?:string;input:NativeWorkInput;prepared:NativePrepared;executionAllowed:false};
@@ -81,7 +88,7 @@ export class BrowserNativeWorkflow{
   const input=structuredClone(raw);if(typeof input.id!=='string'||!input.id.trim()||input.id.length>128)throw Error('invalid stable operation ID');
   const {target}=await this.probe();let prepared:NativePrepared;
   switch(input.kind){
-   case 'receive-existing-part':{const p=input.payload;prepared={kind:input.kind,value:await this.receipt().prepare(this.scope,{partId:p.partId,quantity:p.quantity,allocations:[{locationId:p.locationId,quantity:p.quantity}]})};break}
+   case 'receive-existing-part':{const p=input.payload;prepared={kind:input.kind,value:await this.receipt().prepare(this.scope,{partId:p.partId,quantity:p.quantity,allocations:[{locationId:p.locationId,quantity:p.quantity}]})};if(p.expectedIpn!==undefined&&prepared.value.candidate.part.ipn!==p.expectedIpn)throw Error('created Part identity changed');break}
    case 'create-part':prepared={kind:input.kind,value:await this.part().prepare(this.scope,input.payload)};break;
    case 'enrichment':{const value=await this.enrichment().prepare(this.scope,input.payload);if(Object.hasOwn(input,'expectedBefore')&&(value.baseline.kind!=='parameter'||snapshotKey(value.baseline.before)!==snapshotKey(input.expectedBefore)))throw Error('reviewed parameter baseline changed');prepared={kind:input.kind,value};break}
    case 'operation':if(input.payload.id!==input.id)throw Error('operation ID mismatch');prepared={kind:input.kind,value:await this.operations().prepare(this.scope,input.payload)};break;
