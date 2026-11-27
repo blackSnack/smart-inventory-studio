@@ -24,7 +24,7 @@ function fixture({deny=false,unsafe=false,wrongVersion=false,duplicate=false,mis
  if(path==='/api/user/me/')return deny?Response.json({detail:'secret response'},{status:403}):Response.json({pk:88,username:'private user'});
  if(path==='/api/schema/')return Response.json(schema);
  if(i.method==='OPTIONS'){const w=contractWrites.find(w=>w.path===path||w.path.replace('{model}','stocklocation').replace('{id}',path.split('/').filter(Boolean).at(-1))===path);const fields=Object.fromEntries((w?.fields??[]).map(k=>[k,{read_only:false,default:'private default'}]));return Response.json({actions:{POST:fields,PUT:fields},name:'private label'},{headers:{Allow:'GET, POST, PUT, PATCH, OPTIONS'}})}
- assert.equal(i.method,'GET');const r=contractReads.find(r=>r.path===path||r.path.replace('{model}','stocklocation').replace('{id}',path.split('/').filter(Boolean).at(-1))===path);assert.ok(r,path);
+ assert.equal(i.method,'GET');const r=contractReads.find(r=>r.path===path)??contractReads.find(r=>r.path.includes('{id}')&&/^[1-9][0-9]*$/.test(path.split('/').filter(Boolean).at(-1))&&r.path.replace('{model}','stocklocation').replace('{id}',path.split('/').filter(Boolean).at(-1))===path);assert.ok(r,path);
  const v=Object.fromEntries(r.fields.map(k=>[k,'private row']));v.pk=Number(path.split('/').filter(Boolean).at(-1))||1;
  for(const k of ['active','virtual','trackable','is_template','assembly','component','enabled','checkbox','structural','external','exclude_from_stock','in_stock','is_building'])if(Object.hasOwn(v,k))v[k]=false;
  for(const k of ['part','template','model_id','status','manufacturer','supplier'])if(Object.hasOwn(v,k))v[k]=1;
