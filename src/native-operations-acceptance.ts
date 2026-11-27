@@ -171,7 +171,7 @@ export class NativeOperationsAcceptance{
  }
  private async target(ctx:LocalOperationContext){
   const get=async(path:string)=>{const r=await ctx.request(new URL(path,ctx.base));if(!r.ok)throw Error('native target probe failed');return r};
-  const version=obj(await (await get('api/')).json());const api=nativeApiVersion(version,!!this.production);
+  const version=obj(await (await get('api/')).json());const api=nativeApiVersion(version,this.production);
   const auth=obj(await (await get('api/user/me/')).json()),actorId=id(auth.pk??auth.id);
   const schema=await get('api/schema/?format=json'),schemaSha256=await hash(new Uint8Array(await schema.arrayBuffer()));
   assertNativeTarget(this.production,actorId,schemaSha256);return {actorId,schemaSha256,...(api===232?{apiVersion:232 as const}:{})};
