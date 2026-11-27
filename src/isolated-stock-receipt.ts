@@ -37,7 +37,9 @@ export class IsolatedStockReceiptTransport implements OperationTransport{
  }
  private async call(path:string,method:'GET'|'POST',body?:Record<string,unknown>){
   const r=await this.request(new URL(path,this.base),{method,headers:{Authorization:'Token '+this.token,Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},redirect:'error',cache:'no-store',signal:AbortSignal.timeout(20000),...(body?{body:JSON.stringify(body)}:{})});
-  if(!r.ok)throw Error('receipt HTTP '+r.status);return object(await r.json());
+  if(!r.ok)throw Error('receipt HTTP '+r.status);const data:unknown=await r.json();
+  if(method==='POST'){if(!Array.isArray(data)||data.length!==1)throw Error('expected exactly one created StockItem');return object(data[0])}
+  return object(data);
  }
  private async current(p:ReturnType<typeof parse>){
   const part=await this.call('api/part/'+p.partId+'/','GET');if(id(part.pk)!==p.partId||part.active!==true||part.trackable!==false||part.virtual!==false)throw Error('unsupported receipt part');
