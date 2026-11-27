@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "0.3.0-draft",
+  "catalogVersion": "0.4.0-draft",
   "status": "seed_not_approved_for_production",
   "referenceProvider": "LCSC",
   "fieldDefinitions": {
@@ -572,6 +572,228 @@
       "aliases": [
         "IQ"
       ]
+    },
+    "cpu_core": {
+      "key": "cpu_core",
+      "labelZh": "CPU 内核",
+      "labelEn": "CPU Core",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "classification",
+      "aliases": [
+        "Core Processor"
+      ]
+    },
+    "core_bit_width": {
+      "key": "core_bit_width",
+      "labelZh": "内核位宽",
+      "labelEn": "Core Size",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "classification"
+    },
+    "cpu_max_frequency": {
+      "key": "cpu_max_frequency",
+      "labelZh": "CPU 最高频率",
+      "labelEn": "CPU Maximum Speed",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "rating",
+      "aliases": [
+        "Maximum Clock Frequency"
+      ]
+    },
+    "program_memory_type": {
+      "key": "program_memory_type",
+      "labelZh": "程序存储器类型",
+      "labelEn": "Program Memory Type",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "classification"
+    },
+    "program_memory_size": {
+      "key": "program_memory_size",
+      "labelZh": "程序存储容量",
+      "labelEn": "Program Storage Size",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "nominal",
+      "aliases": [
+        "Program Memory Size"
+      ]
+    },
+    "gpio_count": {
+      "key": "gpio_count",
+      "labelZh": "GPIO 数量",
+      "labelEn": "Number of I/O",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "nominal"
+    },
+    "adc_resolution": {
+      "key": "adc_resolution",
+      "labelZh": "ADC 分辨率",
+      "labelEn": "ADC (Bit)",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "nominal"
+    },
+    "oscillator_type": {
+      "key": "oscillator_type",
+      "labelZh": "振荡器类型",
+      "labelEn": "Oscillator Type",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "classification"
+    },
+    "supply_voltage_range": {
+      "key": "supply_voltage_range",
+      "labelZh": "工作供电电压范围",
+      "labelEn": "Voltage - Supply",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "conditioned",
+      "aliases": [
+        "Supply Voltage Range"
+      ]
+    },
+    "connector_series": {
+      "key": "connector_series",
+      "labelZh": "连接器系列",
+      "labelEn": "Reference Series",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "classification"
+    },
+    "connector_mounting": {
+      "key": "connector_mounting",
+      "labelZh": "连接器安装方式",
+      "labelEn": "Connector Type",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "classification",
+      "aliases": [
+        "Mounting Type"
+      ]
+    },
+    "connector_contact_count": {
+      "key": "connector_contact_count",
+      "labelZh": "触点总数",
+      "labelEn": "Number of PINs",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "nominal"
+    },
+    "connector_row_count": {
+      "key": "connector_row_count",
+      "labelZh": "连接器排数",
+      "labelEn": "Number of Rows",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "nominal"
+    },
+    "connector_pins_per_row": {
+      "key": "connector_pins_per_row",
+      "labelZh": "每排引脚数",
+      "labelEn": "Number of PINs Per Row",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "nominal"
+    },
+    "contact_material": {
+      "key": "contact_material",
+      "labelZh": "触点材料",
+      "labelEn": "Contact Material",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "classification"
+    },
+    "contact_plating": {
+      "key": "contact_plating",
+      "labelZh": "触点镀层",
+      "labelEn": "Contact Plating",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "classification"
+    },
+    "connector_voltage_rating": {
+      "key": "connector_voltage_rating",
+      "labelZh": "连接器电压额定值",
+      "labelEn": "Voltage Rating (Max)",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "conditioned"
+    },
+    "sensor_interface": {
+      "key": "sensor_interface",
+      "labelZh": "传感器通信接口",
+      "labelEn": "Digital Interface",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "classification"
+    },
+    "io_supply_voltage_range": {
+      "key": "io_supply_voltage_range",
+      "labelZh": "接口供电电压范围",
+      "labelEn": "VDDio Supply Voltage Range",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "conditioned"
+    },
+    "pressure_measurement_range": {
+      "key": "pressure_measurement_range",
+      "labelZh": "压力测量范围",
+      "labelEn": "Pressure Operating Range",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "conditioned"
+    },
+    "humidity_measurement_range": {
+      "key": "humidity_measurement_range",
+      "labelZh": "湿度测量范围",
+      "labelEn": "Relative Humidity Operating Range",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "conditioned"
+    },
+    "sensor_current_at_mode": {
+      "key": "sensor_current_at_mode",
+      "labelZh": "指定模式电流",
+      "labelEn": "Current Consumption at Operating Mode",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "conditioned"
+    },
+    "humidity_accuracy_conditions": {
+      "key": "humidity_accuracy_conditions",
+      "labelZh": "湿度精度及条件",
+      "labelEn": "Humidity Accuracy Tolerance",
+      "type": "string",
+      "unit": null,
+      "nullable": true,
+      "semantics": "conditioned"
     }
   },
   "categories": [
@@ -926,6 +1148,128 @@
           "output_voltage_nominal",
           "output_voltage_range",
           "output_current"
+        ],
+        "genericPooling": false,
+        "supportedModes": [
+          "exact",
+          "partial"
+        ],
+        "unknownNeverMatches": true,
+        "status": "draft_requires_category_review"
+      }
+    },
+    {
+      "key": "ic.mcu",
+      "labelZh": "微控制器 MCU",
+      "source": {
+        "provider": "LCSC",
+        "categoryLabel": "Integrated Circuits (ICs)/Embedded/Microcontrollers",
+        "url": "https://www.lcsc.com/product-detail/Microcontrollers-MCU-MPU-SOC_ST-STM32F103C8T6_C8734.html",
+        "observedDate": "2026-11-27",
+        "evidenceScope": "public product example; proposed template, not exhaustive category export"
+      },
+      "parameters": [
+        "package",
+        "cpu_core",
+        "core_bit_width",
+        "cpu_max_frequency",
+        "program_memory_type",
+        "program_memory_size",
+        "gpio_count",
+        "adc_resolution",
+        "oscillator_type",
+        "supply_voltage_range",
+        "operating_temperature"
+      ],
+      "identityPolicy": {
+        "version": 1,
+        "fields": [
+          "package",
+          "cpu_core",
+          "program_memory_size",
+          "gpio_count",
+          "supply_voltage_range"
+        ],
+        "genericPooling": false,
+        "supportedModes": [
+          "exact",
+          "partial"
+        ],
+        "unknownNeverMatches": true,
+        "status": "draft_requires_category_review"
+      }
+    },
+    {
+      "key": "connector.header.male",
+      "labelZh": "矩形公针连接器",
+      "source": {
+        "provider": "LCSC",
+        "categoryLabel": "Rectangular Connectors/Headers, Male Pins",
+        "url": "https://www.lcsc.com/product-detail/Wire-To-Board-Wire-To-Wire-Connector_JST-B2B-XH-A-LF-SN_C158012.html",
+        "observedDate": "2026-11-27",
+        "evidenceScope": "public product example; proposed template, not exhaustive category export"
+      },
+      "parameters": [
+        "package",
+        "connector_series",
+        "connector_mounting",
+        "pin_spacing",
+        "connector_contact_count",
+        "connector_row_count",
+        "connector_pins_per_row",
+        "rated_current",
+        "connector_voltage_rating",
+        "contact_material",
+        "contact_plating",
+        "operating_temperature"
+      ],
+      "identityPolicy": {
+        "version": 1,
+        "fields": [
+          "connector_series",
+          "connector_mounting",
+          "pin_spacing",
+          "connector_contact_count",
+          "connector_row_count"
+        ],
+        "genericPooling": false,
+        "supportedModes": [
+          "exact",
+          "partial"
+        ],
+        "unknownNeverMatches": true,
+        "status": "draft_requires_category_review"
+      }
+    },
+    {
+      "key": "sensor.environment.combined",
+      "labelZh": "温湿度与压力组合传感器",
+      "source": {
+        "provider": "LCSC",
+        "categoryLabel": "Humidity, Moisture Sensors (combined environmental sensor example)",
+        "url": "https://www.lcsc.com/product-detail/Humidity-Sensors_Bosch-Sensortec_BME280_Bosch-Sensortec-BME280_C92489.html",
+        "observedDate": "2026-11-27",
+        "evidenceScope": "public product example; proposed template, not exhaustive category export"
+      },
+      "parameters": [
+        "package",
+        "sensor_interface",
+        "supply_voltage_range",
+        "io_supply_voltage_range",
+        "pressure_measurement_range",
+        "humidity_measurement_range",
+        "sensor_current_at_mode",
+        "humidity_accuracy_conditions",
+        "operating_temperature"
+      ],
+      "identityPolicy": {
+        "version": 1,
+        "fields": [
+          "package",
+          "sensor_interface",
+          "supply_voltage_range",
+          "pressure_measurement_range",
+          "humidity_measurement_range"
         ],
         "genericPooling": false,
         "supportedModes": [
