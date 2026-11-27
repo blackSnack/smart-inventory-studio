@@ -1,9 +1,25 @@
 import type {Journal,JournalStore} from './operation-journal.js';
 type Row={instanceId:string;planId:string;journal:Journal};
 const STORE='operations';
+ // Compare the actual structured data, not lossy JSON serialization (NaN/null, missing/undefined).
+ // Optional object properties may be undefined; non-finite numbers, sparse arrays and non-data objects are invalid.
+ function snapshotKey(value:unknown,ancestors=new Set<object>()):string{
+  if(value===undefined)return 'u';
+  if(value===null)return 'null';
+  if(typeof value==='string'||typeof value==='boolean')return JSON.stringify(value);
+  if(typeof value==='number'){if(!Number.isFinite(value))throw Error('invalid journal numeric value');return Object.is(value,-0)?'-0':JSON.stringify(value)}
+  if(typeof value!=='object'||ancestors.has(value))throw Error('invalid journal snapshot');
+  ancestors.add(value);
+  try{
+   if(Array.isArray(value)){if(Object.keys(value).length!==value.length)throw Error('invalid journal array');const parts:string[]=[];for(let i=0;i<value.length;i++){if(!Object.hasOwn(value,i))throw Error('invalid journal array');parts.push(snapshotKey(value[i],ancestors))}return '['+parts.join(',')+']'}
+   if(Object.getPrototypeOf(value)!==Object.prototype&&Object.getPrototypeOf(value)!==null)throw Error('invalid journal data object');
+   return '{'+Object.keys(value).sort().map(k=>JSON.stringify(k)+':'+snapshotKey((value as Record<string,unknown>)[k],ancestors)).join(',')+'}';
+  }finally{ancestors.delete(value)}
+ }
+
 function validate(j:Journal,instanceId:string,planId:string){
  const p=j.plan;
- if(p.instanceId!==instanceId||p.id!==planId||![p.id,p.instanceId,p.catalogHash,p.snapshotHash,p.approvalId].every(v=>typeof v==='string'&&v.trim())||!Number.isSafeInteger(j.revision)||j.revision<0||!Array.isArray(p.operations)||!p.operations.length||new Set(p.operations.map(o=>o.id)).size!==p.operations.length||p.operations.some(o=>!o.id||!o.kind)||!Array.isArray(j.steps)||j.steps.length!==p.operations.length||j.steps.some((s,i)=>JSON.stringify(s.operation)!==JSON.stringify(p.operations[i])))throw Error('invalid journal scope or structure');
+ if(p.instanceId!==instanceId||p.id!==planId||![p.id,p.instanceId,p.catalogHash,p.snapshotHash,p.approvalId].every(v=>typeof v==='string'&&v.trim())||!Number.isSafeInteger(j.revision)||j.revision<0||!Array.isArray(p.operations)||!p.operations.length||new Set(p.operations.map(o=>o.id)).size!==p.operations.length||p.operations.some(o=>!o.id||!o.kind)||!Array.isArray(j.steps)||j.steps.length!==p.operations.length||j.steps.some((s,i)=>snapshotKey(s.operation)!==snapshotKey(p.operations[i])))throw Error('invalid journal scope or structure');
  const first=j.steps.findIndex(s=>s.state!=='verified');
  if(j.steps.some((s,i)=>!['planned','sent','verified','unknown','blocked'].includes(s.state)||(['verified','unknown','blocked'].includes(s.state)&&(typeof s.evidence!=='string'||!s.evidence.trim()))||(first>=0&&i>first&&s.state!=='planned')))throw Error('invalid journal step state');
  if(j.abandonment){const i=j.abandonment.firstUnsent;if(!Number.isSafeInteger(i)||i<0||i>=j.steps.length||!j.abandonment.evidence?.trim()||j.steps.slice(0,i).some(s=>s.state!=='verified')||j.steps.slice(i).some(s=>s.state!=='planned'))throw Error('invalid stopped remainder');}
@@ -28,7 +44,7 @@ export class IndexedDbJournalStore implements JournalStore{
  async compareAndSet(id:string,revision:number,next:Journal):Promise<boolean>{
   next=structuredClone(next);validate(next,this.instanceId,id);if(!Number.isSafeInteger(revision)||next.revision!==revision+1)throw Error('invalid revision increment');
   return new Promise((resolve,reject)=>{const tx=this.db.transaction(STORE,'readwrite');const store=tx.objectStore(STORE);let changed=false;tx.oncomplete=()=>resolve(changed);tx.onabort=()=>reject(tx.error??Error('journal CAS aborted'));const req=store.get([this.instanceId,id]);req.onsuccess=()=>{const row=req.result as Row|undefined;if(!row||row.journal.revision!==revision)return;
-   try{validate(row.journal,this.instanceId,id);if(JSON.stringify(row.journal.plan)!==JSON.stringify(next.plan)||row.journal.abandonment)throw Error('approved or stopped plan cannot change');if(next.abandonment){if(JSON.stringify(row.journal.steps)!==JSON.stringify(next.steps))throw Error('stop cannot change steps');store.put({instanceId:this.instanceId,planId:id,journal:structuredClone(next)} satisfies Row);changed=true;return}const indexes=next.steps.flatMap((s,i)=>JSON.stringify(s)!==JSON.stringify(row.journal.steps[i])?[i]:[]);if(indexes.length!==1)throw Error('one journal transition required');const i=indexes[0],before=row.journal.steps[i],after=next.steps[i];if(JSON.stringify(before.operation)!==JSON.stringify(after.operation))throw Error('operation cannot change');const allowed=before.state==='planned'?['sent']:before.state==='sent'?['verified','unknown','blocked']:before.state==='unknown'||before.state==='blocked'?['verified','unknown','blocked']:[];if(!allowed.includes(after.state)||after.state!=='sent'&&!after.evidence?.trim()||row.journal.steps.slice(0,i).some(s=>s.state!=='verified'))throw Error('invalid journal transition');store.put({instanceId:this.instanceId,planId:id,journal:structuredClone(next)} satisfies Row);changed=true}catch{tx.abort()}
+   try{validate(row.journal,this.instanceId,id);if(snapshotKey(row.journal.plan)!==snapshotKey(next.plan)||row.journal.abandonment)throw Error('approved or stopped plan cannot change');if(next.abandonment){if(snapshotKey(row.journal.steps)!==snapshotKey(next.steps))throw Error('stop cannot change steps');store.put({instanceId:this.instanceId,planId:id,journal:structuredClone(next)} satisfies Row);changed=true;return}const indexes=next.steps.flatMap((s,i)=>snapshotKey(s)!==snapshotKey(row.journal.steps[i])?[i]:[]);if(indexes.length!==1)throw Error('one journal transition required');const i=indexes[0],before=row.journal.steps[i],after=next.steps[i];if(snapshotKey(before.operation)!==snapshotKey(after.operation))throw Error('operation cannot change');const allowed=before.state==='planned'?['sent']:before.state==='sent'?['verified','unknown','blocked']:before.state==='unknown'||before.state==='blocked'?['verified','unknown','blocked']:[];if(!allowed.includes(after.state)||after.state!=='sent'&&!after.evidence?.trim()||row.journal.steps.slice(0,i).some(s=>s.state!=='verified'))throw Error('invalid journal transition');store.put({instanceId:this.instanceId,planId:id,journal:structuredClone(next)} satisfies Row);changed=true}catch{tx.abort()}
   }});
  }
  async pending():Promise<Journal[]>{return (await this.all()).filter(j=>!j.abandonment&&j.steps.some(s=>s.state!=='verified'))}
