@@ -21,9 +21,10 @@ function parse(o:Operation,allowContinuation=false){
  if(o.kind!=='transfer-stock'||!o.id.trim()||o.payload.physicalConfirmed!==true)throw Error('explicit transfer approval required');const p=o.payload,source=id(p.sourceId),target=id(p.targetId),stockId=id(p.stockItemId),partId=id(p.partId),quantity=decimal(p.quantity);
  if(source===target||quantity==='0')throw Error('invalid transfer scope');
  const before=sort([...scoped(p.expectedSource,source),...scoped(p.expectedTarget,target)]),item=before.find(x=>x.id===stockId);
- if(new Set(before.map(x=>x.id)).size!==before.length||before.some(x=>x.part!==partId)||!item||item.location!==source||item.allocated!=='0'||item.status!=='10'||!item.inStock||item.isBuilding||item.customer!==null||item.parent!==null||item.belongsTo!==null||item.consumedBy!==null||item.sales!==null||item.installed!=='0')throw Error('only reviewed unallocated ordinary stock can move');
+ if(new Set(before.map(x=>x.id)).size!==before.length||before.some(x=>x.part!==partId)||!item||item.location!==source||item.allocated!=='0'||item.status!=='10'||!item.inStock||item.isBuilding||item.customer!==null||item.belongsTo!==null||item.consumedBy!==null||item.sales!==null||item.installed!=='0')throw Error('only reviewed unallocated ordinary stock can move');
  const prior:{locationId:string;rows:Stock[]}[]=[];
  if(p.continuation!==undefined){
+  if(p.linkedExpected!==undefined||p.expectedLinked!==undefined)throw Error('conflicting lineage modes');
   if(!allowContinuation)throw Error('continuation requires explicit native context');
   const c=obj(p.continuation),original=row(c.original);
   if(!Array.isArray(c.splits)||!c.splits.length||c.splits.length>999||!Array.isArray(p.expectedPrior)||p.expectedPrior.length!==c.splits.length||original.id!==stockId||original.location!==source||original.children!=='0'||original.parent!==null||original.serial!==null&&original.serial.trim())throw Error('invalid prior split evidence');
@@ -35,10 +36,18 @@ function parse(o:Operation,allowContinuation=false){
    childIds.add(children[0].id);prior.push({locationId,rows});
   }
   if(qty==='0'||snapshotKey(item)!==snapshotKey({...original,quantity:qty,children:String(c.splits.length)}))throw Error('prior split remainder changed');
- }else if(item.children!=='0'||p.expectedPrior!==undefined)throw Error('unreviewed child lineage');
+ }else if(p.linkedExpected!==undefined){
+  if(!allowContinuation||p.expectedPrior!==undefined||quantity!==item.quantity||!Array.isArray(p.linkedExpected)||p.linkedExpected.length<2||p.linkedExpected.length>10000||!Array.isArray(p.expectedLinked))throw Error('linked StockItems may only move whole with complete evidence');
+  const expected=sort(p.linkedExpected.map(row)),locations=[...new Set(expected.map(x=>x.location))].filter(x=>x!==source&&x!==target).sort();
+  if(p.expectedLinked.length!==locations.length||new Set(expected.map(x=>x.id)).size!==expected.length)throw Error('duplicate or incomplete lineage scope');
+  for(const locationId of locations){const matches=p.expectedLinked.map(obj).filter(x=>x.locationId===locationId);if(matches.length!==1)throw Error('missing linked location baseline');prior.push({locationId,rows:scoped(matches[0].rows,locationId)})}
+  const actual=[...before,...prior.flatMap(x=>x.rows)],byId=new Map(actual.map(x=>[x.id,x])),family=new Map(expected.map(x=>[x.id,x]));
+  if(actual.length!==byId.size||!family.has(stockId)||expected.some(x=>!byId.has(x.id)||snapshotKey(x)!==snapshotKey(byId.get(x.id))||x.part!==partId||x.parent!==null&&!family.has(x.parent)||actual.filter(y=>y.parent===x.id).length!==Number(x.children)||actual.some(y=>y.parent===x.id&&!family.has(y.id))))throw Error('linked stock evidence changed or incomplete');
+  const roots=new Set<string>();for(const x of expected){let y=x;const seen=new Set<string>();while(y.parent!==null){if(seen.has(y.id))throw Error('cyclic stock lineage');seen.add(y.id);y=family.get(y.parent)!}roots.add(y.id)}if(roots.size!==1)throw Error('unrelated stock lineage');
+ }else if(item.parent!==null||item.children!=='0'||p.expectedPrior!==undefined||p.expectedLinked!==undefined)throw Error('unreviewed child lineage');
  if(p.reviewedStock!==undefined&&snapshotKey(row(p.reviewedStock))!==snapshotKey(item))throw Error('reviewed stock record changed');
  const remaining=remainder(item.quantity,quantity),split=remaining!=='0';
- if(split&&(p.splitConfirmed!==true||item.serial!==null&&item.serial.trim()!==''))throw Error('explicit nonserialized split approval required');
+ if(split&&(item.parent!==null||p.splitConfirmed!==true||item.serial!==null&&item.serial.trim()!==''))throw Error('explicit nonserialized split approval required');
  const after=sort(before.map(x=>x.id!==stockId?x:split?{...x,quantity:remaining,children:(BigInt(x.children)+1n).toString()}:{...x,location:target}));
  const expectedChild=split?{...item,location:target,quantity,parent:stockId,children:'0'}:null;
  return {source,target,stockId,partId,quantity,before,after,expectedChild,prior};

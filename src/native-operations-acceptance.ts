@@ -177,6 +177,7 @@ export class NativeOperationsAcceptance{
    const read=new InvenTreeReadProvider(ctx.base,ctx.token,ctx.request);
    const expectedSource=await read.list('api/stock/',{location:source,cascade:'false'}),expectedTarget=await read.list('api/stock/',{location:target,cascade:'false'});
    if(p.continuation!==undefined){const c=obj(p.continuation);if(!Array.isArray(c.splits)||!c.splits.length||c.splits.length>999)throw Error('invalid prior split list');const expectedPrior=[];for(const x of c.splits){const locationId=id(obj(x).locationId);expectedPrior.push({locationId,rows:await read.list('api/stock/',{location:locationId,cascade:'false'})})}return {...op,payload:{...p,expectedSource,expectedTarget,expectedPrior}}}
+   if(p.linkedExpected!==undefined){if(!Array.isArray(p.linkedExpected)||p.linkedExpected.length<2||p.linkedExpected.length>10000)throw Error('invalid linked stock evidence');const ids=[...new Set(p.linkedExpected.map(x=>id(obj(x).location)))].filter(x=>x!==source&&x!==target).sort(),expectedLinked=[];for(const locationId of ids)expectedLinked.push({locationId,rows:await read.list('api/stock/',{location:locationId,cascade:'false'})});return {...op,payload:{...p,expectedSource,expectedTarget,expectedLinked}}}
    return {...op,payload:{...p,expectedSource,expectedTarget}};
   }
   if(op.kind==='associate-category-template'){
