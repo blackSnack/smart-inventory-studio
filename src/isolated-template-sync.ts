@@ -23,7 +23,7 @@ type RecordRow={id:string;definition:Definition};
 function readRow(raw:unknown,kind:Definition['kind']):RecordRow{
  const r=object(raw),pk=id(r.pk),name=text(r.name,100),description=text(r.description,250,true);
  if(kind==='category'){if(typeof r.structural!=='boolean')throw Error('invalid category structure');return {id:pk,definition:{kind,name,description,parentId:parent(r.parent),structural:r.structural}}}
- if(r.model_type!=='part.part'||typeof r.checkbox!=='boolean'||typeof r.enabled!=='boolean'||typeof r.choices!=='string')throw Error('unexpected template model or shape');
+ if((r.model_type!=='part.part'&&r.model_type!==null)||typeof r.checkbox!=='boolean'||typeof r.enabled!=='boolean'||typeof r.choices!=='string')throw Error('unexpected template model or shape');
  // Keep conflict detection for existing enum/disabled definitions too; do not silently reuse them.
  return {id:pk,definition:{kind,name,description,units:text(r.units,100,true)}};
 }
@@ -38,8 +38,8 @@ export class IsolatedTemplateSyncTransport implements OperationTransport{
   const e=await probeSchema(b.href,config.token,required,request);if(e.operations.some(o=>!o.declared))throw Error('schema sync API not declared');
   return new IsolatedTemplateSyncTransport(b,config.token,request,new InvenTreeReadProvider(b.href,config.token,request));
  }
- private async rows(d:Definition){const records=(await this.read.list(path(d),d.kind==='template'?{model_type:'part.part'}:{})).map(x=>readRow(x,d.kind));if(new Set(records.map(x=>x.id)).size!==records.length)throw Error('duplicate schema ID');return records}
- private verify(raw:unknown,d:Definition){const row=readRow(raw,d.kind);if(snapshotKey(row.definition)!==snapshotKey(d))throw Error('schema readback mismatch');if(d.kind==='template'){const r=object(raw);if(r.enabled!==true||r.checkbox!==false||r.choices!==''||r.selectionlist!==null)throw Error('template semantic mismatch')}return row.id}
+ private async rows(d:Definition){const records=(await this.read.list(path(d),d.kind==='template'?{for_model:'part.part'}:{})).map(x=>readRow(x,d.kind));if(new Set(records.map(x=>x.id)).size!==records.length)throw Error('duplicate schema ID');return records}
+ private verify(raw:unknown,d:Definition){const row=readRow(raw,d.kind);if(snapshotKey(row.definition)!==snapshotKey(d))throw Error('schema readback mismatch');if(d.kind==='template'){const r=object(raw);if(r.model_type!=='part.part'||r.enabled!==true||r.checkbox!==false||r.choices!==''||r.selectionlist!==null)throw Error('template semantic mismatch')}return row.id}
  async send(o:Operation){
   const snapshot=structuredClone(o),d=parse(snapshot),key=snapshotKey(snapshot);if(this.attempted.has(snapshot.id))throw Error('already attempted; readback only');this.attempted.add(snapshot.id);
   const rows=await this.rows(d);if(d.kind==='category'&&d.parentId!==null&&!rows.some(r=>r.id===d.parentId))throw Error('category parent missing');if(rows.some(r=>conflict(r.definition,d)))throw Error('existing name requires explicit mapping, not creation');
@@ -49,7 +49,7 @@ export class IsolatedTemplateSyncTransport implements OperationTransport{
  }
  async observe(o:Operation):Promise<Observation>{try{
   const snapshot=structuredClone(o),d=parse(snapshot),ack=this.ack.get(snapshot.id);if(!ack||ack.key!==snapshotKey(snapshot))return {status:'unknown',evidence:'Fixture: no correlated create acknowledgement; no replay'};
-  const raw=await this.read.list(path(d),d.kind==='template'?{model_type:'part.part'}:{}),rows=raw.map(x=>readRow(x,d.kind));if(new Set(rows.map(r=>r.id)).size!==rows.length)throw Error('duplicate schema ID');
+  const raw=await this.read.list(path(d),d.kind==='template'?{for_model:'part.part'}:{}),rows=raw.map(x=>readRow(x,d.kind));if(new Set(rows.map(r=>r.id)).size!==rows.length)throw Error('duplicate schema ID');
   const matched=rows.filter(r=>conflict(r.definition,d));if(matched.length!==1||matched[0].id!==ack.id)return {status:'blocked',evidence:'Fixture: schema name or ID changed'};
   if(d.kind==='category'&&d.parentId!==null&&!rows.some(r=>r.id===d.parentId))return {status:'blocked',evidence:'Fixture: category parent changed'};
   try{this.verify(raw[rows.findIndex(r=>r.id===ack.id)],d)}catch{return {status:'blocked',evidence:'Fixture: schema definition changed'}}

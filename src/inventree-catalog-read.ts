@@ -43,7 +43,7 @@ export class InvenTreeCatalogReadAdapter implements CatalogReadPort{
   id(categoryId);
   // Public schema does not promise a category filter; read relations and select exact category locally.
   const relations=await this.list('api/part/category/parameters/'),seen=new Set<string>(),out:ParameterTemplateRef[]=[];
-  for(const r of relations){if(id(r.category)!==categoryId)continue;const tid=id(r.template),d=row(r.template_detail);if(id(d.pk)!==tid||d.model_type!=='part.part'||seen.has(tid)||typeof d.enabled!=='boolean'||typeof d.checkbox!=='boolean')throw Error('invalid category template relation');seen.add(tid);
+  for(const r of relations){if(id(r.category)!==categoryId)continue;const tid=id(r.template),d=row(r.template_detail);if(id(d.pk)!==tid||(d.model_type!=='part.part'&&d.model_type!==null)||seen.has(tid)||typeof d.enabled!=='boolean'||typeof d.checkbox!=='boolean')throw Error('invalid category template relation');seen.add(tid);
    if(!d.enabled)continue;const choices=text(d.choices),selection=d.selectionlist==null?null:id(d.selectionlist);
    // Native templates do not establish numeric/rating semantics from units alone.
    out.push({id:tid,name:name(d.name),unit:str(d.units).trim()||null,type:d.checkbox?'boolean':choices.trim()||selection?'enum':'unknown'});
@@ -53,8 +53,8 @@ export class InvenTreeCatalogReadAdapter implements CatalogReadPort{
  private async labelParameters(parameters:ParameterValueRef[]):Promise<ParameterValueRef[]>{
   if(!this.templateDeclared||!parameters.length)return parameters;
   try{
-   const rows=await this.list('api/parameter/template/',{model_type:'part.part'});
-   const templates=new Map(rows.map(r=>{if(r.model_type!=='part.part'||typeof r.enabled!=='boolean')throw Error('invalid native template scope');return [id(r.pk),{name:name(r.name),unit:str(r.units).trim()||null}] as const}));
+   const rows=await this.list('api/parameter/template/',{for_model:'part.part'});
+   const templates=new Map(rows.map(r=>{if((r.model_type!=='part.part'&&r.model_type!==null)||typeof r.enabled!=='boolean')throw Error('invalid native template scope');return [id(r.pk),{name:name(r.name),unit:str(r.units).trim()||null}] as const}));
    // Disabled templates may still identify historic values; no change to search/write capabilities.
    return parameters.map(p=>{const template=templates.get(p.templateId);return template?{...p,template}:p});
   }catch{return parameters} // Optional label metadata must not hide valid values.

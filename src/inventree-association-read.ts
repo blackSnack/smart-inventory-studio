@@ -16,15 +16,15 @@ export class InvenTreeAssociationReader{
  async readCandidate(instanceId:string,reviews:readonly ScalarTypeReview[]=[]):Promise<AssociationSnapshot>{
   if(typeof instanceId!=='string'||!instanceId.trim()||!Array.isArray(reviews))throw Error('association instance required');
   const confirmed=structuredClone(reviews);if(new Set(confirmed.map(x=>id(x.templateId))).size!==confirmed.length||confirmed.some(x=>x.confirmed!==true||!['string','number'].includes(x.type)||typeof x.name!=='string'||!x.name.trim()||!(x.unit===null||typeof x.unit==='string')))throw Error('invalid scalar semantic reviews');
-  const [categories,templates,relations]=await Promise.all([this.read.list('api/part/category/'),this.read.list('api/parameter/template/',{model_type:'part.part'}),this.read.list('api/part/category/parameters/')]);
+  const [categories,templates,relations]=await Promise.all([this.read.list('api/part/category/'),this.read.list('api/parameter/template/',{for_model:'part.part'}),this.read.list('api/part/category/parameters/')]);
   const seen=new Set<string>();
   const snapshot:AssociationSnapshot={instanceId,complete:false,
    categories:categories.map(x=>{const r=obj(x);return {id:id(r.pk),name:str(r.name),parentId:r.parent===null?null:id(r.parent)}}),
    templates:templates.map(x=>{const r=obj(x),tid=id(r.pk),name=str(r.name),unit=str(r.units).trim()||null;
-    if(r.model_type!=='part.part'||typeof r.checkbox!=='boolean'||typeof r.enabled!=='boolean'||!Object.hasOwn(r,'selectionlist'))throw Error('invalid native template scope');
+    if((r.model_type!=='part.part'&&r.model_type!==null)||typeof r.checkbox!=='boolean'||typeof r.enabled!=='boolean'||!Object.hasOwn(r,'selectionlist'))throw Error('invalid native template scope');
     const choices=str(r.choices),selection=r.selectionlist===null?null:id(r.selectionlist);
-    const reviewed=confirmed.find(c=>c.templateId===tid);let type=r.checkbox?'boolean':choices.trim()||selection!==null?'enum':'unknown';
-    if(reviewed){if(type!=='unknown'||name!==reviewed.name||unit!==reviewed.unit||r.enabled!==true)throw Error('reviewed scalar definition changed');type=reviewed.type;seen.add(tid)}
+    const reviewed=confirmed.find(c=>c.templateId===tid);let type=r.model_type===null?'unknown':r.checkbox?'boolean':choices.trim()||selection!==null?'enum':'unknown';
+    if(reviewed){if(r.model_type!== 'part.part'||type!=='unknown'||name!==reviewed.name||unit!==reviewed.unit||r.enabled!==true)throw Error('reviewed scalar definition changed');type=reviewed.type;seen.add(tid)}
     return {id:tid,name,unit,type,enabled:r.enabled};
    }),
    relations:relations.map(x=>{const r=obj(x);return {id:id(r.pk),categoryId:id(r.category),templateId:id(r.template)}})
