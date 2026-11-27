@@ -1,3 +1,4 @@
+import {assertLocalOperationContext,type LocalOperationContext} from './local-operation-context.js';
 import {probeSchema} from './provider-schema.js';
 import {readCabinetMetadata} from './cabinet-metadata.js';
 import {InvenTreeReadAdapter,type LocationSummary} from './inventory-provider.js';
@@ -30,6 +31,13 @@ export class IsolatedLocationTransport implements OperationTransport{
  private constructor(private base:URL,private token:string,private metadataModel:string,private request:typeof fetch,private adapter:InvenTreeReadAdapter){}
  static async open(config:{base:string;token:string;metadataModel:string;fixtureOnly:true},request:typeof fetch){
   const u=new URL(config.base.endsWith('/')?config.base:config.base+'/');if(config.fixtureOnly!==true||u.protocol!=='https:'||!u.hostname.endsWith('.test')||u.username||u.password||u.search||u.hash||!config.token.trim()||!/^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)?$/.test(config.metadataModel))throw Error('isolated fixture configuration required');
+  return IsolatedLocationTransport.openTransport(u,config,request);
+ }
+ static async openLocalAcceptance(ctx:LocalOperationContext){
+  assertLocalOperationContext(ctx);const config={token:ctx.token,metadataModel:'stocklocation'},request=ctx.request,u=new URL(ctx.base);
+  return IsolatedLocationTransport.openTransport(u,config,request);
+ }
+ private static async openTransport(u:URL,config:{token:string;metadataModel:string},request:typeof fetch){
   const evidence=await probeSchema(u.href,config.token,[...required],request);if(evidence.operations.some(o=>!o.declared))throw Error('migration API not declared');
   return new IsolatedLocationTransport(u,config.token,config.metadataModel,request,new InvenTreeReadAdapter(u.href,config.token,request));
  }

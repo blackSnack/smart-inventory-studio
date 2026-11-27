@@ -1,3 +1,4 @@
+import {assertLocalOperationContext,type LocalOperationContext} from './local-operation-context.js';
 import {fixtureEvidenceFor,type FixtureEvidenceConfig,type FixtureEvidenceStore} from './fixture-operation-evidence.js';
 import {probeSchema} from './provider-schema.js';
 import {InvenTreeReadProvider} from './domain.js';
@@ -21,6 +22,13 @@ export class IsolatedLocationCreateTransport implements OperationTransport{
  private constructor(private evidence:FixtureEvidenceStore,private base:URL,private token:string,private request:typeof fetch,private read:InvenTreeReadProvider,private locations:InvenTreeReadAdapter){}
  static async open(config:{base:string;token:string;fixtureOnly:true}&FixtureEvidenceConfig,request:typeof fetch){
   const evidence=fixtureEvidenceFor(config);const b=new URL(config.base.endsWith('/')?config.base:config.base+'/');if(config.fixtureOnly!==true||b.protocol!=='https:'||!b.hostname.endsWith('.test')||b.username||b.password||b.search||b.hash||!config.token.trim())throw Error('isolated fixture configuration required');
+  return IsolatedLocationCreateTransport.openTransport(b,config,request,evidence);
+ }
+ static async openLocalAcceptance(ctx:LocalOperationContext,evidence:FixtureEvidenceStore){
+  assertLocalOperationContext(ctx,evidence);const config={token:ctx.token},request=ctx.request,b=new URL(ctx.base);
+  return IsolatedLocationCreateTransport.openTransport(b,config,request,evidence);
+ }
+ private static async openTransport(b:URL,config:{token:string},request:typeof fetch,evidence:FixtureEvidenceStore){
   const e=await probeSchema(b.href,config.token,[{key:'locations',path:'/api/stock/location/',method:'get'},{key:'create',path:'/api/stock/location/',method:'post'},{key:'detail',path:'/api/stock/location/{id}/',method:'get'},{key:'stock',path:'/api/stock/',method:'get'}],request);
   if(e.operations.some(o=>!o.declared))throw Error('location create API not declared');return new IsolatedLocationCreateTransport(evidence,b,config.token,request,new InvenTreeReadProvider(b.href,config.token,request),new InvenTreeReadAdapter(b.href,config.token,request));
  }
