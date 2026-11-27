@@ -1,5 +1,5 @@
 export interface CatalogField { key:string; labelZh:string; labelEn:string; type:string; unit:string|null; nullable:boolean }
-export interface CatalogCategory {key:string; parameters:string[]; identityPolicy:{version:number;fields:string[];genericPooling:boolean;supportedModes:string[];unknownNeverMatches:boolean};source:{provider:string;url:string}}
+export interface CatalogCategory {key:string;labelZh?:string; parameters:string[]; identityPolicy:{version:number;fields:string[];genericPooling:boolean;supportedModes:string[];unknownNeverMatches:boolean};source:{provider:string;url:string}}
 export interface Catalog {schemaVersion:number;catalogVersion:string;status:string;fieldDefinitions:Record<string,CatalogField>;categories:CatalogCategory[]}
 const record=(x:unknown):x is Record<string,unknown>=>!!x&&typeof x==='object'&&!Array.isArray(x);
 const strings=(x:unknown):x is string[]=>Array.isArray(x)&&x.every(s=>typeof s==='string'&&s.trim().length>0);
