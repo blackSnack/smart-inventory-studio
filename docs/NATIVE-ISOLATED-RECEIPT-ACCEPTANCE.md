@@ -1,6 +1,6 @@
 # QA-01 local disposable-instance receipt acceptance (#23)
 
-This opt-in operator tool is not used by the PWA or fixture router. It supports one ordinary existing-Part receipt into one leaf of a disposable InvenTree 1.7.4/API 570 instance on an explicitly specified loopback IP and port. Never point it at production, including a tunnel/proxy to production; a loopback address cannot itself establish disposability. Prepare dedicated test records and ensure exclusive access, complete visibility and physical/identity review. Use a user-authorized isolated token, not production credentials. HTTP is allowed only on loopback. No service setup or command is run automatically.
+This opt-in operator tool is not used by the PWA or fixture router. It supports one ordinary existing-Part receipt into one leaf of a disposable InvenTree 0.16.7/API 232 (primary) or 1.7.4/API 570 instance on an explicitly specified loopback IP and port. Never point it at production, including a tunnel/proxy to production; a loopback address cannot itself establish disposability. Prepare dedicated test records and ensure exclusive access, complete visibility and physical/identity review. Use a user-authorized isolated token, not production credentials. HTTP is allowed only on loopback. No service setup or command is run automatically.
 
 After the existing core build, set STUDIO_INVENTREE_ISOLATED_TOKEN privately and use an existing private directory outside the repository. Prepare with:
 
