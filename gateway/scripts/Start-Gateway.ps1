@@ -38,5 +38,9 @@ for($i=0;$i -lt 40;$i++){
     if((Get-Content $stdout -Raw) -match 'Gateway HTTPS listening'){$ready=$true;break}
   }
 }
-if(-not $ready){throw "Gateway process $($process.Id) is running but did not report HTTPS readiness within 20 seconds. Check $stdout and $stderr"}
+if(-not $ready){
+  Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
+  throw "Gateway process $($process.Id) did not report HTTPS readiness within 20 seconds. Check $stdout and $stderr"
+}
 Write-Output "Gateway started (PID $($process.Id)). Logs: $stdout"
