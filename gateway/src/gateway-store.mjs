@@ -61,6 +61,8 @@ export class GatewayStore {
     const db=new DatabaseSync(databasePath);
     try {
       db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
+      const schemaVersion=db.prepare('PRAGMA user_version').get().user_version;
+      if(schemaVersion>1)throw new Error('Gateway database schema is newer than this Gateway build');
       db.exec(`
         CREATE TABLE IF NOT EXISTS gateway_metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS gateway_admin(id INTEGER PRIMARY KEY CHECK(id=1),salt BLOB NOT NULL,password_hash BLOB NOT NULL,created_at INTEGER NOT NULL);
@@ -71,6 +73,7 @@ export class GatewayStore {
         CREATE TABLE IF NOT EXISTS gateway_journals(instance_id TEXT NOT NULL,plan_id TEXT NOT NULL,revision INTEGER NOT NULL,journal_json TEXT NOT NULL,updated_at INTEGER NOT NULL,PRIMARY KEY(instance_id,plan_id));
         CREATE TABLE IF NOT EXISTS gateway_journal_operation_ids(instance_id TEXT NOT NULL,operation_id TEXT NOT NULL,plan_id TEXT NOT NULL,PRIMARY KEY(instance_id,operation_id),FOREIGN KEY(instance_id,plan_id) REFERENCES gateway_journals(instance_id,plan_id) ON DELETE CASCADE);
       `);
+      if(schemaVersion===0)db.exec('PRAGMA user_version=1');
       if(process.platform!=='win32')await chmod(databasePath,0o600);
       const store=new GatewayStore(directory,db,key);
       await store.ensureSetupToken();
@@ -141,7 +144,9 @@ export class GatewayStore {
   login(password,clientIdentity='local') {
     if(typeof password!=='string'||password.length>256)throw Error('invalid credentials');
     const clientHash=hash(typeof clientIdentity==='string'?clientIdentity:'local');
-    const now=Date.now(),attempt=this.db.prepare('SELECT window_started_at,failures,blocked_until FROM gateway_login_attempts WHERE client_hash=?').get(clientHash);
+    const now=Date.now();
+    this.db.prepare('DELETE FROM gateway_login_attempts WHERE window_started_at<? AND blocked_until<?').run(now-24*60*60*1000,now);
+    const attempt=this.db.prepare('SELECT window_started_at,failures,blocked_until FROM gateway_login_attempts WHERE client_hash=?').get(clientHash);
     if(attempt&&attempt.blocked_until>now)throw Error('login rate limited');
     const row=this.db.prepare('SELECT salt,password_hash FROM gateway_admin WHERE id=1').get();
     if(!row)throw Error('Gateway administrator is not initialized');
