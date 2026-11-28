@@ -12,7 +12,6 @@ const openssl=process.env.GATEWAY_TEST_OPENSSL||process.env.GATEWAY_OPENSSL||(pr
 function run(directory,args){execFileSync(openssl,args,{cwd:directory,stdio:'pipe',windowsHide:true})}
 async function fixture(t){
   const directory=await mkdtemp(join(tmpdir(),'gateway-auth-'));
-  t.after(()=>rm(directory,{recursive:true,force:true}));
   await writeFile(join(directory,'root.cnf'),'[req]\ndistinguished_name=dn\nprompt=no\nx509_extensions=ca\n[dn]\nCN=Gateway Auth Test CA\n[ca]\nbasicConstraints=critical,CA:true,pathlen:0\nkeyUsage=critical,keyCertSign,cRLSign\nsubjectKeyIdentifier=hash\n');
   await writeFile(join(directory,'leaf.cnf'),'[leaf]\nbasicConstraints=critical,CA:false\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectAltName=IP:127.0.0.1\n');
   run(directory,['req','-x509','-newkey','rsa:2048','-nodes','-days','2','-keyout','ca.key','-out','ca.crt','-config','root.cnf']);
@@ -26,7 +25,7 @@ function call(port,path,{method='GET',body,headers={},ca}={}){
   return new Promise((resolve,reject)=>{
     const payload=body===undefined?undefined:Buffer.from(JSON.stringify(body));
     const req=request({host:'127.0.0.1',port,path,method,ca,timeout:5000,headers:{
-      ...(payload?{'Content-Type':'application/json','Content-Length':payload.length}:{}),...headers
+      'Connection':'close',...(payload?{'Content-Type':'application/json','Content-Length':payload.length}:{}),...headers
     }},res=>{
       const chunks=[];res.on('data',chunk=>chunks.push(chunk));res.on('end',()=>{
         const raw=Buffer.concat(chunks).toString('utf8');
@@ -40,7 +39,11 @@ function call(port,path,{method='GET',body,headers={},ca}={}){
 
 test('setup, login, CSRF, redacted upstream settings and logout are enforced over HTTPS',async t=>{
   const f=await fixture(t),server=await createGateway(f.config);
-  t.after(()=>new Promise(resolve=>server.close(resolve)));
+  t.after(async()=>{
+    server.closeAllConnections();
+    await new Promise(resolve=>server.close(resolve));
+    await rm(f.directory,{recursive:true,force:true});
+  });
   await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,f.config.host,resolve)});
   const port=server.address().port,origin='https://127.0.0.1:'+port;
   const status=await call(port,'/api/v1/setup/status',{ca:f.ca});
