@@ -1,0 +1,11 @@
+config.json
+*.key
+*.pem
+*.crt
+*.csr
+*.srl
+*.pfx
+*.p12
+*.mobileconfig
+data/
+tls/
