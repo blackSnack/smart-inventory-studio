@@ -58,7 +58,8 @@ if([string]::IsNullOrWhiteSpace($InstallDirectory) -or [string]::IsNullOrWhiteSp
 $sourceRoot=$PSScriptRoot
 $install=([System.IO.Path]::GetFullPath($InstallDirectory)).TrimEnd('\')
 $data=([System.IO.Path]::GetFullPath($DataDirectory)).TrimEnd('\')
-if($install -eq $data -or $data.StartsWith($install+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'DataDirectory must be outside InstallDirectory so upgrades cannot replace persistent state.'}
+if($install -eq $data -or $data.StartsWith($install+'\',[StringComparison]::OrdinalIgnoreCase) -or $install.StartsWith($data+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'InstallDirectory and DataDirectory must be separate, non-nested paths.'}
+if([System.IO.Path]::GetPathRoot($data).TrimEnd('\') -eq $data){throw 'DataDirectory cannot be a drive root.'}
 
 # Stop an existing installation before replacing its executable files.
 $oldStop=Join-Path $install 'Stop-Gateway.ps1'
