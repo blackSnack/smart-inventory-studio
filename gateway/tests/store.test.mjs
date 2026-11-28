@@ -73,5 +73,6 @@ test('corrupt encryption key fails closed without replacing it',async t=>{
   const original=await readFile(keyPath);
   await (await import('node:fs/promises')).writeFile(keyPath,'bad');
   await assert.rejects(GatewayStore.open(f.directory),/encryption key is corrupt/);
-  assert.notDeepEqual(await readFile(keyPath),original);
+  assert.equal((await readFile(keyPath)).toString(),'bad');
+  assert.equal(original.length,32);
 });
