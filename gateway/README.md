@@ -15,9 +15,9 @@ Then:
 
 1. Copy `gateway/config.example.json` to `gateway/config.json` in a private deployment directory.
 2. Set `tls.opensslPath` if OpenSSL 3 is not available as `openssl` on PATH.
-3. Run `npm --prefix gateway start -- --config gateway/config.json`.
+3. Run `npm --prefix gateway start -- --config config.json`.
 4. On first start, the Gateway creates a persistent root CA, a short-lived server certificate, a protected SQLite database, a 256-bit encryption key and a one-time administrator setup token file. The path to the setup token file is printed to the console.
-5. Export the public CA and iOS profile with `npm --prefix gateway run ca:export -- --config gateway/config.json --out ./gateway-export`. Verify the printed SHA-256 fingerprint over a trusted channel before installing the profile.
+5. Export the public CA and iOS profile with `npm --prefix gateway run ca:export -- --config config.json --out ../gateway-export`. Verify the printed SHA-256 fingerprint over a trusted channel before installing the profile.
 6. On iOS, install the profile, then open Settings → General → About → Certificate Trust Settings and explicitly enable full trust for the local CA. Profile installation alone does not enable full trust.
 
 The root CA is persistent for 10 years. Server leaves are valid for 397 days and are renewed automatically when within the configured renewal window. Renewal preserves the root fingerprint. If root certificate/key material is incomplete, corrupt or expired, startup fails closed; it never silently replaces the root CA. Recovery or rotation must be an explicit administrator action.
