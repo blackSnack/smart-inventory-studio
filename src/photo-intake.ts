@@ -79,7 +79,7 @@ export function parseLabelEvidence(input:unknown,catalog:Catalog,inputCodes:read
    const candidate=parseLabelEvidence({...item,kind:'package',readability:readability.includes(item.readability as LabelEvidence['readability'])?item.readability:read,rawText:typeof item.rawText==='string'?item.rawText:'',parameters:obj(item.parameters)?item.parameters:{}},catalog,[]);
    if(candidate.kind!=='package')throw Error('invalid package candidate kind');
    const {packages:_nested,...fields}=candidate;
-   return {...fields,id:'package-'+(index+1)};
+   return {...fields,id:'package-'+(index+1),kind:'package'};
   });
   return {kind,readability:read,rawText,quantity:null,candidateCategory:null,codes:[],conflicts,draft,packages};
  }

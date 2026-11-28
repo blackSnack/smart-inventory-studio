@@ -26,7 +26,10 @@ export async function decodePhoto(file:File,bounds?:LabelBounds):Promise<{codes:
  try{image=await createImageBitmap(file);if(image.width*image.height>40_000_000)return {codes:[],status:'failed'};if(bounds){const original=image;const x=Math.floor(bounds[0]*original.width),y=Math.floor(bounds[1]*original.height),w=Math.min(original.width-x,Math.ceil(bounds[2]*original.width)),h=Math.min(original.height-y,Math.ceil(bounds[3]*original.height));image=await createImageBitmap(original,x,y,w,h);original.close()}
  let native:CodeObservation[]=[];if(Detector){try{const formats=Detector.getSupportedFormats?await Detector.getSupportedFormats():['qr_code','code_128','ean_13','code_39','data_matrix'];if(formats.length)native=(await new Detector({formats}).detect(image)).map(x=>({format:x.format,raw:x.rawValue}))}catch{/* use bundled fallback */}}
  let fallback:CodeObservation[]=[];try{fallback=await fallbackDecode(image)}catch{const codes=normalizeCodes(native);return {codes,status:codes.length?'decoded':'failed'}}
- const codes=normalizeCodes([...native,...fallback]);return {codexport async function recognizePhoto(file:File,gateway:GatewayConfig,catalog:Catalog,signal?:AbortSignal,progress?:(s:string)=>void){
+ const codes=normalizeCodes([...native,...fallback]);return {codes,status:codes.length?'decoded':'none'}
+ }catch{return {codes:[],status:'failed'}}finally{image?.close()}
+}
+export async function recognizePhoto(file:File,gateway:GatewayConfig,catalog:Catalog,signal?:AbortSignal,progress?:(s:string)=>void){
  progress?.('读取原图及编码…');const [data,decoded]=await Promise.all([photoData(file),decodePhoto(file)]);if(signal?.aborted)throw Error('cancelled');progress?.('提取标签文字…');const provider=new PhotoIntakeProvider(gateway.url,gateway.key,gateway.model);let evidence=await provider.extract(data,catalog,decoded.codes,signal);let status=decoded.status;
  if(evidence.kind==='multiple'){
   const candidates:PackageCandidate[]=[];
@@ -42,7 +45,7 @@ export async function decodePhoto(file:File,bounds?:LabelBounds):Promise<{codes:
     }
    }
    if(current.kind!=='package')throw Error('invalid package candidate state');
-   const {packages:_nested,...fields}=current;candidates.push({...fields,id:candidate.id});
+   const {packages:_nested,...fields}=current;candidates.push({...fields,id:candidate.id,kind:'package'});
   }
   evidence={...evidence,packages:candidates};
  }else if(evidence.kind==='package'&&evidence.bounds&&!signal?.aborted){
@@ -58,8 +61,6 @@ export function PhotoEvidence({evidence,status,onSelectPackage}:{evidence:LabelE
  {evidence.kind==='package'&&evidence.cropRetried&&<p className="text-xs text-muted">已尝试原始照片标签特写复核。</p>}
  {evidence.kind==='package'&&lcscLabelCodes(evidence.codes).map((v,i)=><p key={'lcsc'+i} className="text-sm">立创编码：{v.sku} · {v.mpn} · {v.quantity} 件（待确认）</p>)}
  {evidence.kind==='package'&&evidence.candidateCategory&&!evidence.draft.category&&<p className="text-sm text-muted">视觉分类候选：{evidence.candidateCategory}（未自动采用）</p>}
-
-
  {evidence.kind==='package'&&evidence.quantity!==null&&<p className="text-sm">包装标记数量：{evidence.quantity} 件 · 待确认</p>}
  {evidence.kind==='package'&&evidence.conflicts.map(v=><p key={v} role="alert" className="text-sm text-warn">{v}</p>)}
  <details className="space-y-2"><summary className="cursor-pointer min-h-11">原始标签文字与编码</summary><pre className="whitespace-pre-wrap break-words text-sm">{evidence.rawText||'无可读文字'}</pre><p className="text-sm text-muted">{status==='unsupported'?'浏览器不支持本地解码；继续使用标签文字。':status==='failed'?'编码解码失败；继续使用标签文字。':status==='none'?'未读到编码。':'已读取编码（不自动视为商品编号）'}</p>{evidence.codes.map((c,i)=><p key={i} className="text-sm break-all">{c.format}：{parseLcscLabelCode(c.raw)?'立创商品编码（订单字段已隐藏）':c.raw}</p>)}</details>
