@@ -4,7 +4,7 @@ function pack(value) {
   if(value===undefined)return ['u'];
   if(value===null)return ['n'];
   if(typeof value==='string'||typeof value==='boolean')return ['p',value];
-  if(typeof value==='number'){if(!Number.isFinite(value))throw Error('invalid journal numeric value');return ['p',value]}
+  if(typeof value==='number'){if(!Number.isFinite(value))throw Error('invalid journal numeric value');return ['d',Object.is(value,-0)?'-0':String(value)]}
   if(Array.isArray(value))return ['a',value.map(pack)];
   if(typeof value==='object'&&(Object.getPrototypeOf(value)===Object.prototype||Object.getPrototypeOf(value)===null)){
     return ['o',Object.keys(value).sort().map(key=>[key,pack(value[key])])];
@@ -16,14 +16,17 @@ function unpack(value) {
   if(!Array.isArray(value)||typeof value[0]!=='string')throw Error('invalid stored journal encoding');
   if(value[0]==='u'&&value.length===1)return undefined;
   if(value[0]==='n'&&value.length===1)return null;
-  if(value[0]==='p'&&value.length===2&&(typeof value[1]==='string'||typeof value[1]==='boolean'||typeof value[1]==='number')&&
-      (typeof value[1]!=='number'||Number.isFinite(value[1])))return value[1];
+  if(value[0]==='p'&&value.length===2&&(typeof value[1]==='string'||typeof value[1]==='boolean'))return value[1];
+  if(value[0]==='d'&&value.length===2&&typeof value[1]==='string'){
+    const number=value[1]==='-0'?-0:Number(value[1]);
+    if(Number.isFinite(number)&&String(number)===value[1]||value[1]==='-0')return number;
+  }
   if(value[0]==='a'&&value.length===2&&Array.isArray(value[1]))return value[1].map(unpack);
   if(value[0]==='o'&&value.length===2&&Array.isArray(value[1])){
-    const out=Object.create(null);
+    const out={};
     for(const entry of value[1]){
       if(!Array.isArray(entry)||entry.length!==2||typeof entry[0]!=='string'||Object.hasOwn(out,entry[0]))throw Error('invalid stored journal object');
-      out[entry[0]]=unpack(entry[1]);
+      Object.defineProperty(out,entry[0],{value:unpack(entry[1]),enumerable:true,writable:true,configurable:true});
     }
     return out;
   }
