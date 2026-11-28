@@ -4,7 +4,7 @@ import {validateDrawer,splitCompartment,mergeCompartments,mergeMetadata} from '.
 import {InvenTreeReadAdapter} from '../dist/inventory-provider.js';
 import {OpenAICompatibleProvider,parseDraft} from '../dist/ai-provider.js';
 const catalog=JSON.parse(fs.readFileSync(new URL('../catalog/electronic-parts.json',import.meta.url)));
-test('seed catalog valid and draft pooling disabled',()=>{const c=validateCatalog(catalog);assert.equal(c.categories.length,12);assert.equal(categoryPolicy(c,c.categories[0].key).genericPooling,false)});
+test('seed catalog valid and draft pooling disabled',()=>{const c=validateCatalog(catalog);assert.equal(c.categories.length,19);assert.equal(categoryPolicy(c,c.categories[0].key).genericPooling,false)});
 test('reject unknown or duplicate template refs',()=>{const c=structuredClone(catalog);c.categories[0].parameters.push('unknown_field');assert.throws(()=>validateCatalog(c));});
 const d={id:'drawer',width:12,height:12,revision:0,compartments:[{id:'one',x:0,y:0,width:12,height:12}]};
 test('unequal split then merge preserves geometry',()=>{const s=splitCompartment(d,'one','vertical',[3,4,5],['a','b','c']);const t=mergeCompartments(s,['a','b'],'ab');assert.equal(t.compartments.length,2);assert.equal(t.compartments.find(c=>c.id==='ab').width,7);assert.equal(t.revision,2);validateDrawer(t);assert.equal(d.compartments.length,1)});
