@@ -9,11 +9,28 @@ export async function createGateway(config) {
   let cert, key;
   try {
     [cert,key] = await Promise.all([readFile(config.tls.cert),readFile(config.tls.key)]);
-    const leaf = new X509Certificate(cert);
-    const now = Date.now();
-    if (leaf.ca || !leaf.checkIP(config.host) || !leaf.checkPrivateKey(createPrivateKey(key)) ||
-        !(Date.parse(leaf.validFrom) <= now && now < Date.parse(leaf.validTo))) throw new Error('Invalid TLS leaf');
-  } catch { throw new Error('Gateway TLS material missing, invalid, expired or does not match configured host'); }
+  } catch {
+    throw new Error('Gateway TLS certificate or private key is missing or unreadable');
+  }
+  let leaf;
+  try {
+    leaf = new X509Certificate(cert);
+    if (!leaf.checkPrivateKey(createPrivateKey(key))) throw new Error('Certificate/private key mismatch');
+  } catch {
+    throw new Error('Gateway TLS certificate or private key is invalid or mismatched');
+  }
+  const now = Date.now();
+  if (leaf.ca || !leaf.checkIP(config.host) ||
+      !(Date.parse(leaf.validFrom) <= now && now < Date.parse(leaf.validTo))) {
+    throw new Error('Gateway TLS certificate is a CA, has the wrong IP SAN or is outside its validity period');
+  }
+  const serverAuth = '1.3.6.1.5.5.7.3.1';
+  const anyExtendedKeyUsage = '2.5.29.37.0';
+  if (leaf.keyUsage &&
+      !leaf.keyUsage.includes(serverAuth) &&
+      !leaf.keyUsage.includes(anyExtendedKeyUsage)) {
+    throw new Error('Gateway TLS certificate does not permit TLS server authentication');
+  }
   return createServer({cert,key,minVersion:'TLSv1.2',requestTimeout:10000,headersTimeout:5000,maxHeaderSize:8192}, (req,res)=>{
     const headers = {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
     if (req.method === 'GET' && req.url === '/api/v1/health') {
