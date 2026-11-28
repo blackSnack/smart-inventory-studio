@@ -50,11 +50,11 @@ function validateLeaf(certBytes, keyBytes, ca, host, now) {
 }
 
 
-async function createRoot(directory, executable) {
+async function createRoot(directory, tlsConfig) {
   const temporary = join(directory, '.root-' + randomUUID());
   await mkdir(temporary, {mode: 0o700});
   try {
-    await runOpenSsl(executable, ['genpkey','-algorithm','RSA','-pkeyopt','rsa_keygen_bits:3072','-out','root-ca.key'], temporary);
+    await runOpenSsl(tlsConfig.opensslPath, ['genpkey','-algorithm','RSA','-pkeyopt','rsa_keygen_bits:3072','-out','root-ca.key'], temporary,tlsConfig.opensslConfigPath);
     await runOpenSsl(executable, ['req','-x509','-new','-key','root-ca.key','-sha256','-days',String(CA_DAYS),
       '-out','root-ca.crt','-subj','/CN=Smart Inventory Local Gateway Root CA',
       '-addext','basicConstraints=critical,CA:TRUE,pathlen:0',
@@ -70,7 +70,7 @@ async function createRoot(directory, executable) {
   }
 }
 
-async function createLeaf(directory, executable, host) {
+async function createLeaf(directory, tlsConfig, host) {
   const temporary = join(directory, '.leaf-' + randomUUID());
   await mkdir(temporary,{mode:0o700});
   try {
@@ -144,7 +144,7 @@ export async function ensureLocalCertificates(config, now) {
     try { await lstat(path); return true; } catch (e) { if (e.code === 'ENOENT') return false; throw e; }
   }));
   if (hasCaCert !== hasCaKey) throw new Error('Local CA is incomplete; refusing silent replacement. Explicit recovery is required.');
-  if (!hasCaCert) await createRoot(directory,config.tls.opensslPath);
+  if (!hasCaCert) await createRoot(directory,config.tls);
 
   // Capture wall-clock time after waiting for the lock and after first-time CA creation.
   // Capturing it at function entry can predate the freshly issued certificate's notBefore.
@@ -157,7 +157,7 @@ export async function ensureLocalCertificates(config, now) {
   } catch {}
   const renewBeforeDays = config.tls.renewBeforeDays ?? 30;
   if (!leaf || Date.parse(leaf.validTo) - validationTime <= renewBeforeDays * 86400000) {
-    await createLeaf(directory,config.tls.opensslPath,host);
+    await createLeaf(directory,config.tls,host);
     leaf = new X509Certificate(await readFile(serverCertPath));
   }
   return {caCertPath,caKeyPath,caFingerprint:fingerprint(ca),certPath:serverCertPath,keyPath:serverKeyPath,

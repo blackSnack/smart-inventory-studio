@@ -5,6 +5,7 @@ import {pathToFileURL} from 'node:url';
 import {loadConfig} from './config.mjs';
 import {ensureLocalCertificates} from './certificates.mjs';
 import {GatewayStore} from './gateway-store.mjs';
+import {isPrivateOrLoopbackAddress} from './network-address.mjs';
 
 const SESSION_COOKIE='gateway_session';
 const BODY_LIMIT=64*1024;
@@ -173,7 +174,7 @@ async function handleRequest(req,res,store) {
 }
 
 export async function createGateway(config) {
-  if (!['127.0.0.1','::1'].includes(config.host)) throw new Error('LAN binding not enabled');
+  if (!isPrivateOrLoopbackAddress(config.host)) throw new Error('Gateway bind address must be a private or loopback IP address');
   const material = config.tls.mode === 'local-ca'
     ? await ensureLocalCertificates(config)
     : {certPath:config.tls.cert,keyPath:config.tls.key};
