@@ -105,7 +105,8 @@ $isLoopback=[System.Net.IPAddress]::IsLoopback([System.Net.IPAddress]::Parse($ef
 if(-not $isLoopback -and -not $EnableLan){throw 'LAN binding requires the explicit -EnableLan switch, including on upgrades.'}
 $config=[ordered]@{host=$effectiveHost;port=$effectivePort;dataDir=$data;tls=$tls}
 $tempConfig=$configPath+'.next'
-$config|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $tempConfig -Encoding utf8
+$json=$config|ConvertTo-Json -Depth 8
+[System.IO.File]::WriteAllText($tempConfig,$json,[System.Text.UTF8Encoding]::new($false))
 Move-Item -LiteralPath $tempConfig -Destination $configPath -Force
 
 $firewallName='Smart Inventory Gateway'
