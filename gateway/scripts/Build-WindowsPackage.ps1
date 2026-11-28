@@ -86,6 +86,10 @@ if(Test-Path -LiteralPath $gitLicense){Copy-Item -LiteralPath $gitLicense -Desti
 $licenseRoot=Join-Path $gitRoot 'usr\share\licenses'
 if(Test-Path -LiteralPath $licenseRoot){Copy-Item -LiteralPath $licenseRoot -Destination (Join-Path $package 'THIRD-PARTY-LICENSES') -Recurse}
 
+$windowsReadme=Join-Path $gatewayRoot 'README-WINDOWS.md'
+if(-not(Test-Path -LiteralPath $windowsReadme)){throw 'Windows deployment guide is missing'}
+Copy-Item -LiteralPath $windowsReadme -Destination (Join-Path $package 'README-WINDOWS.md')
+
 $manifest=[ordered]@{
   package=$PackageName
   architecture='win-x64'
@@ -98,6 +102,8 @@ $manifest|ConvertTo-Json -Depth 4|Set-Content -LiteralPath (Join-Path $package '
 $zip=Join-Path $out ($PackageName+'.zip')
 if(Test-Path $zip){Remove-Item $zip -Force}
 Compress-Archive -Path (Join-Path $package '*') -DestinationPath $zip -CompressionLevel Optimal
+$zipHash=(Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash
+Set-Content -LiteralPath ($zip+'.sha256') -Value $zipHash -Encoding ascii
 Write-Output "Package: $package"
 Write-Output "Archive: $zip"
 Write-Output "Node: $nodeVersion"
