@@ -1,8 +1,9 @@
 import {randomUUID, createPrivateKey, X509Certificate} from 'node:crypto';
-import {chmod, lstat, mkdir, open, readFile, rename, rm, writeFile} from 'node:fs/promises';
+import {lstat, mkdir, open, readFile, rename, rm, writeFile} from 'node:fs/promises';
 import {isIP} from 'node:net';
 import {join, resolve} from 'node:path';
 import {runOpenSsl} from './openssl.mjs';
+import {securePrivateDirectory,writePrivateFile} from './private-storage.mjs';
 
 const SERVER_AUTH = '1.3.6.1.5.5.7.3.1';
 const CA_DAYS = 3650;
@@ -48,22 +49,6 @@ function validateLeaf(certBytes, keyBytes, ca, host, now) {
   }
 }
 
-async function protectDirectory(directory) {
-  if (process.platform === 'win32') {
-    const user = process.env.USERNAME;
-    const domain = process.env.USERDOMAIN;
-    if (!user || !domain) throw new Error('Cannot determine the current Windows account for Gateway data ACLs');
-    await runOpenSsl('icacls.exe', [directory, '/inheritance:r', '/grant:r',
-      domain + '\\' + user + ':(OI)(CI)F', 'SYSTEM:(OI)(CI)F'], process.cwd());
-  } else {
-    await chmod(directory, 0o700);
-  }
-}
-
-async function writePrivate(path, value) {
-  await writeFile(path, value, {mode: 0o600, flag: 'wx'});
-  if (process.platform !== 'win32') await chmod(path, 0o600);
-}
 
 async function createRoot(directory, executable) {
   const temporary = join(directory, '.root-' + randomUUID());
@@ -78,7 +63,7 @@ async function createRoot(directory, executable) {
     const key = await readFile(join(temporary,'root-ca.key'));
     const cert = await readFile(join(temporary,'root-ca.crt'));
     validateCa(cert,key,Date.now());
-    await writePrivate(join(directory,'root-ca.key'),key);
+    await writePrivateFile(join(directory,'root-ca.key'),key);
     await writeFile(join(directory,'root-ca.crt'),cert,{flag:'wx'});
   } finally {
     await rm(temporary,{recursive:true,force:true});
@@ -112,9 +97,8 @@ async function createLeaf(directory, executable, host) {
     const key = await readFile(join(temporary,'server.key'));
     const ca = new X509Certificate(await readFile(join(directory,'root-ca.crt')));
     if (!validateLeaf(cert,key,ca,host,Date.now())) throw new Error('Generated TLS server certificate failed validation');
-    await writeFile(join(directory,'server.key.next'),key,{mode:0o600,flag:'w'});
+    await writePrivateFile(join(directory,'server.key.next'),key,{exclusive:false});
     await writeFile(join(directory,'server.crt.next'),cert,{flag:'w'});
-    if (process.platform !== 'win32') await chmod(join(directory,'server.key.next'),0o600);
     await rename(join(directory,'server.key.next'),join(directory,'server.key'));
     await rename(join(directory,'server.crt.next'),join(directory,'server.crt'));
   } finally {
@@ -150,10 +134,7 @@ export async function ensureLocalCertificates(config, now) {
   const host = config.host;
   if (!validHost(host)) throw new Error('Invalid TLS certificate host');
   const directory = resolve(config.dataDir,'tls');
-  await mkdir(directory,{recursive:true,mode:0o700});
-  const stat = await lstat(directory);
-  if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('Gateway TLS data path must be a real directory');
-  await protectDirectory(directory);
+  await securePrivateDirectory(directory);
   return withCertificateLock(directory,async()=>{
   const caCertPath = join(directory,'root-ca.crt');
   const caKeyPath = join(directory,'root-ca.key');

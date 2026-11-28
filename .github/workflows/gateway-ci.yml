@@ -13,15 +13,20 @@ jobs:
       matrix:
         os: [ubuntu-24.04, windows-2022]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Linux synthetic TLS smoke
+      - name: Install and build shared TypeScript core
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build:core
+      - name: Linux synthetic Gateway smoke
         if: runner.os == 'Linux'
         run: npm --prefix gateway test
-      - name: Windows synthetic TLS smoke
+      - name: Windows synthetic Gateway smoke
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
