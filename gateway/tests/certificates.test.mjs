@@ -77,7 +77,7 @@ test('refuses incomplete or corrupt root CA instead of silently replacing it',as
   await assert.rejects(ensureLocalCertificates(f.config),/corrupt|mismatched|refusing/i);
 });
 
-test('rejects invalid certificate host names',async t=>{
+test('rejects non-IP certificate hosts before invoking OpenSSL',async t=>{
   const f=await fixture(t);
-  await assert.rejects(ensureLocalCertificates({...f.config,host:'127.0.0.1\nsubjectAltName=DNS:evil.example'}),/Invalid TLS certificate host/);
+  await assert.rejects(ensureLocalCertificates({...f.config,host:'127.0.0.1\nsubjectAltName=DNS:evil.example'}),/private or loopback IP address/);
 });
