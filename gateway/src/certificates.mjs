@@ -1,6 +1,7 @@
 import {randomUUID, createPrivateKey, X509Certificate} from 'node:crypto';
 import {lstat, mkdir, open, readFile, rename, rm, writeFile} from 'node:fs/promises';
 import {isIP} from 'node:net';
+import {isPrivateOrLoopbackAddress} from './network-address.mjs';
 import {join, resolve} from 'node:path';
 import {runOpenSsl} from './openssl.mjs';
 import {securePrivateDirectory,writePrivateFile} from './private-storage.mjs';
@@ -9,12 +10,6 @@ const SERVER_AUTH = '1.3.6.1.5.5.7.3.1';
 const CA_DAYS = 3650;
 const LEAF_DAYS = 397;
 
-function validHost(host) {
-  if (typeof host !== 'string' || !host || host.length > 253 || /[\r\n/\\\s]/.test(host)) return false;
-  if (isIP(host)) return true;
-  return host.split('.').every(label => label.length > 0 && label.length <= 63 &&
-    /^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/.test(label));
-}
 
 function fingerprint(cert) {
   return cert.fingerprint256.replaceAll(':', '').toUpperCase();
@@ -132,7 +127,7 @@ async function withCertificateLock(directory, action) {
 
 export async function ensureLocalCertificates(config, now) {
   const host = config.host;
-  if (!validHost(host)) throw new Error('Invalid TLS certificate host');
+  if (!isPrivateOrLoopbackAddress(host)) throw new Error('TLS certificate host must be a private or loopback IP address');
   const directory = resolve(config.dataDir,'tls');
   await securePrivateDirectory(directory);
   return withCertificateLock(directory,async()=>{
