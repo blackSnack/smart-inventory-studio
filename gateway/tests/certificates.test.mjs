@@ -37,6 +37,14 @@ test('creates persistent root CA and serverAuth leaf; exports only public CA and
   assert.ok(!JSON.stringify(profile).includes('root-ca.key'));
 });
 
+test('serializes concurrent initialization and preserves a single root CA',async t=>{
+  const f=await fixture(t);
+  const [first,second]=await Promise.all([ensureLocalCertificates(f.config),ensureLocalCertificates(f.config)]);
+  assert.equal(first.caFingerprint,second.caFingerprint);
+  assert.equal(first.leafFingerprint,second.leafFingerprint);
+  assert.equal(await readFile(join(f.config.dataDir,'tls','.certificate.lock')).then(()=>true,()=>false),false);
+});
+
 test('reissues an expired leaf without replacing the root CA',async t=>{
   const f=await fixture(t);
   const first=await ensureLocalCertificates(f.config);

@@ -1,5 +1,5 @@
 import {randomUUID, createPrivateKey, X509Certificate} from 'node:crypto';
-import {chmod, lstat, mkdir, readFile, rename, rm, writeFile} from 'node:fs/promises';
+import {chmod, lstat, mkdir, open, readFile, rename, rm, writeFile} from 'node:fs/promises';
 import {isIP} from 'node:net';
 import {join, resolve} from 'node:path';
 import {runOpenSsl} from './openssl.mjs';
@@ -124,6 +124,28 @@ async function createLeaf(directory, executable, host) {
   }
 }
 
+async function withCertificateLock(directory, action) {
+  const lockPath = join(directory,'.certificate.lock');
+  const started = Date.now();
+  let handle;
+  while (!handle) {
+    try {
+      handle = await open(lockPath,'wx',0o600);
+      await handle.writeFile(JSON.stringify({pid:process.pid,createdAt:new Date().toISOString()}));
+      await handle.close();
+    } catch (error) {
+      if (handle) { await handle.close().catch(()=>{}); handle=null; }
+      if (error?.code !== 'EEXIST') throw error;
+      if (Date.now()-started > 30000) {
+        throw new Error('Gateway certificate lock is busy or stale; confirm no Gateway process is running before removing .certificate.lock');
+      }
+      await new Promise(resolve=>setTimeout(resolve,100));
+    }
+  }
+  try { return await action(); }
+  finally { await rm(lockPath,{force:true}); }
+}
+
 export async function ensureLocalCertificates(config, now = Date.now()) {
   const host = config.host;
   if (!validHost(host)) throw new Error('Invalid TLS certificate host');
@@ -132,7 +154,7 @@ export async function ensureLocalCertificates(config, now = Date.now()) {
   const stat = await lstat(directory);
   if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('Gateway TLS data path must be a real directory');
   await protectDirectory(directory);
-
+  return withCertificateLock(directory,async()=>{
   const caCertPath = join(directory,'root-ca.crt');
   const caKeyPath = join(directory,'root-ca.key');
   const serverCertPath = join(directory,'server.crt');
@@ -154,8 +176,9 @@ export async function ensureLocalCertificates(config, now = Date.now()) {
     await createLeaf(directory,config.tls.opensslPath,host);
     leaf = new X509Certificate(await readFile(serverCertPath));
   }
-  return {caCertPath,caFingerprint:fingerprint(ca),certPath:serverCertPath,keyPath:serverKeyPath,
+  return {caCertPath,caKeyPath,caFingerprint:fingerprint(ca),certPath:serverCertPath,keyPath:serverKeyPath,
     leafFingerprint:fingerprint(leaf),leafValidTo:leaf.validTo};
+  });
 }
 
 export async function exportLocalCa({caCertPath,outDir}) {
