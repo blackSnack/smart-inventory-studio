@@ -84,7 +84,7 @@ if(-not(Test-Path -LiteralPath $node) -or -not(Test-Path -LiteralPath $openssl) 
 $configPath=Join-Path $data 'gateway.config.json'
 $existing=$null
 if(Test-Path -LiteralPath $configPath){
-  try {$existing=Get-Content -LiteralPath $configPath -Raw|ConvertFrom-Json} catch {throw 'Existing Gateway configuration is invalid; it was not overwritten.'}
+  try {$existing=Get-Content -LiteralPath $configPath -Raw|ConvertFrom-Json} catch {throw ('Existing Gateway configuration is invalid; it was not overwritten. '+$_.Exception.Message)}
 }
 if($existing -and -not $Reconfigure){
   $effectiveHost=[string]$existing.host
