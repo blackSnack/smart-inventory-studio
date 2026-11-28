@@ -192,27 +192,40 @@ export async function exportLocalCa({caCertPath,outDir}) {
   const certificatePath = join(directory,'smart-inventory-local-ca.crt');
   const profilePath = join(directory,'smart-inventory-local-ca.mobileconfig');
   const uuid = randomUUID().toUpperCase();
-  const profile = {
-    PayloadContent: [{
-      PayloadCertificateFileName: 'SmartInventoryLocalCA.cer',
-      PayloadContent: ca.raw.toString('base64'),
-      PayloadDescription: 'Local CA certificate. Verify the SHA-256 fingerprint with the Gateway administrator before installation.',
-      PayloadDisplayName: 'Smart Inventory Local CA',
-      PayloadIdentifier: 'com.smartinventory.gateway.rootca',
-      PayloadType: 'com.apple.security.root',
-      PayloadUUID: uuid,
-      PayloadVersion: 1
-    }],
-    PayloadDescription: 'Installs the Smart Inventory local root CA. Full trust must be enabled manually in iOS Settings.',
-    PayloadDisplayName: 'Smart Inventory Gateway CA',
-    PayloadIdentifier: 'com.smartinventory.gateway.ca.profile',
-    PayloadOrganization: 'Smart Inventory Studio',
-    PayloadRemovalDisallowed: false,
-    PayloadType: 'Configuration',
-    PayloadUUID: randomUUID().toUpperCase(),
-    PayloadVersion: 1
-  };
+  const escapeXml = value => String(value).replaceAll('&','&amp;').replaceAll('<','&lt;')
+    .replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&apos;");
+  const data = ca.raw.toString('base64').match(/.{1,64}/g).join('\\n');
+  const profile = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>PayloadContent</key>
+  <array>
+    <dict>
+      <key>PayloadCertificateFileName</key><string>SmartInventoryLocalCA.cer</string>
+      <key>PayloadContent</key><data>
+${data}
+      </data>
+      <key>PayloadDescription</key><string>${escapeXml('Local CA certificate. Verify the SHA-256 fingerprint with the Gateway administrator before installation.')}</string>
+      <key>PayloadDisplayName</key><string>Smart Inventory Local CA</string>
+      <key>PayloadIdentifier</key><string>com.smartinventory.gateway.rootca</string>
+      <key>PayloadType</key><string>com.apple.security.root</string>
+      <key>PayloadUUID</key><string>${uuid}</string>
+      <key>PayloadVersion</key><integer>1</integer>
+    </dict>
+  </array>
+  <key>PayloadDescription</key><string>Installs the Smart Inventory local root CA. Full trust must be enabled manually in iOS Settings.</string>
+  <key>PayloadDisplayName</key><string>Smart Inventory Gateway CA</string>
+  <key>PayloadIdentifier</key><string>com.smartinventory.gateway.ca.profile</string>
+  <key>PayloadOrganization</key><string>Smart Inventory Studio</string>
+  <key>PayloadRemovalDisallowed</key><false/>
+  <key>PayloadType</key><string>Configuration</string>
+  <key>PayloadUUID</key><string>${randomUUID().toUpperCase()}</string>
+  <key>PayloadVersion</key><integer>1</integer>
+</dict>
+</plist>
+`;
   await writeFile(certificatePath,await readFile(caCertPath),{flag:'w'});
-  await writeFile(profilePath,Buffer.from(JSON.stringify(profile,null,2)+'\n'),{flag:'w'});
+  await writeFile(profilePath,profile,{flag:'w'});
   return {certificatePath,profilePath,fingerprint:fingerprint(ca)};
 }

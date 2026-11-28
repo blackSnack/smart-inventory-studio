@@ -29,12 +29,14 @@ test('creates persistent root CA and serverAuth leaf; exports only public CA and
   const out=join(f.directory,'export');
   const exported=await exportLocalCa({caCertPath:first.caCertPath,outDir:out});
   assert.equal(exported.fingerprint,first.caFingerprint);
-  const profile=JSON.parse(await readFile(exported.profilePath,'utf8'));
-  assert.equal(profile.PayloadType,'Configuration');
-  assert.equal(profile.PayloadContent[0].PayloadType,'com.apple.security.root');
-  assert.equal(profile.PayloadContent[0].PayloadContent,ca.raw.toString('base64'));
-  assert.ok(!JSON.stringify(profile).includes('PRIVATE KEY'));
-  assert.ok(!JSON.stringify(profile).includes('root-ca.key'));
+  const profile=await readFile(exported.profilePath,'utf8');
+  assert.match(profile,/^<\\?xml version="1.0" encoding="UTF-8"\\?>/);
+  assert.match(profile,/<plist version="1.0">/);
+  assert.match(profile,/<key>PayloadType<\\/key><string>Configuration<\\/string>/);
+  assert.match(profile,/<key>PayloadType<\\/key><string>com\\.apple\\.security\\.root<\\/string>/);
+  assert.ok(profile.includes(ca.raw.toString('base64')));
+  assert.ok(!profile.includes('PRIVATE KEY'));
+  assert.ok(!profile.includes('root-ca.key'));
 });
 
 test('serializes concurrent initialization and preserves a single root CA',async t=>{
