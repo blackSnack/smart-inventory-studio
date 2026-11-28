@@ -54,7 +54,7 @@ test('trusted local HTTPS, rejects unknown CA and business routes across server 
 });
 test('invalid configuration and TLS fail closed',async t=>{
   const f=await fixture(t);
-  await assert.rejects(createGateway({...f.config,host:'0.0.0.0'}),/LAN binding/);
+  await assert.rejects(createGateway({...f.config,host:'0.0.0.0'}),/private or loopback IP address/);
   await assert.rejects(createGateway({...f.config,host:'::1'}),/wrong IP SAN/);
   await assert.rejects(createGateway({...f.config,tls:{...f.config.tls,key:join(f.dir,'ca.key')}}),/invalid or mismatched/);
   await assert.rejects(createGateway({...f.config,tls:{...f.config.tls,cert:join(f.dir,'missing.crt')}}),/TLS certificate or private key is missing/);
