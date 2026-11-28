@@ -1,5 +1,21 @@
 param([Parameter(Mandatory=$true)][string]$PackageDirectory,[Parameter(Mandatory=$true)][string]$Workspace)
 $ErrorActionPreference='Stop'
+$script:capturedFirewall=$null
+$script:capturedTask=$null
+function Get-NetFirewallRule { [CmdletBinding()] param([string]$DisplayName) return $null }
+function Remove-NetFirewallRule { param([string]$DisplayName) }
+function New-NetFirewallRule {
+  param([string]$DisplayName,[string]$Direction,[string]$Action,[string]$Enabled,[string]$Program,[string]$Protocol,[string]$LocalAddress,[int]$LocalPort,[string]$RemoteAddress,[string]$Profile)
+  $script:capturedFirewall=@{DisplayName=$DisplayName;Direction=$Direction;Action=$Action;Enabled=$Enabled;Program=$Program;Protocol=$Protocol;LocalAddress=$LocalAddress;LocalPort=$LocalPort;RemoteAddress=$RemoteAddress;Profile=$Profile}
+}
+function Get-ScheduledTask { [CmdletBinding()] param([string]$TaskName) return $null }
+function New-ScheduledTaskAction { param($Execute,$Argument,$WorkingDirectory); return @{Execute=$Execute;Argument=$Argument;WorkingDirectory=$WorkingDirectory} }
+function New-ScheduledTaskTrigger { param([switch]$AtLogOn,$User); return @{AtLogOn=$AtLogOn.IsPresent;User=$User} }
+function New-ScheduledTaskPrincipal { param($UserId,$LogonType,$RunLevel); return @{UserId=$UserId;LogonType=$LogonType;RunLevel=$RunLevel} }
+function New-ScheduledTaskSettingsSet { param([switch]$StartWhenAvailable,[switch]$AllowStartIfOnBatteries,[switch]$DontStopIfGoingOnBatteries); return @{StartWhenAvailable=$StartWhenAvailable.IsPresent} }
+function Register-ScheduledTask { param($TaskName,$Action,$Trigger,$Principal,$Settings,[switch]$Force); $script:capturedTask=@{TaskName=$TaskName;Action=$Action;Trigger=$Trigger;Principal=$Principal;Settings=$Settings} }
+function Unregister-ScheduledTask { [CmdletBinding()] param([string]$TaskName,[switch]$Confirm) }
+
 $package=(Resolve-Path $PackageDirectory).Path
 $workspace=[System.IO.Path]::GetFullPath($Workspace)
 $install=Join-Path $workspace 'installed-gateway'
@@ -59,6 +75,17 @@ $stop=Join-Path $install 'Stop-Gateway.ps1'
 & $start -DataDirectory $data
 & $node $healthScript $port $ca
 if($LASTEXITCODE -ne 0){throw 'Packaged HTTPS health smoke failed.'}
+
+# Complete first-run setup over HTTPS with a synthetic password and the exported CA; no TLS bypass.
+$setupScript=Join-Path $install 'Complete-FirstRunSetup.ps1'
+$syntheticPassword=ConvertTo-SecureString 'Synthetic-Gateway-Password-2026!' -AsPlainText -Force
+& $setupScript -DataDirectory $data -Password $syntheticPassword
+if(Test-Path (Join-Path $data 'setup-token.txt')){throw 'First-run setup token was not consumed.'}
+$endpointFile=Join-Path $data 'gateway.endpoint.txt'
+if(-not(Test-Path $endpointFile)){throw 'Configured HTTPS endpoint was not persisted.'}
+if((Get-Content $endpointFile -Raw).Trim() -ne ('https://127.0.0.1:'+ $port)){throw 'Persisted HTTPS endpoint does not match the configured listener.'}
+if($script:capturedTask){throw 'Autostart was registered despite -NoAutostart.'}
+
 & $stop -DataDirectory $data
 
 # Upgrade in place must preserve the CA root and the persistent encryption/database files.
@@ -79,4 +106,22 @@ if(Test-Path $install){throw 'Uninstall did not remove Gateway binaries.'}
 foreach($path in @((Join-Path $data 'secret.key'),(Join-Path $data 'gateway.sqlite'),(Join-Path $data 'tls\root-ca.key'))){
   if(-not(Test-Path $path)){throw "Uninstall removed persistent state unexpectedly: $path"}
 }
-Write-Output "Windows package smoke passed. Node=$nodeVersion OpenSSL=$opensslVersion CA fingerprint=$fingerprint"
+# Exercise explicit LAN/firewall/autostart consent with synthetic addresses and mocked OS commands.
+$policyDeniedInstall=Join-Path $workspace 'policy-denied-install'
+$policyDeniedData=Join-Path $workspace 'policy-denied-data'
+try{
+  & $installer -InstallDirectory $policyDeniedInstall -DataDirectory $policyDeniedData -BindAddress '192.168.50.25' -Port 18443 -NoStart
+  throw 'LAN binding was accepted without explicit -EnableLan consent.'
+}catch{
+  if($_.Exception.Message -notmatch 'LAN binding requires the explicit -EnableLan switch'){throw}
+}
+if($script:capturedFirewall){throw 'Firewall rule was created without explicit LAN consent.'}
+$policyInstall=Join-Path $workspace 'policy-install'
+$policyData=Join-Path $workspace 'policy-data'
+$script:capturedFirewall=$null;$script:capturedTask=$null
+& $installer -InstallDirectory $policyInstall -DataDirectory $policyData -BindAddress '192.168.50.25' -Port 18443 -EnableLan -EnableAutostart -NoStart
+if(-not $script:capturedFirewall -or $script:capturedFirewall.LocalAddress -ne '192.168.50.25' -or $script:capturedFirewall.LocalPort -ne 18443 -or $script:capturedFirewall.Profile -ne 'Private' -or $script:capturedFirewall.RemoteAddress -ne 'LocalSubnet' -or $script:capturedFirewall.Program -ne (Join-Path $policyInstall 'runtime\node.exe')){throw 'LAN firewall rule is not restricted to the explicit private bind and local subnet.'}
+if(-not $script:capturedTask -or $script:capturedTask.TaskName -ne 'Smart Inventory Gateway' -or $script:capturedTask.Trigger.AtLogOn -ne $true){throw 'Explicit optional autostart did not register the expected per-user logon task.'}
+$policyEndpoint=Get-Content (Join-Path $policyData 'gateway.endpoint.txt') -Raw
+if($policyEndpoint.Trim() -ne 'https://192.168.50.25:18443'){throw 'Stable configured endpoint does not match the selected bind address.'}
+Write-Output "Windows package smoke passed. Node=$nodeVersion OpenSSL=$opensslVersion CA fingerprint=$fingerprint; first-run HTTPS setup, explicit LAN policy and optional autostart verified with synthetic data and mocked OS commands."

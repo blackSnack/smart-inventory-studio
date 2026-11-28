@@ -20,16 +20,27 @@ This ZIP contains a self-contained Node.js 22 and OpenSSL 3 runtime. It does not
 
    Replace the example address with the address assigned to this PC. Do not use `0.0.0.0`, a public IP, a link-local address or an address copied from another device. The installer does not scan network interfaces or change the Windows network profile.
 
-The LAN firewall rule is restricted to the selected local address, TCP port, **Private** network profile and `LocalSubnet` remote addresses. If Windows currently classifies the network as Public, the rule will not open it; change the network profile yourself only if this is a trusted private network. No public-profile rule is created.
+`-EnableLan` is the explicit consent to expose the selected address and create a firewall rule. `-NoFirewall` skips rule creation. The LAN firewall rule is restricted to the selected local address, TCP port, **Private** network profile and `LocalSubnet` remote addresses. The configured endpoint is written to `gateway.endpoint.txt`; for a stable address across router restarts, reserve the selected address for this PC in the router or configure a static address yourself. The installer does not change network settings. If Windows currently classifies the network as Public, the rule will not open it; change the network profile yourself only if this is a trusted private network. No public-profile rule is created.
 
 Default paths:
 
 - Binaries: `C:\Program Files\SmartInventoryGateway`
 - Persistent data and configuration: `C:\ProgramData\SmartInventoryGateway\data`
 - First-run setup token: `C:\ProgramData\SmartInventoryGateway\data\setup-token.txt`
+- Advertised HTTPS endpoint: `gateway.endpoint.txt` in the data directory
 - Logs: `gateway.log` and `gateway-error.log` in the data directory
 
 The data directory ACL is restricted to the installing account and SYSTEM. The installer does not import certificates into Windows or iOS trust stores.
+
+## First-run administrator setup
+
+After installation starts the Gateway, run the setup helper from the installed directory. It reads the one-time token from the protected data directory, prompts for a password (minimum 12 characters), and posts the setup request over HTTPS using the Gateway's local CA certificate. It does not disable TLS validation or add the CA to the Windows trust store:
+
+```powershell
+& 'C:\Program Files\SmartInventoryGateway\Complete-FirstRunSetup.ps1' -DataDirectory 'C:\ProgramData\SmartInventoryGateway\data'
+```
+
+The helper does not persist the administrator password or session. Sign in using the configured password when the PWA is available.
 
 ## Local CA and iPhone trust
 
