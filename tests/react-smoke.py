@@ -6,6 +6,7 @@ from functools import partial
 from threading import Thread
 from playwright.sync_api import sync_playwright
 root=Path(__file__).resolve().parents[1]/'web'/'dist'
+artifacts=Path('artifacts');artifacts.mkdir(exist_ok=True)
 server=ThreadingHTTPServer(('127.0.0.1',0),partial(SimpleHTTPRequestHandler,directory=str(root)))
 Thread(target=server.serve_forever,daemon=True).start()
 requests=[]
@@ -41,7 +42,13 @@ class Gateway(BaseHTTPRequestHandler):
    requests.append('valid-photo-post')
    if len(requests)==1:
     self.send_response(503);self.cors();self.end_headers();return
-   draft={'kind':'package','readability':'clear','rawText':'LCSC C123456 · AI 33k resistor · SMD resistor · 33kΩ ±1% 0603 QTY: 7','name':'AI 33k resistor','manufacturer':None,'mpn':None,'supplier':'LCSC','sku':'C123456','category':'capacitor.ceramic','parameters':{'resistance':'33kΩ','tolerance':'±1%','package':'0603','rated_power':'0.125 W'}}
+if len(requests)==3:
+    draft={'kind':'multiple','readability':'partial','rawText':'Two separate packages visible in one synthetic photo','parameters':{},'packages':[
+     {'readability':'clear','rawText':'YAGEO RC0603FR-0710KL 10kΩ 0603 10 PCS 贴片电阻','name':'YAGEO resistor','manufacturer':'YAGEO','mpn':'RC0603FR-0710KL','supplier':None,'sku':None,'category':'resistor.smd','parameters':{'resistance':'10kΩ','package':'0603'}},
+     {'readability':'partial','rawText':'NOBRAND-001 0603 20 PCS','name':'NOBRAND-001','manufacturer':None,'mpn':'NOBRAND-001','supplier':None,'sku':None,'category':'resistor.smd','parameters':{'package':'0603'}}
+    ]}
+   else:
+    draft={'kind':'package','readability':'clear','rawText':'LCSC C123456 · AI 33k resistor · SMD resistor · 33kΩ ±1% 0603 QTY: 7','name':'AI 33k resistor','manufacturer':None,'mpn':None,'supplier':'LCSC','sku':'C123456','category':'capacitor.ceramic','parameters':{'resistance':'33kΩ','tolerance':'±1%','package':'0603','rated_power':'0.125 W'}}
    response=json.dumps({'choices':[{'message':{'content':json.dumps(draft)}}]}).encode()
    self.send_response(200);self.cors();self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(response)));self.end_headers();self.wfile.write(response)
   except Exception:
@@ -126,6 +133,14 @@ try:
   page.get_by_label('已核对草稿和来源',exact=False).check();page.get_by_role('button',name='核对已有库存').click();page.get_by_role('button',name='确认独立建档').click()
   assert page.get_by_label('本次入库数量').input_value()=='7';page.get_by_role('button',name='确认实际数量',exact=True).click();page.get_by_role('button',name='添加存放位置').click();page.get_by_label('搜索空闲或同元件库位').fill('B-02');page.get_by_role('button',name='选择库位 B-02').click();page.get_by_label('已确认独立档案及实际存放空间',exact=False).check();page.get_by_role('button',name='确认入库',exact=True).click()
   page.get_by_role('button',name='元件',exact=True).click();page.get_by_role('textbox',name='全局搜索').fill('AI 33k');page.get_by_text('7 件',exact=True).wait_for();page.get_by_role('button',name='首页',exact=True).click()
+  page.get_by_role('button',name='拍照录入').click();page.get_by_test_id('receipt-camera').set_input_files({'name':'multi-package.png','mimeType':'image/png','buffer':label_png()});page.get_by_role('button',name='识别元件',exact=True).click();page.get_by_role('heading',name='核对元件资料').wait_for();page.get_by_role('button',name='选择包装 1',exact=True).wait_for();page.get_by_role('button',name='选择包装 2',exact=True).wait_for()
+  page.screenshot(path=str(artifacts/'ai-intake-multiple-packages.png'),full_page=True)
+  page.get_by_role('button',name='选择包装 1',exact=True).click();assert page.get_by_label('MPN',exact=True).input_value()=='RC0603FR-0710KL';assert page.get_by_label('制造商',exact=True).input_value()=='YAGEO';assert page.get_by_label('SKU',exact=True).input_value()==''
+  page.get_by_role('button',name='选择其他包装',exact=True).click();page.get_by_role('button',name='选择包装 2',exact=True).click();assert page.get_by_label('MPN',exact=True).input_value()=='NOBRAND-001';assert page.get_by_label('制造商',exact=True).input_value()=='';assert page.get_by_label('供应商',exact=True).input_value()=='';assert page.get_by_label('SKU',exact=True).input_value()==''
+  page.get_by_text('只识别到部分型号',exact=False).wait_for();page.get_by_text('标签分类尚未映射',exact=False).wait_for();page.get_by_text('视觉分类候选：resistor.smd（未自动采用）',exact=True).wait_for();assert page.get_by_label('元件分类',exact=True).input_value()==''
+  page.screenshot(path=str(artifacts/'ai-intake-unbranded-unmapped.png'),full_page=True)
+  page.get_by_label('元件分类',exact=True).select_option('resistor.smd');assert page.get_by_text('标签分类尚未映射',exact=False).count()==0
+  page.get_by_role('button',name='首页',exact=True).click()
   # Create an exact source-reviewed record, then enrich only missing fields.
   page.get_by_role('button',name='仓储',exact=True).click();page.get_by_role('button',name='批量建库').click();batch=page.get_by_role('dialog');batch.get_by_label('CSV 内容').fill('name,category,manufacturer,mpn,source_url,param:resistance\nExact 47k,resistor.smd,Example,R-47K,https://example.test/r,47kΩ');batch.get_by_role('button',name='生成批量预览').click();batch.get_by_label('已核对草稿资料',exact=False).check();batch.get_by_role('button',name='确认建档（1）').click();batch.wait_for(state='hidden')
   page.get_by_role('button',name='元件',exact=True).click();page.get_by_role('textbox',name='全局搜索').fill('Exact 47k');page.get_by_text('0 件',exact=True).wait_for();page.locator('button.studio-result').filter(has_text='Exact 47k').click();page.get_by_role('dialog').get_by_role('button',name='补全资料',exact=True).click()

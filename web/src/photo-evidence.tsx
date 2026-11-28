@@ -41,6 +41,7 @@ export async function decodePhoto(file:File,bounds?:LabelBounds):Promise<{codes:
      try{const crop=await photoData(file,candidate.bounds),second=await provider.extract(crop,catalog,current.codes,signal);if(second.kind==='package')current=mergeLabelEvidence(current,second)}catch{if(signal?.aborted)throw Error('cancelled');current={...current,cropRetried:true}}
     }
    }
+   if(current.kind!=='package')throw Error('invalid package candidate state');
    const {packages:_nested,...fields}=current;candidates.push({...fields,id:candidate.id});
   }
   evidence={...evidence,packages:candidates};
@@ -49,7 +50,6 @@ export async function decodePhoto(file:File,bounds?:LabelBounds):Promise<{codes:
   if(evidence.readability!=='clear'){progress?.('复核标签特写…');try{const crop=await photoData(file,bounds);const second=await provider.extract(crop,catalog,evidence.codes,signal);evidence=mergeLabelEvidence(evidence,second)}catch{if(signal?.aborted)throw Error('cancelled');evidence={...evidence,cropRetried:true}}}
  }
  return {evidence,status}
-}signal?.aborted)throw Error('cancelled');evidence={...evidence,cropRetried:true}}}}return {evidence,status}
 }
 export function PhotoEvidence({evidence,status,onSelectPackage}:{evidence:LabelEvidence;status:DecodeStatus;onSelectPackage?:(candidate:PackageCandidate)=>void}){
  const hint=evidence.kind==='multiple'?'检测到多个包装。每个包装独立列出，选择一个后单独审核；不同标签不会合并。':evidence.kind==='bare'?'裸元件仅提供类别候选，具体型号和参数需要人工确认。':evidence.kind!=='package'||evidence.readability==='unreadable'?'没有可靠标签，请重新拍摄或手动填写。':evidence.readability==='partial'?'标签部分可读，请核对型号、数量和缺失字段。':'请对照原始标签确认识别值。';
@@ -58,8 +58,8 @@ export function PhotoEvidence({evidence,status,onSelectPackage}:{evidence:LabelE
  {evidence.kind==='package'&&evidence.cropRetried&&<p className="text-xs text-muted">已尝试原始照片标签特写复核。</p>}
  {evidence.kind==='package'&&lcscLabelCodes(evidence.codes).map((v,i)=><p key={'lcsc'+i} className="text-sm">立创编码：{v.sku} · {v.mpn} · {v.quantity} 件（待确认）</p>)}
  {evidence.kind==='package'&&evidence.candidateCategory&&!evidence.draft.category&&<p className="text-sm text-muted">视觉分类候选：{evidence.candidateCategory}（未自动采用）</p>}
- {evidence.kind==='package'&&!evidence.draft.category&&<p className="text-sm text-warn">标签分类尚未映射。原始文字和可见参数会保留；请人工选择正确分类，不会强行套用其他分类。</p>}
- {evidence.kind==='package'&&!hasStrongPhotoIdentity(evidence.draft)&&(evidence.draft.mpn||evidence.draft.sku)&&<p className="text-sm text-warn">当前只有部分型号，缺少可核验的制造商型号或供应商料号组合。不会自动复用已有元件；可按部分身份独立建档。</p>}
+
+
  {evidence.kind==='package'&&evidence.quantity!==null&&<p className="text-sm">包装标记数量：{evidence.quantity} 件 · 待确认</p>}
  {evidence.kind==='package'&&evidence.conflicts.map(v=><p key={v} role="alert" className="text-sm text-warn">{v}</p>)}
  <details className="space-y-2"><summary className="cursor-pointer min-h-11">原始标签文字与编码</summary><pre className="whitespace-pre-wrap break-words text-sm">{evidence.rawText||'无可读文字'}</pre><p className="text-sm text-muted">{status==='unsupported'?'浏览器不支持本地解码；继续使用标签文字。':status==='failed'?'编码解码失败；继续使用标签文字。':status==='none'?'未读到编码。':'已读取编码（不自动视为商品编号）'}</p>{evidence.codes.map((c,i)=><p key={i} className="text-sm break-all">{c.format}：{parseLcscLabelCode(c.raw)?'立创商品编码（订单字段已隐藏）':c.raw}</p>)}</details>
