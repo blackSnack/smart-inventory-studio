@@ -14,11 +14,13 @@ async function fixture(t,value) {
 }
 
 test('loads local CA mode with a private persistent data directory',async t=>{
-  const f=await fixture(t,{host:'127.0.0.1',port:8443,dataDir:'./state',tls:{mode:'local-ca',renewBeforeDays:30}});
+  const f=await fixture(t,{host:'127.0.0.1',port:8443,dataDir:'./state',tls:{mode:'local-ca',renewBeforeDays:30,opensslPath:'./runtime/openssl.exe',opensslConfigPath:'./runtime/openssl.cnf'}});
   const config=await loadConfig(f.path);
   assert.equal(config.tls.mode,'local-ca');
   assert.equal(config.dataDir,join(f.directory,'state'));
   assert.equal(config.tls.renewBeforeDays,30);
+  assert.equal(config.tls.opensslPath,join(f.directory,'runtime/openssl.exe'));
+  assert.equal(config.tls.opensslConfigPath,join(f.directory,'runtime/openssl.cnf'));
 });
 
 test('preserves the supplied-certificate configuration contract',async t=>{
