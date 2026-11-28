@@ -1,6 +1,7 @@
 import {randomUUID, createPrivateKey, X509Certificate} from 'node:crypto';
 import {lstat, mkdir, open, readFile, rename, rm, writeFile} from 'node:fs/promises';
 import {isIP} from 'node:net';
+import {isPrivateOrLoopbackAddress} from './network-address.mjs';
 import {join, resolve} from 'node:path';
 import {runOpenSsl} from './openssl.mjs';
 import {securePrivateDirectory,writePrivateFile} from './private-storage.mjs';
@@ -9,12 +10,6 @@ const SERVER_AUTH = '1.3.6.1.5.5.7.3.1';
 const CA_DAYS = 3650;
 const LEAF_DAYS = 397;
 
-function validHost(host) {
-  if (typeof host !== 'string' || !host || host.length > 253 || /[\r\n/\\\s]/.test(host)) return false;
-  if (isIP(host)) return true;
-  return host.split('.').every(label => label.length > 0 && label.length <= 63 &&
-    /^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/.test(label));
-}
 
 function fingerprint(cert) {
   return cert.fingerprint256.replaceAll(':', '').toUpperCase();
@@ -50,16 +45,16 @@ function validateLeaf(certBytes, keyBytes, ca, host, now) {
 }
 
 
-async function createRoot(directory, executable) {
+async function createRoot(directory, tlsConfig) {
   const temporary = join(directory, '.root-' + randomUUID());
   await mkdir(temporary, {mode: 0o700});
   try {
-    await runOpenSsl(executable, ['genpkey','-algorithm','RSA','-pkeyopt','rsa_keygen_bits:3072','-out','root-ca.key'], temporary);
-    await runOpenSsl(executable, ['req','-x509','-new','-key','root-ca.key','-sha256','-days',String(CA_DAYS),
+    await runOpenSsl(tlsConfig.opensslPath, ['genpkey','-algorithm','RSA','-pkeyopt','rsa_keygen_bits:3072','-out','root-ca.key'], temporary,tlsConfig.opensslConfigPath);
+    await runOpenSsl(tlsConfig.opensslPath, ['req','-x509','-new','-key','root-ca.key','-sha256','-days',String(CA_DAYS),
       '-out','root-ca.crt','-subj','/CN=Smart Inventory Local Gateway Root CA',
       '-addext','basicConstraints=critical,CA:TRUE,pathlen:0',
       '-addext','keyUsage=critical,keyCertSign,cRLSign',
-      '-addext','subjectKeyIdentifier=hash'], temporary);
+      '-addext','subjectKeyIdentifier=hash'], temporary, tlsConfig.opensslConfigPath);
     const key = await readFile(join(temporary,'root-ca.key'));
     const cert = await readFile(join(temporary,'root-ca.crt'));
     validateCa(cert,key,Date.now());
@@ -70,7 +65,7 @@ async function createRoot(directory, executable) {
   }
 }
 
-async function createLeaf(directory, executable, host) {
+async function createLeaf(directory, tlsConfig, host) {
   const temporary = join(directory, '.leaf-' + randomUUID());
   await mkdir(temporary,{mode:0o700});
   try {
@@ -88,11 +83,11 @@ async function createLeaf(directory, executable, host) {
       ''
     ].join('\n');
     await writeFile(join(temporary,'server.ext'),extension,{flag:'wx'});
-    await runOpenSsl(executable,['genpkey','-algorithm','EC','-pkeyopt','ec_paramgen_curve:P-256','-out','server.key'],temporary);
-    await runOpenSsl(executable,['req','-new','-key','server.key','-out','server.csr','-subj','/CN='+host],temporary);
-    await runOpenSsl(executable,['x509','-req','-in','server.csr','-CA',join(directory,'root-ca.crt'),
+    await runOpenSsl(tlsConfig.opensslPath,['genpkey','-algorithm','EC','-pkeyopt','ec_paramgen_curve:P-256','-out','server.key'],temporary,tlsConfig.opensslConfigPath);
+    await runOpenSsl(tlsConfig.opensslPath,['req','-new','-key','server.key','-out','server.csr','-subj','/CN='+host],temporary,tlsConfig.opensslConfigPath);
+    await runOpenSsl(tlsConfig.opensslPath,['x509','-req','-in','server.csr','-CA',join(directory,'root-ca.crt'),
       '-CAkey',join(directory,'root-ca.key'),'-CAcreateserial','-out','server.crt','-days',String(LEAF_DAYS),
-      '-sha256','-extfile','server.ext','-extensions','server_cert'],temporary);
+      '-sha256','-extfile','server.ext','-extensions','server_cert'],temporary,tlsConfig.opensslConfigPath);
     const cert = await readFile(join(temporary,'server.crt'));
     const key = await readFile(join(temporary,'server.key'));
     const ca = new X509Certificate(await readFile(join(directory,'root-ca.crt')));
@@ -132,7 +127,7 @@ async function withCertificateLock(directory, action) {
 
 export async function ensureLocalCertificates(config, now) {
   const host = config.host;
-  if (!validHost(host)) throw new Error('Invalid TLS certificate host');
+  if (!isPrivateOrLoopbackAddress(host)) throw new Error('TLS certificate host must be a private or loopback IP address');
   const directory = resolve(config.dataDir,'tls');
   await securePrivateDirectory(directory);
   return withCertificateLock(directory,async()=>{
@@ -144,7 +139,7 @@ export async function ensureLocalCertificates(config, now) {
     try { await lstat(path); return true; } catch (e) { if (e.code === 'ENOENT') return false; throw e; }
   }));
   if (hasCaCert !== hasCaKey) throw new Error('Local CA is incomplete; refusing silent replacement. Explicit recovery is required.');
-  if (!hasCaCert) await createRoot(directory,config.tls.opensslPath);
+  if (!hasCaCert) await createRoot(directory,config.tls);
 
   // Capture wall-clock time after waiting for the lock and after first-time CA creation.
   // Capturing it at function entry can predate the freshly issued certificate's notBefore.
@@ -157,7 +152,7 @@ export async function ensureLocalCertificates(config, now) {
   } catch {}
   const renewBeforeDays = config.tls.renewBeforeDays ?? 30;
   if (!leaf || Date.parse(leaf.validTo) - validationTime <= renewBeforeDays * 86400000) {
-    await createLeaf(directory,config.tls.opensslPath,host);
+    await createLeaf(directory,config.tls,host);
     leaf = new X509Certificate(await readFile(serverCertPath));
   }
   return {caCertPath,caKeyPath,caFingerprint:fingerprint(ca),certPath:serverCertPath,keyPath:serverKeyPath,
