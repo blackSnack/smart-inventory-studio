@@ -146,7 +146,7 @@ async function withCertificateLock(directory, action) {
   finally { await rm(lockPath,{force:true}); }
 }
 
-export async function ensureLocalCertificates(config, now = Date.now()) {
+export async function ensureLocalCertificates(config, now) {
   const host = config.host;
   if (!validHost(host)) throw new Error('Invalid TLS certificate host');
   const directory = resolve(config.dataDir,'tls');
@@ -165,14 +165,17 @@ export async function ensureLocalCertificates(config, now = Date.now()) {
   if (hasCaCert !== hasCaKey) throw new Error('Local CA is incomplete; refusing silent replacement. Explicit recovery is required.');
   if (!hasCaCert) await createRoot(directory,config.tls.opensslPath);
 
-  const ca = validateCa(await readFile(caCertPath),await readFile(caKeyPath),now);
+  // Capture wall-clock time after waiting for the lock and after first-time CA creation.
+  // Capturing it at function entry can predate the freshly issued certificate's notBefore.
+  const validationTime = now ?? Date.now();
+  const ca = validateCa(await readFile(caCertPath),await readFile(caKeyPath),validationTime);
   let leaf = null;
   try {
     const [cert,key] = await Promise.all([readFile(serverCertPath),readFile(serverKeyPath)]);
-    leaf = validateLeaf(cert,key,ca,host,now);
+    leaf = validateLeaf(cert,key,ca,host,validationTime);
   } catch {}
   const renewBeforeDays = config.tls.renewBeforeDays ?? 30;
-  if (!leaf || Date.parse(leaf.validTo) - now <= renewBeforeDays * 86400000) {
+  if (!leaf || Date.parse(leaf.validTo) - validationTime <= renewBeforeDays * 86400000) {
     await createLeaf(directory,config.tls.opensslPath,host);
     leaf = new X509Certificate(await readFile(serverCertPath));
   }
