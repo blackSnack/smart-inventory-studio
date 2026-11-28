@@ -71,7 +71,7 @@ export class GatewayStore {
         CREATE TABLE IF NOT EXISTS gateway_journals(instance_id TEXT NOT NULL,plan_id TEXT NOT NULL,revision INTEGER NOT NULL,journal_json TEXT NOT NULL,updated_at INTEGER NOT NULL,PRIMARY KEY(instance_id,plan_id));
         CREATE TABLE IF NOT EXISTS gateway_journal_operation_ids(instance_id TEXT NOT NULL,operation_id TEXT NOT NULL,plan_id TEXT NOT NULL,PRIMARY KEY(instance_id,operation_id),FOREIGN KEY(instance_id,plan_id) REFERENCES gateway_journals(instance_id,plan_id) ON DELETE CASCADE);
       `);
-      await chmod(databasePath,0o600).catch(()=>{});
+      if(process.platform!=='win32')await chmod(databasePath,0o600);
       const store=new GatewayStore(directory,db,key);
       await store.ensureSetupToken();
       return store;
