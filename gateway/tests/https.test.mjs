@@ -18,7 +18,7 @@ async function fixture(t) {
   run(dir,['req','-x509','-newkey','rsa:2048','-nodes','-days','2','-keyout','ca.key','-out','ca.crt','-config','root.cnf']);
   run(dir,['req','-new','-newkey','rsa:2048','-nodes','-subj','/CN=Gateway Test','-keyout','server.key','-out','server.csr']);
   run(dir,['x509','-req','-in','server.csr','-CA','ca.crt','-CAkey','ca.key','-CAcreateserial','-days','1','-out','server.crt','-extfile','leaf.cnf','-extensions','leaf']);
-  await writeFile(join(dir,'client-only.cnf'),'[client]\\nbasicConstraints=critical,CA:false\\nkeyUsage=critical,digitalSignature,keyEncipherment\\nextendedKeyUsage=clientAuth\\nsubjectAltName=IP:127.0.0.1\\n');
+  await writeFile(join(dir,'client-only.cnf'),'[client]\nbasicConstraints=critical,CA:false\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=clientAuth\nsubjectAltName=IP:127.0.0.1\n');
   run(dir,['x509','-req','-in','server.csr','-CA','ca.crt','-CAkey','ca.key','-CAserial','ca.srl','-days','1','-out','client-only.crt','-extfile','client-only.cnf','-extensions','client']);
   const file=join(dir,'config.json');
   const raw={host:'127.0.0.1',port:8443,tls:{cert:'server.crt',key:'server.key'}};
@@ -53,8 +53,8 @@ test('trusted local HTTPS, rejects unknown CA and business routes across server 
 test('invalid configuration and TLS fail closed',async t=>{
   const f=await fixture(t);
   await assert.rejects(createGateway({...f.config,host:'0.0.0.0'}),/LAN binding/);
-  await assert.rejects(createGateway({...f.config,host:'::1'}),/TLS material/);
-  await assert.rejects(createGateway({...f.config,tls:{...f.config.tls,key:join(f.dir,'ca.key')}}),/TLS material/);
+  await assert.rejects(createGateway({...f.config,host:'::1'}),/wrong IP SAN/);
+  await assert.rejects(createGateway({...f.config,tls:{...f.config.tls,key:join(f.dir,'ca.key')}}),/invalid or mismatched/
   await assert.rejects(createGateway({...f.config,tls:{...f.config.tls,cert:join(f.dir,'missing.crt')}}),/TLS certificate or private key is missing/);
   await assert.rejects(createGateway({...f.config,tls:{...f.config.tls,cert:f.clientOnlyCert}}),/does not permit TLS server authentication/);
   await writeFile(f.file,JSON.stringify({...f.raw,host:'0.0.0.0'}));
