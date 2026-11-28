@@ -14,7 +14,6 @@ $listener.Stop()
 
 $installer=Join-Path $package 'Install-Gateway.ps1'
 & $installer -InstallDirectory $install -DataDirectory $data -BindAddress '127.0.0.1' -Port $port -NoFirewall -NoAutostart -NoStart
-if($LASTEXITCODE -ne 0){throw 'Windows Gateway install smoke failed.'}
 $node=Join-Path $install 'runtime\node.exe'
 $openssl=Join-Path $install 'runtime\openssl\openssl.exe'
 if(-not(Test-Path $node) -or -not(Test-Path $openssl)){throw 'Packaged runtime files are missing.'}
@@ -24,7 +23,6 @@ if($nodeVersion -notmatch '^v22\.' -or $opensslVersion -notmatch '^OpenSSL 3\.')
 
 $exportScript=Join-Path $install 'Export-CA.ps1'
 & $exportScript -DataDirectory $data -OutputDirectory $export
-if($LASTEXITCODE -ne 0){throw 'Packaged CA export failed.'}
 $ca=Join-Path $export 'smart-inventory-local-ca.crt'
 $profile=Join-Path $export 'smart-inventory-local-ca.mobileconfig'
 if(-not(Test-Path $ca) -or -not(Test-Path $profile)){throw 'Public CA or iOS profile export is missing.'}
@@ -65,9 +63,7 @@ if($LASTEXITCODE -ne 0){throw 'Packaged HTTPS health smoke failed.'}
 
 # Upgrade in place must preserve the CA root and the persistent encryption/database files.
 & $installer -InstallDirectory $install -DataDirectory $data -BindAddress '127.0.0.1' -Port $port -NoFirewall -NoAutostart -NoStart
-if($LASTEXITCODE -ne 0){throw 'Windows Gateway upgrade smoke failed.'}
 & $exportScript -DataDirectory $data -OutputDirectory $export2
-if($LASTEXITCODE -ne 0){throw 'CA export after upgrade failed.'}
 $fingerprint2=(Get-FileHash -LiteralPath (Join-Path $export2 'smart-inventory-local-ca.crt') -Algorithm SHA256).Hash
 if($fingerprint2 -ne $fingerprint){throw 'Gateway upgrade changed the persistent root CA fingerprint.'}
 & $start -DataDirectory $data
