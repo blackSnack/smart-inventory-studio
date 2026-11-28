@@ -9,10 +9,12 @@ import {GatewayStore} from '../src/gateway-store.mjs';
 
 async function fixture(t) {
   const directory=await mkdtemp(join(tmpdir(),'gateway-journal-'));
-  t.after(()=>rm(directory,{recursive:true,force:true}));
-  const store=await GatewayStore.open(directory);
-  t.after(()=>{try{store.close()}catch{}});
-  return {directory,store};
+  const store=await GatewayStore.open(directory),stores=[store];
+  t.after(async()=>{
+    for(const item of stores){try{item.close()}catch{}}
+    await rm(directory,{recursive:true,force:true});
+  });
+  return {directory,store,register:item=>stores.push(item)};
 }
 function plan(id,operationId,instanceId='inventree-a') {
   return {id,instanceId,catalogHash:'catalog-v1',snapshotHash:'snapshot-v1',approvalId:'approval-v1',
@@ -32,7 +34,8 @@ test('SQLite journal preserves exact snapshots and recovers sent operations afte
   assert.equal((await journals.pending()).length,1);
   f.store.close();
 
-  const reopened=await GatewayStore.open(f.directory),recovered=reopened.journalStore('inventree-a');
+  const reopened=await GatewayStore.open(f.directory);f.register(reopened);
+  const recovered=reopened.journalStore('inventree-a');
   const afterRestart=recovered.read('plan-1');
   assert.equal(afterRestart.steps[0].state,'sent');
   let writes=0,observations=0;
