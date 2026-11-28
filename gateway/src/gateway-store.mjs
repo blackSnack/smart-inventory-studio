@@ -66,6 +66,7 @@ export class GatewayStore {
         CREATE TABLE IF NOT EXISTS gateway_admin(id INTEGER PRIMARY KEY CHECK(id=1),salt BLOB NOT NULL,password_hash BLOB NOT NULL,created_at INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS gateway_sessions(token_hash TEXT PRIMARY KEY,csrf_hash TEXT NOT NULL,expires_at INTEGER NOT NULL);
         CREATE INDEX IF NOT EXISTS gateway_sessions_expiry ON gateway_sessions(expires_at);
+        CREATE TABLE IF NOT EXISTS gateway_login_attempts(client_hash TEXT PRIMARY KEY,window_started_at INTEGER NOT NULL,failures INTEGER NOT NULL,blocked_until INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS gateway_connections(provider TEXT PRIMARY KEY,base_url TEXT NOT NULL,model TEXT NOT NULL,secret_ciphertext TEXT NOT NULL,updated_at INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS gateway_journals(instance_id TEXT NOT NULL,plan_id TEXT NOT NULL,revision INTEGER NOT NULL,journal_json TEXT NOT NULL,updated_at INTEGER NOT NULL,PRIMARY KEY(instance_id,plan_id));
         CREATE TABLE IF NOT EXISTS gateway_journal_operation_ids(instance_id TEXT NOT NULL,operation_id TEXT NOT NULL,plan_id TEXT NOT NULL,PRIMARY KEY(instance_id,operation_id),FOREIGN KEY(instance_id,plan_id) REFERENCES gateway_journals(instance_id,plan_id) ON DELETE CASCADE);
@@ -130,12 +131,25 @@ export class GatewayStore {
     return this.createSession();
   }
 
-  login(password) {
+  login(password,clientIdentity='local') {
     if(typeof password!=='string'||password.length>256)throw Error('invalid credentials');
+    const clientHash=hash(typeof clientIdentity==='string'?clientIdentity:'local');
+    const now=Date.now(),attempt=this.db.prepare('SELECT window_started_at,failures,blocked_until FROM gateway_login_attempts WHERE client_hash=?').get(clientHash);
+    if(attempt&&attempt.blocked_until>now)throw Error('login rate limited');
     const row=this.db.prepare('SELECT salt,password_hash FROM gateway_admin WHERE id=1').get();
     if(!row)throw Error('Gateway administrator is not initialized');
     const candidate=scryptSync(password,row.salt,64);
-    if(!same(candidate,row.password_hash))throw Error('invalid credentials');
+    if(!same(candidate,row.password_hash)){
+      const windowStart=attempt&&now-attempt.window_started_at<15*60*1000?attempt.window_started_at:now;
+      const failures=windowStart===attempt?.window_started_at?attempt.failures+1:1;
+      const blockedUntil=failures>=5?now+15*60*1000:0;
+      this.db.prepare(`INSERT INTO gateway_login_attempts(client_hash,window_started_at,failures,blocked_until) VALUES(?,?,?,?)
+        ON CONFLICT(client_hash) DO UPDATE SET window_started_at=excluded.window_started_at,failures=excluded.failures,blocked_until=excluded.blocked_until`)
+        .run(clientHash,windowStart,failures,blockedUntil);
+      if(blockedUntil)throw Error('login rate limited');
+      throw Error('invalid credentials');
+    }
+    this.db.prepare('DELETE FROM gateway_login_attempts WHERE client_hash=?').run(clientHash);
     return this.createSession();
   }
 
@@ -153,6 +167,14 @@ export class GatewayStore {
     if(!row)return null;
     if(row.expires_at<=Date.now()){this.db.prepare('DELETE FROM gateway_sessions WHERE token_hash=?').run(hash(sessionToken));return null}
     return {csrfHash:row.csrf_hash,expiresAt:row.expires_at};
+  }
+
+  refreshCsrf(sessionToken) {
+    const session=this.authenticate(sessionToken);
+    if(!session)return null;
+    const csrfToken=token();
+    this.db.prepare('UPDATE gateway_sessions SET csrf_hash=? WHERE token_hash=?').run(hash(csrfToken),hash(sessionToken));
+    return {csrfToken,expiresAt:session.expiresAt};
   }
 
   verifyCsrf(session,csrfToken) {
