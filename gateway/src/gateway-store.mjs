@@ -91,10 +91,17 @@ export class GatewayStore {
     let created=false;
     try {
       if(this.db.prepare('SELECT id FROM gateway_admin WHERE id=1').get()) {
+        await rm(this.setupTokenPath,{force:true});
         this.db.exec('COMMIT');
         return;
       }
-      if(this.db.prepare('SELECT value FROM gateway_metadata WHERE key=?').get('setup_token_hash')) {
+      const existing=this.db.prepare('SELECT value FROM gateway_metadata WHERE key=?').get('setup_token_hash');
+      if(existing) {
+        let stored;
+        try {stored=(await readFile(this.setupTokenPath,'utf8')).trim()} catch {
+          throw new Error('Gateway setup token file is missing; refusing to issue a replacement automatically');
+        }
+        if(!stored||!same(hash(stored),existing.value))throw new Error('Gateway setup token file does not match its database record');
         this.db.exec('COMMIT');
         return;
       }
