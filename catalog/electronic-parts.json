@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "0.4.0-draft",
+  "catalogVersion": "0.5.0-draft",
   "status": "seed_not_approved_for_production",
   "referenceProvider": "LCSC",
   "fieldDefinitions": {
@@ -794,6 +794,230 @@
       "unit": null,
       "nullable": true,
       "semantics": "conditioned"
+    },
+    "frequency": {
+      "key": "frequency",
+      "labelZh": "频率",
+      "labelEn": "Frequency",
+      "type": "string",
+      "unit": "Hz",
+      "nullable": true
+    },
+    "frequency_tolerance": {
+      "key": "frequency_tolerance",
+      "labelZh": "频率精度",
+      "labelEn": "Frequency Tolerance",
+      "type": "string",
+      "unit": "ppm",
+      "nullable": true
+    },
+    "frequency_stability": {
+      "key": "frequency_stability",
+      "labelZh": "频率稳定度",
+      "labelEn": "Frequency Stability",
+      "type": "string",
+      "unit": "ppm",
+      "nullable": true
+    },
+    "load_capacitance": {
+      "key": "load_capacitance",
+      "labelZh": "负载电容",
+      "labelEn": "Load Capacitance",
+      "type": "string",
+      "unit": "pF",
+      "nullable": true
+    },
+    "drive_level": {
+      "key": "drive_level",
+      "labelZh": "驱动电平",
+      "labelEn": "Drive Level",
+      "type": "string",
+      "unit": "µW",
+      "nullable": true
+    },
+    "shunt_capacitance": {
+      "key": "shunt_capacitance",
+      "labelZh": "并联电容",
+      "labelEn": "Shunt Capacitance",
+      "type": "string",
+      "unit": "pF",
+      "nullable": true
+    },
+    "oscillation_mode": {
+      "key": "oscillation_mode",
+      "labelZh": "振荡模式",
+      "labelEn": "Mode of Oscillation",
+      "type": "string",
+      "unit": null,
+      "nullable": true
+    },
+    "rated_ac_voltage": {
+      "key": "rated_ac_voltage",
+      "labelZh": "额定交流电压",
+      "labelEn": "AC Voltage Rating",
+      "type": "string",
+      "unit": "V AC",
+      "nullable": true
+    },
+    "capacitor_safety_class": {
+      "key": "capacitor_safety_class",
+      "labelZh": "安规等级",
+      "labelEn": "Safety Class",
+      "type": "string",
+      "unit": null,
+      "nullable": true
+    },
+    "amplifier_type": {
+      "key": "amplifier_type",
+      "labelZh": "运放类型",
+      "labelEn": "Amplifier Type",
+      "type": "string",
+      "unit": null,
+      "nullable": true
+    },
+    "channel_count": {
+      "key": "channel_count",
+      "labelZh": "通道数",
+      "labelEn": "Number of Channels",
+      "type": "string",
+      "unit": null,
+      "nullable": true
+    },
+    "gain_bandwidth_product": {
+      "key": "gain_bandwidth_product",
+      "labelZh": "增益带宽积",
+      "labelEn": "Gain Bandwidth Product",
+      "type": "string",
+      "unit": "Hz",
+      "nullable": true
+    },
+    "input_offset_voltage": {
+      "key": "input_offset_voltage",
+      "labelZh": "输入失调电压",
+      "labelEn": "Input Offset Voltage",
+      "type": "string",
+      "unit": "V",
+      "nullable": true
+    },
+    "slew_rate": {
+      "key": "slew_rate",
+      "labelZh": "压摆率",
+      "labelEn": "Slew Rate",
+      "type": "string",
+      "unit": "V/µs",
+      "nullable": true
+    },
+    "input_bias_current": {
+      "key": "input_bias_current",
+      "labelZh": "输入偏置电流",
+      "labelEn": "Input Bias Current",
+      "type": "string",
+      "unit": "A",
+      "nullable": true
+    },
+    "input_offset_current": {
+      "key": "input_offset_current",
+      "labelZh": "输入失调电流",
+      "labelEn": "Input Offset Current",
+      "type": "string",
+      "unit": "A",
+      "nullable": true
+    },
+    "common_mode_rejection_ratio": {
+      "key": "common_mode_rejection_ratio",
+      "labelZh": "共模抑制比",
+      "labelEn": "Common Mode Rejection Ratio",
+      "type": "string",
+      "unit": "dB",
+      "nullable": true
+    },
+    "quiescent_current": {
+      "key": "quiescent_current",
+      "labelZh": "静态电流",
+      "labelEn": "Quiescent Current",
+      "type": "string",
+      "unit": "A",
+      "nullable": true
+    },
+    "single_supply_range": {
+      "key": "single_supply_range",
+      "labelZh": "单电源范围",
+      "labelEn": "Single Supply Range",
+      "type": "string",
+      "unit": "V",
+      "nullable": true
+    },
+    "dual_supply_range": {
+      "key": "dual_supply_range",
+      "labelZh": "双电源范围",
+      "labelEn": "Dual Supply Range",
+      "type": "string",
+      "unit": "V",
+      "nullable": true
+    },
+    "connector_insulation_height": {
+      "key": "connector_insulation_height",
+      "labelZh": "绝缘体高度",
+      "labelEn": "Insulation Height",
+      "type": "string",
+      "unit": "mm",
+      "nullable": true
+    },
+    "connector_hole_direction": {
+      "key": "connector_hole_direction",
+      "labelZh": "插孔方向",
+      "labelEn": "Holes Direction",
+      "type": "string",
+      "unit": null,
+      "nullable": true
+    },
+    "connector_hole_structure": {
+      "key": "connector_hole_structure",
+      "labelZh": "插孔结构",
+      "labelEn": "Holes Structure",
+      "type": "string",
+      "unit": null,
+      "nullable": true
+    },
+    "wire_gauge": {
+      "key": "wire_gauge",
+      "labelZh": "线规",
+      "labelEn": "Wire Gauge",
+      "type": "string",
+      "unit": "AWG",
+      "nullable": true
+    },
+    "screw_specification": {
+      "key": "screw_specification",
+      "labelZh": "螺钉规格",
+      "labelEn": "Screw Specification",
+      "type": "string",
+      "unit": null,
+      "nullable": true
+    },
+    "connector_termination": {
+      "key": "connector_termination",
+      "labelZh": "端接方式",
+      "labelEn": "Termination Style",
+      "type": "string",
+      "unit": null,
+      "nullable": true
+    },
+    "connector_color": {
+      "key": "connector_color",
+      "labelZh": "连接器颜色",
+      "labelEn": "Connector Color",
+      "type": "string",
+      "unit": null,
+      "nullable": true
+    },
+    "wire_cross_section": {
+      "key": "wire_cross_section",
+      "labelZh": "导线截面积",
+      "labelEn": "Wire Cross Section",
+      "type": "string",
+      "unit": "mm²",
+      "nullable": true
     }
   },
   "categories": [
@@ -1270,6 +1494,286 @@
           "supply_voltage_range",
           "pressure_measurement_range",
           "humidity_measurement_range"
+        ],
+        "genericPooling": false,
+        "supportedModes": [
+          "exact",
+          "partial"
+        ],
+        "unknownNeverMatches": true,
+        "status": "draft_requires_category_review"
+      }
+    },
+    {
+      "key": "resistor.through_hole",
+      "labelZh": "插件电阻",
+      "source": {
+        "provider": "LCSC",
+        "categoryLabel": "Through Hole Resistors",
+        "url": "https://www.lcsc.com/product-detail/C410697.html",
+        "observedDate": "2026-11-28",
+        "evidenceScope": "public LCSC product-page example; candidate vocabulary only, not an exhaustive category export or verified stock coverage"
+      },
+      "parameters": [
+        "package",
+        "resistor_type",
+        "resistance",
+        "tolerance",
+        "rated_voltage",
+        "rated_power",
+        "tcr",
+        "operating_temperature"
+      ],
+      "identityPolicy": {
+        "version": 1,
+        "fields": [
+          "resistance",
+          "tolerance",
+          "package",
+          "rated_power",
+          "rated_voltage",
+          "resistor_type"
+        ],
+        "genericPooling": false,
+        "supportedModes": [
+          "exact",
+          "partial"
+        ],
+        "unknownNeverMatches": true,
+        "status": "draft_requires_category_review"
+      }
+    },
+    {
+      "key": "capacitor.tantalum",
+      "labelZh": "钽电容",
+      "source": {
+        "provider": "LCSC",
+        "categoryLabel": "Tantalum Capacitors",
+        "url": "https://www.lcsc.com/product-detail/C1952844.html",
+        "observedDate": "2026-11-28",
+        "evidenceScope": "public LCSC product-page example; candidate vocabulary only, not an exhaustive category export or verified stock coverage"
+      },
+      "parameters": [
+        "package",
+        "capacitance",
+        "tolerance",
+        "rated_voltage",
+        "ripple_current",
+        "esr",
+        "operating_temperature"
+      ],
+      "identityPolicy": {
+        "version": 1,
+        "fields": [
+          "capacitance",
+          "tolerance",
+          "package",
+          "rated_voltage"
+        ],
+        "genericPooling": false,
+        "supportedModes": [
+          "exact",
+          "partial"
+        ],
+        "unknownNeverMatches": true,
+        "status": "draft_requires_category_review"
+      }
+    },
+    {
+      "key": "capacitor.film",
+      "labelZh": "薄膜电容",
+      "source": {
+        "provider": "LCSC",
+        "categoryLabel": "Film Capacitors",
+        "url": "https://www.lcsc.com/product-detail/C3294954.html",
+        "observedDate": "2026-11-28",
+        "evidenceScope": "public LCSC product-page example; candidate vocabulary only, not an exhaustive category export or verified stock coverage"
+      },
+      "parameters": [
+        "package",
+        "capacitance",
+        "tolerance",
+        "rated_ac_voltage",
+        "capacitor_safety_class",
+        "operating_temperature"
+      ],
+      "identityPolicy": {
+        "version": 1,
+        "fields": [
+          "capacitance",
+          "tolerance",
+          "package",
+          "rated_ac_voltage",
+          "capacitor_safety_class"
+        ],
+        "genericPooling": false,
+        "supportedModes": [
+          "exact",
+          "partial"
+        ],
+        "unknownNeverMatches": true,
+        "status": "draft_requires_category_review"
+      }
+    },
+    {
+      "key": "crystal.quartz",
+      "labelZh": "石英晶体",
+      "source": {
+        "provider": "LCSC",
+        "categoryLabel": "Crystals",
+        "url": "https://www.lcsc.com/product-detail/C2901755.html",
+        "observedDate": "2026-11-28",
+        "evidenceScope": "public LCSC product-page example; candidate vocabulary only, not an exhaustive category export or verified stock coverage"
+      },
+      "parameters": [
+        "package",
+        "frequency",
+        "frequency_tolerance",
+        "frequency_stability",
+        "load_capacitance",
+        "esr",
+        "drive_level",
+        "shunt_capacitance",
+        "oscillation_mode",
+        "operating_temperature"
+      ],
+      "identityPolicy": {
+        "version": 1,
+        "fields": [
+          "package",
+          "frequency",
+          "load_capacitance",
+          "frequency_tolerance"
+        ],
+        "genericPooling": false,
+        "supportedModes": [
+          "exact",
+          "partial"
+        ],
+        "unknownNeverMatches": true,
+        "status": "draft_requires_category_review"
+      }
+    },
+    {
+      "key": "ic.op_amp",
+      "labelZh": "运算放大器",
+      "source": {
+        "provider": "LCSC",
+        "categoryLabel": "Instrumentation, Op Amps, Buffer Amps",
+        "url": "https://www.lcsc.com/product-detail/Operational-Amplifier_JSMSEMI-LM358_C5296727.html",
+        "observedDate": "2026-11-28",
+        "evidenceScope": "public LCSC product-page example; candidate vocabulary only, not an exhaustive category export or verified stock coverage"
+      },
+      "parameters": [
+        "package",
+        "amplifier_type",
+        "channel_count",
+        "gain_bandwidth_product",
+        "input_offset_voltage",
+        "slew_rate",
+        "input_bias_current",
+        "input_offset_current",
+        "common_mode_rejection_ratio",
+        "quiescent_current",
+        "supply_voltage_range",
+        "single_supply_range",
+        "dual_supply_range",
+        "output_current",
+        "operating_temperature"
+      ],
+      "identityPolicy": {
+        "version": 1,
+        "fields": [
+          "package",
+          "amplifier_type",
+          "channel_count"
+        ],
+        "genericPooling": false,
+        "supportedModes": [
+          "exact",
+          "partial"
+        ],
+        "unknownNeverMatches": true,
+        "status": "draft_requires_category_review"
+      }
+    },
+    {
+      "key": "connector.header.female",
+      "labelZh": "矩形母座连接器",
+      "source": {
+        "provider": "LCSC",
+        "categoryLabel": "Rectangular Connectors/Headers, Receptacles, Female Sockets",
+        "url": "https://www.lcsc.com/product-detail/female-headers_samtec-clm-110-02-f-d_C6150446.html",
+        "observedDate": "2026-11-28",
+        "evidenceScope": "public LCSC product-page example; candidate vocabulary only, not an exhaustive category export or verified stock coverage"
+      },
+      "parameters": [
+        "package",
+        "connector_series",
+        "connector_mounting",
+        "pin_spacing",
+        "connector_contact_count",
+        "connector_row_count",
+        "connector_pins_per_row",
+        "rated_current",
+        "connector_voltage_rating",
+        "contact_material",
+        "contact_plating",
+        "connector_insulation_height",
+        "connector_hole_direction",
+        "connector_hole_structure",
+        "operating_temperature"
+      ],
+      "identityPolicy": {
+        "version": 1,
+        "fields": [
+          "connector_series",
+          "connector_mounting",
+          "pin_spacing",
+          "connector_contact_count",
+          "connector_row_count"
+        ],
+        "genericPooling": false,
+        "supportedModes": [
+          "exact",
+          "partial"
+        ],
+        "unknownNeverMatches": true,
+        "status": "draft_requires_category_review"
+      }
+    },
+    {
+      "key": "connector.terminal_block",
+      "labelZh": "接线端子",
+      "source": {
+        "provider": "LCSC",
+        "categoryLabel": "Terminal Blocks/Wire to Board",
+        "url": "https://www.lcsc.com/product-detail/Terminal-Blocks_WJ500V-5-08-2P_C8465.html",
+        "observedDate": "2026-11-28",
+        "evidenceScope": "public LCSC product-page example; candidate vocabulary only, not an exhaustive category export or verified stock coverage"
+      },
+      "parameters": [
+        "package",
+        "connector_mounting",
+        "pin_spacing",
+        "connector_contact_count",
+        "connector_row_count",
+        "connector_pins_per_row",
+        "rated_current",
+        "connector_voltage_rating",
+        "wire_gauge",
+        "wire_cross_section",
+        "screw_specification",
+        "connector_termination",
+        "connector_color",
+        "operating_temperature"
+      ],
+      "identityPolicy": {
+        "version": 1,
+        "fields": [
+          "pin_spacing",
+          "connector_contact_count",
+          "connector_mounting"
         ],
         "genericPooling": false,
         "supportedModes": [
