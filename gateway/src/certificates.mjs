@@ -55,11 +55,11 @@ async function createRoot(directory, tlsConfig) {
   await mkdir(temporary, {mode: 0o700});
   try {
     await runOpenSsl(tlsConfig.opensslPath, ['genpkey','-algorithm','RSA','-pkeyopt','rsa_keygen_bits:3072','-out','root-ca.key'], temporary,tlsConfig.opensslConfigPath);
-    await runOpenSsl(executable, ['req','-x509','-new','-key','root-ca.key','-sha256','-days',String(CA_DAYS),
+    await runOpenSsl(tlsConfig.opensslPath, ['req','-x509','-new','-key','root-ca.key','-sha256','-days',String(CA_DAYS),
       '-out','root-ca.crt','-subj','/CN=Smart Inventory Local Gateway Root CA',
       '-addext','basicConstraints=critical,CA:TRUE,pathlen:0',
       '-addext','keyUsage=critical,keyCertSign,cRLSign',
-      '-addext','subjectKeyIdentifier=hash'], temporary);
+      '-addext','subjectKeyIdentifier=hash'], temporary, tlsConfig.opensslConfigPath);
     const key = await readFile(join(temporary,'root-ca.key'));
     const cert = await readFile(join(temporary,'root-ca.crt'));
     validateCa(cert,key,Date.now());
@@ -88,11 +88,11 @@ async function createLeaf(directory, tlsConfig, host) {
       ''
     ].join('\n');
     await writeFile(join(temporary,'server.ext'),extension,{flag:'wx'});
-    await runOpenSsl(executable,['genpkey','-algorithm','EC','-pkeyopt','ec_paramgen_curve:P-256','-out','server.key'],temporary);
-    await runOpenSsl(executable,['req','-new','-key','server.key','-out','server.csr','-subj','/CN='+host],temporary);
-    await runOpenSsl(executable,['x509','-req','-in','server.csr','-CA',join(directory,'root-ca.crt'),
+    await runOpenSsl(tlsConfig.opensslPath,['genpkey','-algorithm','EC','-pkeyopt','ec_paramgen_curve:P-256','-out','server.key'],temporary,tlsConfig.opensslConfigPath);
+    await runOpenSsl(tlsConfig.opensslPath,['req','-new','-key','server.key','-out','server.csr','-subj','/CN='+host],temporary,tlsConfig.opensslConfigPath);
+    await runOpenSsl(tlsConfig.opensslPath,['x509','-req','-in','server.csr','-CA',join(directory,'root-ca.crt'),
       '-CAkey',join(directory,'root-ca.key'),'-CAcreateserial','-out','server.crt','-days',String(LEAF_DAYS),
-      '-sha256','-extfile','server.ext','-extensions','server_cert'],temporary);
+      '-sha256','-extfile','server.ext','-extensions','server_cert'],temporary,tlsConfig.opensslConfigPath);
     const cert = await readFile(join(temporary,'server.crt'));
     const key = await readFile(join(temporary,'server.key'));
     const ca = new X509Certificate(await readFile(join(directory,'root-ca.crt')));
