@@ -54,9 +54,6 @@ function Register-GatewayTask([string]$Root,[string]$Data) {
 }
 
 Assert-Administrator
-if(-not(Test-PrivateAddress $BindAddress)){throw 'BindAddress must be an explicit loopback, RFC1918 IPv4 or IPv6 ULA address; wildcard, public and link-local addresses are rejected.'}
-$isLoopback=[System.Net.IPAddress]::IsLoopback([System.Net.IPAddress]::Parse($BindAddress))
-if(-not $isLoopback -and -not $EnableLan){throw 'LAN binding requires the explicit -EnableLan switch.'}
 if([string]::IsNullOrWhiteSpace($InstallDirectory) -or [string]::IsNullOrWhiteSpace($DataDirectory)){throw 'InstallDirectory and DataDirectory are required.'}
 $sourceRoot=$PSScriptRoot
 $install=([System.IO.Path]::GetFullPath($InstallDirectory)).TrimEnd('\')
@@ -91,10 +88,6 @@ if(Test-Path -LiteralPath $configPath){
 if($existing -and -not $Reconfigure){
   $effectiveHost=[string]$existing.host
   $effectivePort=[int]$existing.port
-  if(-not(Test-PrivateAddress $effectiveHost)){throw 'Existing Gateway bind address is no longer permitted.'}
-  if(-not [System.Net.IPAddress]::IsLoopback([System.Net.IPAddress]::Parse($effectiveHost)) -and -not $EnableLan){
-    throw 'This installation is configured for LAN binding. Repeat the upgrade with -EnableLan to confirm that exposure.'
-  }
   $tls=$existing.tls
   if($tls.mode -eq 'local-ca'){
     $tls.opensslPath=$openssl
@@ -105,6 +98,10 @@ if($existing -and -not $Reconfigure){
   $effectivePort=$Port
   $tls=[ordered]@{mode='local-ca';opensslPath=$openssl;opensslConfigPath=$opensslConfig;renewBeforeDays=30}
 }
+if(-not(Test-PrivateAddress $effectiveHost)){throw 'Bind address must be an explicit loopback, RFC1918 IPv4 or IPv6 ULA address; wildcard, public and link-local addresses are rejected.'}
+if($effectivePort -lt 1024 -or $effectivePort -gt 65535){throw 'Gateway port must be between 1024 and 65535.'}
+$isLoopback=[System.Net.IPAddress]::IsLoopback([System.Net.IPAddress]::Parse($effectiveHost))
+if(-not $isLoopback -and -not $EnableLan){throw 'LAN binding requires the explicit -EnableLan switch, including on upgrades.'}
 $config=[ordered]@{host=$effectiveHost;port=$effectivePort;dataDir=$data;tls=$tls}
 $tempConfig=$configPath+'.next'
 $config|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $tempConfig -Encoding utf8
