@@ -9,13 +9,39 @@ export async function loadConfig(file) {
   let value;
   try { value = JSON.parse(await readFile(absolute, 'utf8')); }
   catch { throw new Error('Invalid or unreadable Gateway configuration'); }
-  if (!ownKeys(value, ['host','port','tls']) ||
+  if (!ownKeys(value, ['host','port','dataDir','tls']) ||
       !['127.0.0.1','::1'].includes(value.host) ||
       !Number.isInteger(value.port) || value.port < 1 || value.port > 65535 ||
-      !ownKeys(value.tls, ['cert','key']) ||
-      !['cert','key'].every(key => typeof value.tls[key] === 'string' && value.tls[key].trim())) {
-    throw new Error('Invalid Gateway configuration: loopback host, port and TLS files required');
+      (value.dataDir !== undefined && (typeof value.dataDir !== 'string' || !value.dataDir.trim())) ||
+      !ownKeys(value.tls, ['mode','cert','key','opensslPath','renewBeforeDays'])) {
+    throw new Error('Invalid Gateway configuration');
   }
-  return {host: value.host, port: value.port,
-    tls: {cert: resolve(dirname(absolute), value.tls.cert), key: resolve(dirname(absolute), value.tls.key)}};
+  const mode = value.tls.mode ?? (value.tls.cert && value.tls.key ? 'provided' : 'local-ca');
+  if (!['provided','local-ca'].includes(mode)) throw new Error('Invalid Gateway TLS mode');
+  if (mode === 'provided' &&
+      !['cert','key'].every(key => typeof value.tls[key] === 'string' && value.tls[key].trim())) {
+    throw new Error('Provided TLS mode requires certificate and private key files');
+  }
+  if (mode === 'local-ca' &&
+      (value.tls.cert !== undefined || value.tls.key !== undefined)) {
+    throw new Error('Local CA mode does not accept externally supplied certificate paths');
+  }
+  if (value.tls.opensslPath !== undefined &&
+      (typeof value.tls.opensslPath !== 'string' || !value.tls.opensslPath.trim())) {
+    throw new Error('Invalid OpenSSL executable path');
+  }
+  const renewBeforeDays = value.tls.renewBeforeDays ?? 30;
+  if (!Number.isInteger(renewBeforeDays) || renewBeforeDays < 1 || renewBeforeDays > 90) {
+    throw new Error('TLS renewal window must be between 1 and 90 days');
+  }
+  const root = dirname(absolute);
+  return {
+    configPath: absolute,
+    host: value.host,
+    port: value.port,
+    dataDir: resolve(root, value.dataDir ?? './data'),
+    tls: mode === 'provided'
+      ? {mode, cert: resolve(root, value.tls.cert), key: resolve(root, value.tls.key)}
+      : {mode, opensslPath: value.tls.opensslPath ? resolve(root, value.tls.opensslPath) : undefined, renewBeforeDays}
+  };
 }
