@@ -75,7 +75,7 @@ Set-PrivateAcl $data
 Get-ChildItem -LiteralPath $sourceRoot -Force |
   Where-Object {$_.Name -notin @('Install-Gateway.ps1','Uninstall-Gateway.ps1','Start-Gateway.ps1','Stop-Gateway.ps1','Export-CA.ps1')} |
   ForEach-Object {Copy-Item -LiteralPath $_.FullName -Destination $install -Recurse -Force}
-foreach($name in @('Install-Gateway.ps1','Uninstall-Gateway.ps1','Start-Gateway.ps1','Stop-Gateway.ps1','Export-CA.ps1')){
+foreach($name in @('Install-Gateway.ps1','Uninstall-Gateway.ps1','Start-Gateway.ps1','Stop-Gateway.ps1','Export-CA.ps1','Complete-FirstRunSetup.ps1')){
   Copy-Item -LiteralPath (Join-Path $sourceRoot $name) -Destination $install -Force
 }
 
@@ -125,6 +125,11 @@ if(-not $isLoopback -and -not $NoFirewall){
 
 $task=Get-ScheduledTask -TaskName 'Smart Inventory Gateway' -ErrorAction SilentlyContinue
 if(($EnableAutostart -or $task) -and -not $NoAutostart){Register-GatewayTask $install $data}
+
+$endpointAuthority=if($effectiveHost.Contains(':')){'['+$effectiveHost+']'}else{$effectiveHost}
+$endpoint='https://'+$endpointAuthority+':'+$effectivePort
+$endpointFile=Join-Path $data 'gateway.endpoint.txt'
+[System.IO.File]::WriteAllText($endpointFile,$endpoint+[Environment]::NewLine,[System.Text.UTF8Encoding]::new($false))
 
 Write-Output "Gateway installed: $install"
 Write-Output "Persistent data: $data"

@@ -122,7 +122,7 @@ Copy-Item -LiteralPath (Join-Path $gatewayRoot 'README.md') -Destination $gatewa
 Copy-Item -LiteralPath (Join-Path $repoRoot 'dist') -Destination $app -Recurse
 Set-Content -LiteralPath (Join-Path $app 'package.json') -Encoding utf8 -Value '{"private":true,"type":"module"}'
 
-foreach($name in @('Install-Gateway.ps1','Uninstall-Gateway.ps1','Start-Gateway.ps1','Stop-Gateway.ps1','Export-CA.ps1')){
+foreach($name in @('Install-Gateway.ps1','Uninstall-Gateway.ps1','Start-Gateway.ps1','Stop-Gateway.ps1','Export-CA.ps1','Complete-FirstRunSetup.ps1')){
   $source=Join-Path $gatewayRoot "scripts\$name"
   if(-not(Test-Path -LiteralPath $source)){throw "Required installer script missing: $name"}
   Copy-Item -LiteralPath $source -Destination $package
