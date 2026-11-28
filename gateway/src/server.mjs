@@ -3,12 +3,16 @@ import {X509Certificate, createPrivateKey} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {pathToFileURL} from 'node:url';
 import {loadConfig} from './config.mjs';
+import {ensureLocalCertificates} from './certificates.mjs';
 
 export async function createGateway(config) {
   if (!['127.0.0.1','::1'].includes(config.host)) throw new Error('LAN binding not enabled');
+  const material = config.tls.mode === 'local-ca'
+    ? await ensureLocalCertificates(config)
+    : {certPath:config.tls.cert,keyPath:config.tls.key};
   let cert, key;
   try {
-    [cert,key] = await Promise.all([readFile(config.tls.cert),readFile(config.tls.key)]);
+    [cert,key] = await Promise.all([readFile(material.certPath),readFile(material.keyPath)]);
   } catch {
     throw new Error('Gateway TLS certificate or private key is missing or unreadable');
   }
