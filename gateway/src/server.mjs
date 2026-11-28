@@ -25,11 +25,8 @@ export async function createGateway(config) {
     throw new Error('Gateway TLS certificate is a CA, has the wrong IP SAN or is outside its validity period');
   }
   const serverAuth = '1.3.6.1.5.5.7.3.1';
-  const anyExtendedKeyUsage = '2.5.29.37.0';
-  if (leaf.keyUsage &&
-      !leaf.keyUsage.includes(serverAuth) &&
-      !leaf.keyUsage.includes(anyExtendedKeyUsage)) {
-    throw new Error('Gateway TLS certificate does not permit TLS server authentication');
+  if (leaf.keyUsage && !leaf.keyUsage.includes(serverAuth)) {
+    throw new Error('Gateway TLS certificate does not explicitly permit TLS server authentication');
   }
   return createServer({cert,key,minVersion:'TLSv1.2',requestTimeout:10000,headersTimeout:5000,maxHeaderSize:8192}, (req,res)=>{
     const headers = {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};

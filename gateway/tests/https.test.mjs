@@ -20,10 +20,12 @@ async function fixture(t) {
   run(dir,['x509','-req','-in','server.csr','-CA','ca.crt','-CAkey','ca.key','-CAcreateserial','-days','1','-out','server.crt','-extfile','leaf.cnf','-extensions','leaf']);
   await writeFile(join(dir,'client-only.cnf'),'[client]\nbasicConstraints=critical,CA:false\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=clientAuth\nsubjectAltName=IP:127.0.0.1\n');
   run(dir,['x509','-req','-in','server.csr','-CA','ca.crt','-CAkey','ca.key','-CAserial','ca.srl','-days','1','-out','client-only.crt','-extfile','client-only.cnf','-extensions','client']);
+  await writeFile(join(dir,'any-eku-only.cnf'),'[anyeku]\nbasicConstraints=critical,CA:false\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=2.5.29.37.0\nsubjectAltName=IP:127.0.0.1\n');
+  run(dir,['x509','-req','-in','server.csr','-CA','ca.crt','-CAkey','ca.key','-CAserial','ca.srl','-days','1','-out','any-eku-only.crt','-extfile','any-eku-only.cnf','-extensions','anyeku']);
   const file=join(dir,'config.json');
   const raw={host:'127.0.0.1',port:8443,tls:{cert:'server.crt',key:'server.key'}};
   await writeFile(file,JSON.stringify(raw));
-  return {dir,file,raw,config:await loadConfig(file),ca:await readFile(join(dir,'ca.crt')),clientOnlyCert:join(dir,'client-only.crt')};
+  return {dir,file,raw,config:await loadConfig(file),ca:await readFile(join(dir,'ca.crt')),clientOnlyCert:join(dir,'client-only.crt'),anyEkuOnlyCert:join(dir,'any-eku-only.crt')};
 }
 function get(port,path,ca,method='GET') {
   return new Promise((resolve,reject)=>{
@@ -56,7 +58,8 @@ test('invalid configuration and TLS fail closed',async t=>{
   await assert.rejects(createGateway({...f.config,host:'::1'}),/wrong IP SAN/);
   await assert.rejects(createGateway({...f.config,tls:{...f.config.tls,key:join(f.dir,'ca.key')}}),/invalid or mismatched/);
   await assert.rejects(createGateway({...f.config,tls:{...f.config.tls,cert:join(f.dir,'missing.crt')}}),/TLS certificate or private key is missing/);
-  await assert.rejects(createGateway({...f.config,tls:{...f.config.tls,cert:f.clientOnlyCert}}),/does not permit TLS server authentication/);
+  await assert.rejects(createGateway({...f.config,tls:{...f.config.tls,cert:f.clientOnlyCert}}),/does not explicitly permit TLS server authentication/);
+  await assert.rejects(createGateway({...f.config,tls:{...f.config.tls,cert:f.anyEkuOnlyCert}}),/does not explicitly permit TLS server authentication/);
   await writeFile(f.file,JSON.stringify({...f.raw,host:'0.0.0.0'}));
   await assert.rejects(loadConfig(f.file),/Invalid Gateway configuration/);
   await writeFile(f.file,JSON.stringify({...f.raw,port:0}));
