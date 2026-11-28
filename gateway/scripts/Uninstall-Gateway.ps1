@@ -1,5 +1,6 @@
 [CmdletBinding()]
 param(
+  [string]$InstallDirectory = $PSScriptRoot,
   [string]$DataDirectory = "$env:ProgramData\SmartInventoryGateway\data",
   [switch]$RemoveData
 )
@@ -7,7 +8,7 @@ $ErrorActionPreference='Stop'
 $identity=[Security.Principal.WindowsIdentity]::GetCurrent()
 $principal=[Security.Principal.WindowsPrincipal]::new($identity)
 if(-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){throw 'Run Uninstall-Gateway.ps1 from an elevated PowerShell session.'}
-$install=$PSScriptRoot
+$install=[System.IO.Path]::GetFullPath($InstallDirectory)
 $data=[System.IO.Path]::GetFullPath($DataDirectory)
 $stop=Join-Path $install 'Stop-Gateway.ps1'
 if(Test-Path $stop){& $stop -DataDirectory $data}
