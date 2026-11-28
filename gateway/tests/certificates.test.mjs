@@ -57,6 +57,17 @@ test('reissues an expired leaf without replacing the root CA',async t=>{
   assert.notEqual(renewed.leafFingerprint,first.leafFingerprint);
 });
 
+test('issues a TLS server certificate for an explicitly selected private LAN address',async t=>{
+  const f=await fixture(t);
+  const lan={...f.config,host:'192.168.42.17'};
+  const material=await ensureLocalCertificates(lan);
+  const ca=new X509Certificate(await readFile(material.caCertPath));
+  const leaf=new X509Certificate(await readFile(material.certPath));
+  assert.ok(leaf.checkIP('192.168.42.17'));
+  assert.ok(leaf.verify(ca.publicKey));
+  assert.ok(leaf.keyUsage.includes('1.3.6.1.5.5.7.3.1'));
+});
+
 test('refuses incomplete or corrupt root CA instead of silently replacing it',async t=>{
   const f=await fixture(t);
   const first=await ensureLocalCertificates(f.config);
