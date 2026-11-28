@@ -2,13 +2,13 @@ param([Parameter(Mandatory=$true)][string]$PackageDirectory,[Parameter(Mandatory
 $ErrorActionPreference='Stop'
 $script:capturedFirewall=$null
 $script:capturedTask=$null
-function Get-NetFirewallRule { return $null }
+function Get-NetFirewallRule { [CmdletBinding()] param([string]$DisplayName) return $null }
 function Remove-NetFirewallRule { param([string]$DisplayName) }
 function New-NetFirewallRule {
   param([string]$DisplayName,[string]$Direction,[string]$Action,[string]$Enabled,[string]$Program,[string]$Protocol,[string]$LocalAddress,[int]$LocalPort,[string]$RemoteAddress,[string]$Profile)
   $script:capturedFirewall=@{DisplayName=$DisplayName;Direction=$Direction;Action=$Action;Enabled=$Enabled;Program=$Program;Protocol=$Protocol;LocalAddress=$LocalAddress;LocalPort=$LocalPort;RemoteAddress=$RemoteAddress;Profile=$Profile}
 }
-function Get-ScheduledTask { return $null }
+function Get-ScheduledTask { [CmdletBinding()] param([string]$TaskName) return $null }
 function New-ScheduledTaskAction { param($Execute,$Argument,$WorkingDirectory); return @{Execute=$Execute;Argument=$Argument;WorkingDirectory=$WorkingDirectory} }
 function New-ScheduledTaskTrigger { param([switch]$AtLogOn,$User); return @{AtLogOn=$AtLogOn.IsPresent;User=$User} }
 function New-ScheduledTaskPrincipal { param($UserId,$LogonType,$RunLevel); return @{UserId=$UserId;LogonType=$LogonType;RunLevel=$RunLevel} }
