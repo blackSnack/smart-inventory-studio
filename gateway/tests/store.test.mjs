@@ -84,6 +84,18 @@ test('login attempts are throttled by a hashed client identity',async t=>{
   store.close();
 });
 
+test('missing encryption key for an existing database fails closed',async t=>{
+  const f=await fixture(t),store=await GatewayStore.open(f.directory);
+  const setupToken=(await readFile(store.setupTokenPath,'utf8')).trim();
+  await store.setup(setupToken,'a-long-local-admin-password');
+  store.setConnection('inventree','https://inventory.example/api','saved-inventory-secret');
+  store.close();
+  const keyPath=join(f.directory,'secret.key');
+  await rm(keyPath);
+  await assert.rejects(GatewayStore.open(f.directory),/missing while an existing database is present/);
+  assert.equal(await readFile(keyPath).then(()=>true,()=>false),false);
+});
+
 test('corrupt encryption key fails closed without replacing it',async t=>{
   const f=await fixture(t);
   const store=await GatewayStore.open(f.directory);
