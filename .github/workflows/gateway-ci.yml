@@ -13,7 +13,7 @@ jobs:
       matrix:
         os: [ubuntu-24.04, windows-2022]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -34,3 +34,22 @@ jobs:
           if (-not (Test-Path -LiteralPath $openssl)) { throw 'Git for Windows OpenSSL prerequisite unavailable' }
           $env:GATEWAY_TEST_OPENSSL = $openssl
           npm --prefix gateway test
+      - name: Build and install-test Windows x64 package
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'GatewayPackage'
+          & ./gateway/scripts/Build-WindowsPackage.ps1 -OutputDirectory $out
+          if (-not (Test-Path -LiteralPath (Join-Path $out 'SmartInventoryGateway.zip'))) { throw 'Windows package archive was not produced' }
+          $powershell = (Get-Command powershell.exe).Source
+          & $powershell -NoProfile -ExecutionPolicy Bypass -File ./gateway/tests/windows-package-smoke.ps1 -PackageDirectory (Join-Path $out 'SmartInventoryGateway') -Workspace (Join-Path $env:RUNNER_TEMP 'GatewayPackageSmoke')
+          if ($LASTEXITCODE -ne 0) { throw 'Windows package install/upgrade/uninstall smoke failed' }
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Windows'
+        with:
+          name: smart-inventory-gateway-windows-x64
+          path: |
+            ${{ runner.temp }}/GatewayPackage/SmartInventoryGateway.zip
+            ${{ runner.temp }}/GatewayPackage/SmartInventoryGateway.zip.sha256
+          if-no-files-found: error
+          retention-days: 30
