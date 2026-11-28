@@ -65,6 +65,25 @@ test('upstream secrets are encrypted at rest and never returned by status',async
   store.close();
 });
 
+test('missing first-run setup token fails closed instead of silently issuing a replacement',async t=>{
+  const f=await fixture(t);
+  const store=await GatewayStore.open(f.directory);
+  await rm(store.setupTokenPath,{force:true});
+  store.close();
+  await assert.rejects(GatewayStore.open(f.directory),/setup token file is missing/);
+});
+
+test('login attempts are throttled by a hashed client identity',async t=>{
+  const f=await fixture(t),store=await GatewayStore.open(f.directory);
+  const setupToken=(await readFile(store.setupTokenPath,'utf8')).trim();
+  await store.setup(setupToken,'a-long-local-admin-password');
+  for(let i=0;i<4;i++)assert.throws(()=>store.login('wrong-password','test-client'),/invalid credentials/);
+  assert.throws(()=>store.login('wrong-password','test-client'),/login rate limited/);
+  assert.throws(()=>store.login('a-long-local-admin-password','test-client'),/login rate limited/);
+  assert.ok(store.login('a-long-local-admin-password','different-client'));
+  store.close();
+});
+
 test('corrupt encryption key fails closed without replacing it',async t=>{
   const f=await fixture(t);
   const store=await GatewayStore.open(f.directory);
