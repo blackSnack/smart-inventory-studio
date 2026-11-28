@@ -9,6 +9,7 @@ $gitRoot=Join-Path $env:ProgramFiles 'Git'
 $gitBin=Join-Path $gitRoot 'usr\bin'
 $opensslSource=Join-Path $gitBin 'openssl.exe'
 $objdump=Join-Path $gitBin 'objdump.exe'
+if(-not(Test-Path -LiteralPath $objdump)){$objdump=Join-Path $gitRoot 'mingw64\bin\objdump.exe'}
 $nodeSource=(Get-Command node.exe -ErrorAction Stop).Source
 if(-not(Test-Path -LiteralPath $opensslSource)){throw 'Git for Windows OpenSSL runtime is unavailable'}
 if(-not(Test-Path -LiteralPath $objdump)){throw 'Git for Windows objdump is required to collect OpenSSL runtime dependencies'}
