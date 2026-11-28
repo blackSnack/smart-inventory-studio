@@ -1,6 +1,6 @@
-import {randomBytes,randomUUID,createHash,createCipheriv,createDecipheriv,scryptSync,timingSafeEqual} from 'node:crypto';
+import {randomBytes,createHash,createCipheriv,createDecipheriv,scryptSync,timingSafeEqual} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
-import {chmod,readFile,rm,writeFile} from 'node:fs/promises';
+import {chmod,readFile,rm} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {securePrivateDirectory,writePrivateFile} from './private-storage.mjs';
 import {SQLiteJournalStore} from './sqlite-journal.mjs';
@@ -72,7 +72,7 @@ export class GatewayStore {
       `);
       await chmod(databasePath,0o600).catch(()=>{});
       const store=new GatewayStore(directory,db,key);
-      store.ensureSetupToken();
+      await store.ensureSetupToken();
       return store;
     } catch(error) {
       db.close();
@@ -85,19 +85,35 @@ export class GatewayStore {
     this.setupTokenPath=join(directory,'setup-token.txt');
   }
 
-  ensureSetupToken() {
-    if(this.db.prepare('SELECT id FROM gateway_admin WHERE id=1').get())return;
-    if(this.db.prepare('SELECT value FROM gateway_metadata WHERE key=?').get('setup_token_hash'))return;
-    const setupToken=token();
-    this.db.prepare('INSERT INTO gateway_metadata(key,value) VALUES(?,?)').run('setup_token_hash',hash(setupToken));
-    // This file is protected by the private data directory ACL and is never served over HTTP.
-    const fd=join(this.directory,'.setup-token.tmp-'+randomUUID());
-    writePrivateFile(fd,setupToken+'\\n').then(async()=>{await writeFile(this.setupTokenPath,setupToken+'\\n',{flag:'wx',mode:0o600});await rm(fd,{force:true})}).catch(async()=>{await rm(fd,{force:true})});
+  async ensureSetupToken() {
+    this.db.exec('BEGIN IMMEDIATE');
+    let created=false;
+    try {
+      if(this.db.prepare('SELECT id FROM gateway_admin WHERE id=1').get()) {
+        this.db.exec('COMMIT');
+        return;
+      }
+      if(this.db.prepare('SELECT value FROM gateway_metadata WHERE key=?').get('setup_token_hash')) {
+        this.db.exec('COMMIT');
+        return;
+      }
+      // A token file without a matching database hash is an orphan from an interrupted first boot.
+      await rm(this.setupTokenPath,{force:true});
+      const setupToken=token();
+      await writePrivateFile(this.setupTokenPath,setupToken+'\n');
+      created=true;
+      this.db.prepare('INSERT INTO gateway_metadata(key,value) VALUES(?,?)').run('setup_token_hash',hash(setupToken));
+      this.db.exec('COMMIT');
+    } catch(error) {
+      try {this.db.exec('ROLLBACK')}catch{}
+      if(created)await rm(this.setupTokenPath,{force:true});
+      throw error;
+    }
   }
 
   setupRequired() {return !this.db.prepare('SELECT id FROM gateway_admin WHERE id=1').get()}
 
-  setup(setupToken,password) {
+  async setup(setupToken,password) {
     if(!this.setupRequired())throw Error('Gateway administrator is already initialized');
     if(typeof setupToken!=='string'||typeof password!=='string'||password.length<passwordMin||password.length>256)throw Error('invalid initial credentials');
     const row=this.db.prepare('SELECT value FROM gateway_metadata WHERE key=?').get('setup_token_hash');
@@ -110,7 +126,7 @@ export class GatewayStore {
       this.db.prepare('DELETE FROM gateway_metadata WHERE key=?').run('setup_token_hash');
       this.db.exec('COMMIT');
     } catch(error) {try{this.db.exec('ROLLBACK')}catch{}throw error}
-    void rm(this.setupTokenPath,{force:true});
+    await rm(this.setupTokenPath,{force:true});
     return this.createSession();
   }
 
