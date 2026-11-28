@@ -36,9 +36,13 @@ function Test-PrivateAddress([string]$Value) {
   return $false
 }
 function Set-PrivateAcl([string]$Path) {
-  $account="$env:USERDOMAIN\$env:USERNAME"
-  & icacls.exe $Path '/inheritance:r' '/grant:r' ($account + ':(OI)(CI)F') 'SYSTEM:(OI)(CI)F' '/T' '/C' | Out-Null
-  if($LASTEXITCODE -ne 0){throw 'Unable to restrict Gateway data directory ACLs.'}
+  $account=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+  $items=@(Get-Item -LiteralPath $Path -Force)+@(Get-ChildItem -LiteralPath $Path -Force -Recurse)
+  foreach($item in $items){
+    $rights=if($item.PSIsContainer){'(OI)(CI)F'}else{'F'}
+    & icacls.exe $item.FullName '/inheritance:r' '/grant:r' ('*'+$account+':'+$rights) ('SYSTEM:'+ $rights) | Out-Null
+    if($LASTEXITCODE -ne 0){throw ('Unable to restrict Gateway data ACLs at '+$item.FullName)}
+  }
 }
 function Register-GatewayTask([string]$Root,[string]$Data) {
   $taskName='Smart Inventory Gateway'
