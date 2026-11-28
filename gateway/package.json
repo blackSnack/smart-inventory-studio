@@ -9,6 +9,6 @@
   "scripts": {
     "start": "node src/server.mjs",
     "ca:export": "node src/cli.mjs ca export",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test --test-timeout=60000 tests/*.test.mjs"
   }
 }
