@@ -40,7 +40,7 @@ test('creates persistent root CA and serverAuth leaf; exports only public CA and
 test('reissues an expired leaf without replacing the root CA',async t=>{
   const f=await fixture(t);
   const first=await ensureLocalCertificates(f.config);
-  const renewed=await ensureLocalCertificates({...f.config,tls:{...f.config.tls,renewBeforeDays:90}});
+  const renewed=await ensureLocalCertificates(f.config,Date.now()+370*86400000);
   assert.equal(renewed.caFingerprint,first.caFingerprint);
   assert.notEqual(renewed.leafFingerprint,first.leafFingerprint);
 });
