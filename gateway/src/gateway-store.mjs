@@ -1,6 +1,6 @@
 import {randomBytes,createHash,createCipheriv,createDecipheriv,scryptSync,timingSafeEqual} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
-import {chmod,readFile,rm} from 'node:fs/promises';
+import {chmod,lstat,readFile,rm} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {securePrivateDirectory,writePrivateFile} from './private-storage.mjs';
 import {SQLiteJournalStore} from './sqlite-journal.mjs';
@@ -46,9 +46,13 @@ export class GatewayStore {
     const directory=resolve(dataDirectory);
     await securePrivateDirectory(directory);
     const keyPath=join(directory,'secret.key');
+    const databasePath=join(directory,'gateway.sqlite');
     let key;
     try {key=await readFile(keyPath)} catch(error) {
       if(error?.code!=='ENOENT')throw new Error('Gateway encryption key is unavailable');
+      let databaseExists=false;
+      try {await lstat(databasePath);databaseExists=true} catch(statError) {if(statError?.code!=='ENOENT')throw new Error('Existing Gateway database cannot be inspected')}
+      if(databaseExists)throw new Error('Gateway encryption key is missing while an existing database is present; restore the matching secret.key backup. Refusing to generate a replacement.');
       const created=randomBytes(32);
       try {await writePrivateFile(keyPath,created)} catch(writeError) {
         if(writeError?.code!=='EEXIST')throw writeError;
@@ -57,7 +61,6 @@ export class GatewayStore {
     }
     if(key.length!==32)throw new Error('Gateway encryption key is corrupt; refusing silent replacement');
 
-    const databasePath=join(directory,'gateway.sqlite');
     const db=new DatabaseSync(databasePath);
     try {
       db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
