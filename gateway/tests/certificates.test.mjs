@@ -34,7 +34,9 @@ test('creates persistent root CA and serverAuth leaf; exports only public CA and
   assert.ok(profile.includes('<plist version="1.0">'));
   assert.ok(profile.includes('<key>PayloadType</key><string>Configuration</string>'));
   assert.ok(profile.includes('<key>PayloadType</key><string>com.apple.security.root</string>'));
-  assert.ok(profile.includes(ca.raw.toString('base64')));
+  const dataStart=profile.indexOf('<data>')+'<data>'.length;
+  const dataEnd=profile.indexOf('</data>',dataStart);
+  assert.equal(profile.slice(dataStart,dataEnd).replace(/\\s/g,''),ca.raw.toString('base64'));
   assert.ok(!profile.includes('PRIVATE KEY'));
   assert.ok(!profile.includes('root-ca.key'));
 });
